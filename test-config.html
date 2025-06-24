@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>CONFIG 및 시스템 테스트</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        h1, h2, h3 { color: #00ff88; }
+        .success { color: #00ff88; }
+        .error { color: #ff6b6b; }
+        .info { color: #007bff; }
+        .test-section {
+            background: rgba(255,255,255,0.05);
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        pre {
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>옹벽 3D 뷰어 - 시스템 테스트</h1>
+    
+    <div class="test-section">
+        <h2>1. Three.js 로드 테스트</h2>
+        <div id="threejs-test"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. CONFIG 로드 테스트</h2>
+        <div id="config-test"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 모델 파일 경로 테스트</h2>
+        <div id="path-test"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. DOM 요소 테스트</h2>
+        <div id="dom-test"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>5. 디버깅 도구</h2>
+        <button onclick="testModelLoad()">모델 로드 테스트</button>
+        <button onclick="showFullConfig()">전체 CONFIG 보기</button>
+        <button onclick="clearConsole()">콘솔 지우기</button>
+        <div id="debug-output"></div>
+    </div>
+    
+    <!-- Three.js 먼저 로드 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script type="module">
+        // CONFIG 임포트
+        import { CONFIG } from './js/config.js';
+        
+        // 1. Three.js 테스트
+        const threeTest = document.getElementById('threejs-test');
+        if (typeof THREE !== 'undefined') {
+            // WebGL 지원 체크 (간단한 방법)
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            const webglSupported = !!gl;
+            
+            threeTest.innerHTML = `
+                <p class="success">✅ Three.js 로드 성공!</p>
+                <p class="info">버전: ${THREE.REVISION}</p>
+                <p class="info">WebGL 지원: ${webglSupported ? '예' : '아니오'}</p>
+            `;
+        } else {
+            threeTest.innerHTML = '<p class="error">❌ Three.js 로드 실패!</p>';
+        }
+        
+        // 2. CONFIG 테스트
+        const configTest = document.getElementById('config-test');
+        if (CONFIG) {
+            configTest.innerHTML = `
+                <p class="success">✅ CONFIG 로드 성공!</p>
+                <p class="info">모델 개수: ${CONFIG.models?.length || 0}개</p>
+                <p class="info">모델 경로: ${CONFIG.modelsPath}</p>
+                <h3>모델 목록:</h3>
+                <ul>
+                    ${CONFIG.models?.map((model, index) => `
+                        <li>
+                            <strong>${index + 1}. ${model.name}</strong><br>
+                            아이콘: ${model.icon}<br>
+                            폴더: ${model.folder}<br>
+                            파일: ${model.fileName}<br>
+                            설명: ${model.description}
+                        </li>
+                    `).join('') || '<li>모델 없음</li>'}
+                </ul>
+            `;
+        } else {
+            configTest.innerHTML = '<p class="error">❌ CONFIG 로드 실패!</p>';
+        }
+        
+        // 3. 모델 경로 테스트
+        const pathTest = document.getElementById('path-test');
+        if (CONFIG?.models) {
+            let pathHtml = '<ul>';
+            CONFIG.models.forEach((model, index) => {
+                const fullPath = `${CONFIG.modelsPath}${model.folder}/${model.fileName}`;
+                pathHtml += `
+                    <li>
+                        <strong>${model.name}:</strong><br>
+                        <code>${fullPath}</code>
+                        <button onclick="checkFile('${fullPath}')">파일 확인</button>
+                    </li>
+                `;
+            });
+            pathHtml += '</ul>';
+            pathTest.innerHTML = pathHtml;
+        }
+        
+        // 4. DOM 테스트 (페이지가 실제 index.html인 경우)
+        const domTest = document.getElementById('dom-test');
+        const essentialElements = [
+            { id: 'model-selector', desc: '모델 선택 화면' },
+            { id: 'model-list', desc: '모델 목록' },
+            { id: 'canvas-container', desc: '3D 캔버스' },
+            { id: 'bottom-controls', desc: '하단 컨트롤' },
+            { id: 'right-panel', desc: '우측 패널' }
+        ];
+        
+        domTest.innerHTML = '<p class="info">이 테스트는 실제 index.html에서만 작동합니다.</p>';
+        
+        // 전역 함수들
+        window.CONFIG = CONFIG;
+        
+        window.checkFile = async function(path) {
+            try {
+                const response = await fetch(path, { method: 'HEAD' });
+                if (response.ok) {
+                    alert(`✅ 파일 존재함: ${path}`);
+                } else {
+                    alert(`❌ 파일 없음: ${path} (상태: ${response.status})`);
+                }
+            } catch (error) {
+                alert(`❌ 파일 접근 오류: ${error.message}`);
+            }
+        };
+        
+        window.testModelLoad = async function() {
+            if (!CONFIG?.models?.[0]) {
+                alert('테스트할 모델이 없습니다!');
+                return;
+            }
+            
+            const model = CONFIG.models[0];
+            const path = `${CONFIG.modelsPath}${model.folder}/${model.fileName}`;
+            
+            const output = document.getElementById('debug-output');
+            output.innerHTML = `<p>모델 로딩 중... (${model.name})</p>`;
+            
+            console.log('모델 로드 시도:', path);
+            
+            const loader = new THREE.GLTFLoader();
+            loader.load(
+                path,
+                (gltf) => {
+                    console.log('모델 로드 성공:', gltf);
+                    output.innerHTML = `
+                        <p class="success">✅ 모델 로드 성공!</p>
+                        <p class="info">모델명: ${model.name}</p>
+                        <p class="info">경로: ${path}</p>
+                        <pre>${JSON.stringify({
+                            animations: gltf.animations.length,
+                            cameras: gltf.cameras.length,
+                            scenes: gltf.scenes.length,
+                            meshes: gltf.scene.children.length
+                        }, null, 2)}</pre>
+                    `;
+                },
+                (xhr) => {
+                    if (xhr.lengthComputable) {
+                        const percent = (xhr.loaded / xhr.total * 100).toFixed(2);
+                        output.innerHTML = `<p class="info">로딩 중... ${percent}%</p>`;
+                    }
+                },
+                (error) => {
+                    console.error('모델 로드 실패:', error);
+                    output.innerHTML = `
+                        <p class="error">❌ 로드 실패: ${error.message || error}</p>
+                        <p class="error">경로: ${path}</p>
+                        <p class="info">콘솔에서 자세한 오류를 확인하세요.</p>
+                    `;
+                }
+            );
+        };
+        
+        window.showFullConfig = function() {
+            const output = document.getElementById('debug-output');
+            output.innerHTML = `<h3>전체 CONFIG:</h3><pre>${JSON.stringify(CONFIG, null, 2)}</pre>`;
+        };
+        
+        window.clearConsole = function() {
+            console.clear();
+            console.log('콘솔이 지워졌습니다.');
+        };
+        
+        // 초기 콘솔 메시지
+        console.log('%c옹벽 3D 뷰어 테스트 페이지', 'font-size: 20px; color: #00ff88;');
+        console.log('CONFIG:', CONFIG);
+        console.log('THREE:', typeof THREE !== 'undefined' ? 'Loaded' : 'Not loaded');
+        
+        // 자동 체크 실행
+        window.addEventListener('load', () => {
+            console.log('=== 시스템 체크 결과 ===');
+            console.log('1. Three.js:', typeof THREE !== 'undefined' ? '✅' : '❌');
+            console.log('2. GLTFLoader:', typeof THREE?.GLTFLoader !== 'undefined' ? '✅' : '❌');
+            console.log('3. OrbitControls:', typeof THREE?.OrbitControls !== 'undefined' ? '✅' : '❌');
+            console.log('4. CONFIG:', CONFIG ? '✅' : '❌');
+            console.log('5. 모델 개수:', CONFIG?.models?.length || 0);
+            
+            // 첫 번째 모델 경로 표시
+            if (CONFIG?.models?.[0]) {
+                const firstModel = CONFIG.models[0];
+                const path = `${CONFIG.modelsPath}${firstModel.folder}/${firstModel.fileName}`;
+                console.log('6. 첫 번째 모델 경로:', path);
+            }
+        });
+    </script>
+</body>
+</html>

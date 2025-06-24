@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>옹벽 3D 모니터링 시스템</title>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container"></div>
+        
+        <div id="model-selector" class="model-selector">
+            <div class="selector-container">
+                <h1>옹벽 3D 모니터링 시스템</h1>
+                <p>확인하실 옹벽 모델을 선택하세요</p>
+                <div id="model-list" class="model-list">
+                    </div>
+            </div>
+        </div>
+
+        <div id="loading" class="loading-screen">
+            <div class="loading-spinner"></div>
+            <div>모델을 로딩중입니다...</div>
+            <div class="loading-progress">
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
+                <span id="progress-text">0%</span>
+            </div>
+        </div>
+
+        <div id="error" class="error"></div>
+
+        <button class="model-change-btn" id="changeModel">
+            📁 다른 모델 선택
+        </button>
+
+        <div id="control-panel" class="control-panel">
+            <div id="animation-controls" class="control-group">
+                <button id="playBtn">▶️ 재생</button>
+                <button id="pauseBtn">⏸️ 일시정지</button>
+                <button id="resetBtn">⏮️ 리셋</button>
+            </div>
+            <div id="frame-controls" class="control-group">
+                <label>프레임: <span id="frameDisplay">0</span></label>
+                <input type="range" id="frameSlider" min="0" max="100" value="0">
+            </div>
+            <div class="control-group">
+                <button id="toggleHotspots">📍 핫스팟 표시/숨김</button>
+                <button id="toggleGrid">📏 그리드 표시/숨김</button>
+            </div>
+            <div class="control-group">
+                <label>카메라 뷰:</label>
+                <select id="cameraView">
+                    <option value="default">기본 뷰</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="info-panel" class="info-panel">
+            <h3>모델 정보</h3>
+            <table>
+                <tr>
+                    <td>메시 수:</td>
+                    <td id="meshCount">0</td>
+                </tr>
+                <tr>
+                    <td>정점 수:</td>
+                    <td id="vertexCount">0</td>
+                </tr>
+                <tr>
+                    <td>삼각형 수:</td>
+                    <td id="triangleCount">0</td>
+                </tr>
+                <tr>
+                    <td>핫스팟 수:</td>
+                    <td id="hotspotCount">0</td>
+                </tr>
+                <tr>
+                    <td>FPS:</td>
+                    <td id="fps">0</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script type="module" src="js/main.js"></script>
+</body>
+</html>
