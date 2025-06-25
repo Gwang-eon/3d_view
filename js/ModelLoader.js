@@ -1,5 +1,4 @@
-// js/ModelLoader.js
-// ConfigManager 기반 완전 개선 버전 - 모든 하드코딩 제거
+// ModelLoader.js - 기본 모델 설정과 개선사항이 포함된 완전한 버전
 
 import { getConfig, setConfig } from './core/ConfigManager.js';
 
@@ -25,6 +24,10 @@ export class ModelLoader {
         this.textureLoader = null;
         this.dracoLoader = null;
         this.ktx2Loader = null;
+        
+        // 기본 모델 설정
+        this.defaultModelIndex = null;
+        this.models = getConfig('models', []);
         
         // 로딩 상태 관리
         this.loadingState = {
@@ -85,16 +88,15 @@ export class ModelLoader {
         this.handleLoadingComplete = this.handleLoadingComplete.bind(this);
         this.handleLoadingError = this.handleLoadingError.bind(this);
         
-        // 초기화
-        this.init();
-        
-        console.log('[ModelLoader] 초기화 완료');
+        console.log('[ModelLoader] 생성됨');
     }
     
     /**
      * 초기화
      */
     async init() {
+        console.log('[ModelLoader] 초기화 시작');
+        
         try {
             // 로딩 매니저 설정
             this.setupLoadingManager();
@@ -106,11 +108,12 @@ export class ModelLoader {
             this.validateConfiguration();
             
             // 프리로딩 시작
-            if (this.optimization.enablePreloading) {
+            if (this.optimization.enablePreloading && this.defaultModelIndex !== null) {
                 this.startPreloading();
             }
             
             this.emit('initialized');
+            console.log('[ModelLoader] 초기화 완료');
             
         } catch (error) {
             console.error('[ModelLoader] 초기화 실패:', error);
@@ -123,21 +126,13 @@ export class ModelLoader {
      * 로딩 매니저 설정
      */
     setupLoadingManager() {
-        this.loadingManager = new THREE.LoadingManager();
+        this.loadingManager = new THREE.LoadingManager(
+            this.handleLoadingComplete,
+            this.handleLoadingProgress,
+            this.handleLoadingError
+        );
         
-        // 로딩 시작
         this.loadingManager.onStart = this.handleLoadingStart;
-        
-        // 진행률 업데이트
-        this.loadingManager.onProgress = this.handleLoadingProgress;
-        
-        // 로딩 완료
-        this.loadingManager.onLoad = this.handleLoadingComplete;
-        
-        // 로딩 에러
-        this.loadingManager.onError = this.handleLoadingError;
-        
-        console.log('[ModelLoader] ✓ 로딩 매니저 설정됨');
     }
     
     /**
@@ -147,266 +142,136 @@ export class ModelLoader {
         // GLTF 로더
         this.gltfLoader = new THREE.GLTFLoader(this.loadingManager);
         
-        // DRACO 로더 설정 (선택적)
-        if (getConfig('models.enableDraco', false)) {
-            await this.setupDracoLoader();
+        // Draco 로더 설정 (압축된 모델용)
+        if (getConfig('models.enableDracoLoader', true)) {
+            this.dracoLoader = new THREE.DRACOLoader();
+            this.dracoLoader.setDecoderPath(getConfig('models.dracoDecoderPath', './libs/draco/'));
+            this.gltfLoader.setDRACOLoader(this.dracoLoader);
         }
         
-        // KTX2 로더 설정 (선택적)
-        if (getConfig('models.enableKTX2', false)) {
-            await this.setupKTX2Loader();
+        // KTX2 로더 설정 (압축된 텍스처용)
+        if (getConfig('models.enableKTX2Loader', false)) {
+            this.ktx2Loader = new THREE.KTX2Loader(this.loadingManager);
+            this.ktx2Loader.setTranscoderPath(getConfig('models.ktx2TranscoderPath', './libs/basis/'));
+            this.gltfLoader.setKTX2Loader(this.ktx2Loader);
         }
         
         // 텍스처 로더
         this.textureLoader = new THREE.TextureLoader(this.loadingManager);
-        
-        // 로딩 옵션 설정
-        this.applyLoadingOptions();
-        
-        console.log('[ModelLoader] ✓ 로더 설정 완료');
-    }
-    
-    /**
-     * DRACO 로더 설정
-     */
-    async setupDracoLoader() {
-        try {
-            if (window.THREE?.DRACOLoader) {
-                this.dracoLoader = new THREE.DRACOLoader();
-                const dracoPath = getConfig('models.dracoPath', '/lib/draco/gltf/');
-                this.dracoLoader.setDecoderPath(dracoPath);
-                this.dracoLoader.setDecoderConfig({ type: 'js' });
-                this.gltfLoader.setDRACOLoader(this.dracoLoader);
-                
-                console.log('[ModelLoader] ✓ DRACO 로더 활성화');
-            } else {
-                console.warn('[ModelLoader] DRACO 로더를 사용할 수 없습니다.');
-            }
-        } catch (error) {
-            console.warn('[ModelLoader] DRACO 로더 설정 실패:', error);
-        }
-    }
-    
-    /**
-     * KTX2 로더 설정
-     */
-    async setupKTX2Loader() {
-        try {
-            if (window.THREE?.KTX2Loader && this.sceneManager?.renderer) {
-                this.ktx2Loader = new THREE.KTX2Loader();
-                const ktx2Path = getConfig('models.ktx2Path', '/lib/basis/');
-                this.ktx2Loader.setTranscoderPath(ktx2Path);
-                this.ktx2Loader.detectSupport(this.sceneManager.renderer);
-                this.gltfLoader.setKTX2Loader(this.ktx2Loader);
-                
-                console.log('[ModelLoader] ✓ KTX2 로더 활성화');
-            } else {
-                console.warn('[ModelLoader] KTX2 로더를 사용할 수 없습니다.');
-            }
-        } catch (error) {
-            console.warn('[ModelLoader] KTX2 로더 설정 실패:', error);
-        }
-    }
-    
-    /**
-     * 로딩 옵션 적용
-     */
-    applyLoadingOptions() {
-        const options = getConfig('models.loadingOptions', {});
-        
-        // Cross-Origin 설정
-        if (options.crossOrigin) {
-            this.textureLoader.setCrossOrigin(options.crossOrigin);
-        }
-        
-        // 타임아웃 설정
-        if (options.timeout) {
-            // 커스텀 타임아웃 구현 필요
-        }
-        
-        // 압축 설정
-        if (options.enableCompression) {
-            // 텍스처 압축 활성화
-        }
     }
     
     /**
      * 설정 검증
      */
     validateConfiguration() {
-        const models = getConfig('models.defaultModels', []);
-        const basePath = getConfig('models.basePath', 'gltf/');
-        
-        if (models.length === 0) {
-            console.warn('[ModelLoader] 기본 모델이 설정되지 않았습니다.');
+        if (!this.models || this.models.length === 0) {
+            console.warn('[ModelLoader] 모델 목록이 비어있습니다.');
+            return false;
         }
         
-        // 경로 정규화
-        if (!basePath.endsWith('/')) {
-            setConfig('models.basePath', basePath + '/');
-        }
-        
-        // 모델 검증
-        this.validateModelList(models);
-        
-        console.log('[ModelLoader] ✓ 설정 검증 완료');
-    }
-    
-    /**
-     * 모델 목록 검증
-     */
-    validateModelList(models) {
-        const supportedFormats = getConfig('models.supportedFormats', ['.gltf', '.glb']);
-        
-        models.forEach((model, index) => {
-            // 필수 필드 확인
-            if (!model.name || !model.folder || !model.fileName) {
-                console.error(`[ModelLoader] 모델 ${index}: 필수 필드 누락`, model);
-            }
-            
-            // 파일 형식 확인
-            const hasValidFormat = supportedFormats.some(format => 
-                model.fileName.toLowerCase().endsWith(format)
-            );
-            
-            if (!hasValidFormat) {
-                console.warn(`[ModelLoader] 모델 ${index}: 지원되지 않는 형식 - ${model.fileName}`);
-            }
-            
-            // 파일 크기 경고
-            if (model.fileSize && model.fileSize > getConfig('models.maxFileSize', 50)) {
-                console.warn(`[ModelLoader] 모델 ${index}: 큰 파일 크기 - ${model.fileSize}MB`);
+        // 각 모델 설정 검증
+        this.models.forEach((model, index) => {
+            if (!model.folder || !model.fileName) {
+                console.warn(`[ModelLoader] 모델 ${index}의 설정이 올바르지 않습니다.`);
             }
         });
+        
+        return true;
     }
     
     /**
-     * 프리로딩 시작
+     * 기본 모델 설정
      */
-    async startPreloading() {
-        const preloadList = getConfig('models.preloadList', []);
-        if (preloadList.length === 0) return;
-        
-        console.log(`[ModelLoader] 프리로딩 시작: ${preloadList.length}개 모델`);
-        
-        for (const modelIndex of preloadList) {
-            try {
-                await this.preloadModel(modelIndex);
-            } catch (error) {
-                console.warn(`[ModelLoader] 프리로딩 실패: 모델 ${modelIndex}`, error);
-            }
+    setDefaultModel(index) {
+        if (index >= 0 && index < this.models.length) {
+            this.defaultModelIndex = index;
+            console.log(`[ModelLoader] 기본 모델 설정: ${index} - ${this.models[index].name}`);
+        } else {
+            console.warn(`[ModelLoader] 잘못된 모델 인덱스: ${index}`);
         }
     }
     
     /**
-     * 모델 프리로드
+     * 모델 로드
      */
-    async preloadModel(modelIndex) {
-        const models = getConfig('models.defaultModels', []);
-        const modelData = models[modelIndex];
+    async loadModel(index) {
+        if (!this.validateModelIndex(index)) {
+            const error = new Error(`잘못된 모델 인덱스: ${index}`);
+            this.emit('loading:error', { error, index });
+            throw error;
+        }
         
-        if (!modelData) return;
-        
-        const cacheKey = this.generateCacheKey(modelData);
-        if (this.modelCache.has(cacheKey)) return; // 이미 캐시됨
+        const modelData = this.models[index];
+        console.log(`[ModelLoader] 모델 로드 시작: ${modelData.name}`);
         
         try {
-            const gltf = await this.loadGLTFFile(modelData);
-            const modelInfo = await this.generateModelInfo(gltf, modelData, 0);
+            this.setLoadingState(true, index, modelData);
+            this.emit('loading:start', { 
+                modelData, 
+                index,
+                message: `${modelData.name} 로딩 중...`
+            });
             
-            if (this.enableCaching) {
-                this.saveToCache(cacheKey, gltf, modelInfo);
-            }
-            
-            console.log(`[ModelLoader] ✓ 프리로드 완료: ${modelData.name}`);
-            
-        } catch (error) {
-            console.warn(`[ModelLoader] 프리로드 실패: ${modelData.name}`, error);
-        }
-    }
-    
-    /**
-     * 모델 로드 (인덱스 기반)
-     */
-    async loadModel(modelIndex) {
-        const models = getConfig('models.defaultModels', []);
-        
-        if (modelIndex < 0 || modelIndex >= models.length) {
-            throw new Error(`잘못된 모델 인덱스: ${modelIndex}`);
-        }
-        
-        const modelData = models[modelIndex];
-        return await this.loadModelByData(modelData, modelIndex);
-    }
-    
-    /**
-     * 모델 로드 (데이터 기반)
-     */
-    async loadModelByData(modelData, index = null) {
-        // 중복 로딩 방지
-        if (this.loadingState.isLoading) {
-            console.warn('[ModelLoader] 이미 로딩 중입니다.');
-            await this.waitForCurrentLoad();
-        }
-        
-        // 로딩 상태 설정
-        this.setLoadingState(true, modelData);
-        
-        try {
             // 캐시 확인
             const cacheKey = this.generateCacheKey(modelData);
             if (this.enableCaching && this.modelCache.has(cacheKey)) {
-                console.log('[ModelLoader] 캐시에서 모델 로드:', modelData.name);
+                console.log(`[ModelLoader] 캐시에서 로드: ${modelData.name}`);
+                this.stats.totalCacheHits++;
                 return await this.loadFromCache(cacheKey, modelData, index);
             }
             
-            // 파일에서 로드
-            return await this.loadFromFile(modelData, index, cacheKey);
+            // 새로 로드
+            const result = await this.loadFromFile(modelData, index);
+            
+            this.setLoadingState(false);
+            return result;
             
         } catch (error) {
-            return await this.handleLoadError(error, modelData, index);
-        } finally {
+            console.error(`[ModelLoader] 모델 로드 실패: ${modelData.name}`, error);
+            
+            // 에러 복구 시도
+            if (this.loadingState.retryCount < this.errorRecovery.maxRetries) {
+                return await this.retryLoading(index, error);
+            } else if (this.errorRecovery.enableFallback && this.errorRecovery.fallbackModels.length > 0) {
+                return await this.loadFallbackModel(error);
+            }
+            
             this.setLoadingState(false);
+            this.emit('loading:error', { error, modelData, index });
+            throw error;
         }
     }
     
     /**
-     * 현재 로딩 대기
+     * 파일에서 모델 로드
      */
-    async waitForCurrentLoad() {
-        return new Promise((resolve) => {
-            const checkLoading = () => {
-                if (!this.loadingState.isLoading) {
-                    resolve();
-                } else {
-                    setTimeout(checkLoading, 100);
-                }
-            };
-            checkLoading();
-        });
-    }
-    
-    /**
-     * 파일에서 로드
-     */
-    async loadFromFile(modelData, index, cacheKey) {
-        console.log(`[ModelLoader] 파일에서 로드: ${modelData.name}`);
-        this.emit('loading:start', { modelData, index });
-        
+    async loadFromFile(modelData, index) {
+        const modelPath = `${modelData.folder}/${modelData.fileName}`;
         const startTime = performance.now();
-        this.loadingState.loadStartTime = startTime;
-        this.loadingState.phase = 'downloading';
         
         try {
-            // GLTF 파일 로드
-            const gltf = await this.loadGLTFFile(modelData);
+            this.loadingState.phase = 'downloading';
+            
+            const gltf = await new Promise((resolve, reject) => {
+                this.gltfLoader.load(
+                    modelPath,
+                    (gltf) => {
+                        this.loadingState.phase = 'parsing';
+                        resolve(gltf);
+                    },
+                    (progress) => {
+                        // LoadingManager에서 처리
+                    },
+                    (error) => {
+                        reject(error);
+                    }
+                );
+            });
             
             this.loadingState.phase = 'processing';
             
-            // 로드 시간 계산
+            // 모델 처리
             const loadTime = (performance.now() - startTime) / 1000;
-            
-            // 모델 정보 생성
             const modelInfo = await this.generateModelInfo(gltf, modelData, loadTime);
             
             // 모델 후처리
@@ -414,7 +279,7 @@ export class ModelLoader {
             
             // 캐시에 저장
             if (this.enableCaching) {
-                this.saveToCache(cacheKey, gltf, modelInfo);
+                this.saveToCache(this.generateCacheKey(modelData), gltf, modelInfo);
             }
             
             // 통계 업데이트
@@ -475,17 +340,7 @@ export class ModelLoader {
             this.animationController.setAnimations(clonedGltf.animations);
         }
         
-        // 통계 업데이트
-        this.stats.totalCacheHits++;
-        
-        this.emit('loading:complete', { 
-            gltf: clonedGltf, 
-            modelInfo, 
-            loadTime, 
-            fromCache: true 
-        });
-        
-        console.log(`[ModelLoader] ✓ 캐시 로드 완료: ${modelData.name} (${loadTime.toFixed(3)}초)`);
+        this.emit('loading:complete', { gltf: clonedGltf, modelInfo, loadTime, fromCache: true });
         
         return {
             success: true,
@@ -497,402 +352,206 @@ export class ModelLoader {
     }
     
     /**
-     * GLTF 파일 로드
-     */
-    async loadGLTFFile(modelData) {
-        const basePath = getConfig('models.basePath', 'gltf/');
-        const modelPath = `${basePath}${modelData.folder}/${modelData.fileName}`;
-        
-        return new Promise((resolve, reject) => {
-            const timeout = getConfig('models.loadingTimeout', 30000);
-            
-            // 타임아웃 설정
-            const timeoutId = setTimeout(() => {
-                reject(new Error(`로딩 타임아웃: ${modelPath}`));
-            }, timeout);
-            
-            // 파일 존재 확인 (선택적)
-            if (getConfig('models.checkFileExists', true)) {
-                this.checkFileExists(modelPath)
-                    .then(exists => {
-                        if (!exists) {
-                            clearTimeout(timeoutId);
-                            reject(new Error(`파일을 찾을 수 없습니다: ${modelPath}`));
-                            return;
-                        }
-                        this.performGLTFLoad(modelPath, resolve, reject, timeoutId);
-                    })
-                    .catch(error => {
-                        clearTimeout(timeoutId);
-                        reject(error);
-                    });
-            } else {
-                this.performGLTFLoad(modelPath, resolve, reject, timeoutId);
-            }
-        });
-    }
-    
-    /**
-     * 파일 존재 확인
-     */
-    async checkFileExists(url) {
-        try {
-            const response = await fetch(url, { method: 'HEAD' });
-            return response.ok;
-        } catch (error) {
-            return false;
-        }
-    }
-    
-    /**
-     * GLTF 로드 실행
-     */
-    performGLTFLoad(path, resolve, reject, timeoutId) {
-        this.gltfLoader.load(
-            path,
-            (gltf) => {
-                clearTimeout(timeoutId);
-                resolve(gltf);
-            },
-            (progress) => {
-                // 진행률은 LoadingManager에서 처리
-            },
-            (error) => {
-                clearTimeout(timeoutId);
-                reject(new Error(`GLTF 로드 실패: ${error.message || error}`));
-            }
-        );
-    }
-    
-    /**
      * 모델 정보 생성
      */
     async generateModelInfo(gltf, modelData, loadTime) {
-        const stats = this.calculateModelStats(gltf);
-        const animations = this.extractAnimationInfo(gltf);
-        const cameras = this.extractCameraInfo(gltf);
-        const materials = this.extractMaterialInfo(gltf);
-        const metadata = await this.loadModelMetadata(modelData);
-        
-        return {
-            // 기본 정보
-            name: modelData.name || 'Unknown Model',
-            description: modelData.description || '',
-            icon: modelData.icon || '🏗️',
-            folder: modelData.folder,
+        const info = {
+            name: modelData.name,
             fileName: modelData.fileName,
-            
-            // 성능 정보
+            folder: modelData.folder,
             loadTime: loadTime,
-            fileSize: modelData.fileSize || 0,
-            
-            // 통계 정보
-            stats: stats,
-            
-            // 컨텐츠 정보
-            animations: animations,
-            cameras: cameras,
-            materials: materials,
-            
-            // 메타데이터
-            metadata: metadata,
-            
-            // 타임스탬프
-            loadedAt: new Date().toISOString(),
-            version: getConfig('app.version', '1.0.0')
+            animations: gltf.animations || [],
+            cameras: gltf.cameras || [],
+            scene: gltf.scene,
+            scenes: gltf.scenes || [],
+            asset: gltf.asset || {},
+            userData: gltf.userData || {},
+            parser: gltf.parser || null,
+            stats: {
+                vertices: 0,
+                triangles: 0,
+                meshes: 0,
+                materials: 0,
+                textures: 0,
+                animations: gltf.animations?.length || 0,
+                bones: 0,
+                memoryEstimate: 0
+            }
         };
+        
+        // 통계 수집
+        const stats = this.collectModelStats(gltf.scene);
+        info.stats = { ...info.stats, ...stats };
+        
+        // 메모리 추정
+        info.stats.memoryEstimate = this.estimateMemoryUsage(info.stats);
+        
+        // 경계 상자
+        const box = new THREE.Box3().setFromObject(gltf.scene);
+        info.boundingBox = box;
+        info.boundingCenter = box.getCenter(new THREE.Vector3());
+        info.boundingSize = box.getSize(new THREE.Vector3());
+        
+        return info;
     }
     
     /**
-     * 모델 통계 계산
+     * 모델 통계 수집
      */
-    calculateModelStats(gltf) {
-        let meshes = 0;
-        let vertices = 0;
-        let triangles = 0;
-        let materials = new Set();
-        let textures = new Set();
+    collectModelStats(object) {
+        const stats = {
+            vertices: 0,
+            triangles: 0,
+            meshes: 0,
+            materials: new Set(),
+            textures: new Set(),
+            bones: 0
+        };
         
-        gltf.scene.traverse((child) => {
+        object.traverse((child) => {
             if (child.isMesh) {
-                meshes++;
+                stats.meshes++;
                 
+                // 지오메트리 통계
                 if (child.geometry) {
-                    const geometry = child.geometry;
-                    if (geometry.attributes.position) {
-                        vertices += geometry.attributes.position.count;
-                    }
-                    if (geometry.index) {
-                        triangles += geometry.index.count / 3;
-                    } else if (geometry.attributes.position) {
-                        triangles += geometry.attributes.position.count / 3;
+                    const geo = child.geometry;
+                    stats.vertices += geo.attributes.position?.count || 0;
+                    
+                    if (geo.index) {
+                        stats.triangles += geo.index.count / 3;
+                    } else {
+                        stats.triangles += (geo.attributes.position?.count || 0) / 3;
                     }
                 }
                 
+                // 머티리얼 통계
                 if (child.material) {
-                    if (Array.isArray(child.material)) {
-                        child.material.forEach(mat => materials.add(mat.uuid));
-                    } else {
-                        materials.add(child.material.uuid);
-                    }
-                }
-            }
-        });
-        
-        // 텍스처 수집
-        gltf.scene.traverse((child) => {
-            if (child.material) {
-                const material = Array.isArray(child.material) ? child.material : [child.material];
-                material.forEach(mat => {
-                    Object.values(mat).forEach(value => {
-                        if (value && value.isTexture) {
-                            textures.add(value.uuid);
-                        }
+                    const materials = Array.isArray(child.material) ? child.material : [child.material];
+                    materials.forEach(mat => {
+                        stats.materials.add(mat.uuid);
+                        
+                        // 텍스처 수집
+                        ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'].forEach(mapName => {
+                            if (mat[mapName]) {
+                                stats.textures.add(mat[mapName].uuid);
+                            }
+                        });
                     });
-                });
+                }
+            } else if (child.isBone) {
+                stats.bones++;
             }
         });
         
         return {
-            meshes: meshes,
-            vertices: Math.round(vertices),
-            triangles: Math.round(triangles),
-            materials: materials.size,
-            textures: textures.size,
-            nodes: this.countNodes(gltf.scene),
-            boundingBox: this.calculateBoundingBox(gltf.scene),
-            memoryEstimate: this.estimateMemoryUsage(vertices, textures.size)
-        };
-    }
-    
-    /**
-     * 노드 수 계산
-     */
-    countNodes(object) {
-        let count = 1;
-        object.children.forEach(child => {
-            count += this.countNodes(child);
-        });
-        return count;
-    }
-    
-    /**
-     * 바운딩 박스 계산
-     */
-    calculateBoundingBox(object) {
-        const box = new THREE.Box3().setFromObject(object);
-        const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
-        
-        return {
-            min: { x: box.min.x, y: box.min.y, z: box.min.z },
-            max: { x: box.max.x, y: box.max.y, z: box.max.z },
-            size: { x: size.x, y: size.y, z: size.z },
-            center: { x: center.x, y: center.y, z: center.z }
+            ...stats,
+            materials: stats.materials.size,
+            textures: stats.textures.size
         };
     }
     
     /**
      * 메모리 사용량 추정
      */
-    estimateMemoryUsage(vertices, textureCount) {
-        // 대략적인 계산 (바이트 단위)
-        const vertexMemory = vertices * 32; // 32 bytes per vertex (position, normal, uv, etc.)
-        const textureMemory = textureCount * 1024 * 1024; // 1MB per texture (estimate)
-        return Math.round((vertexMemory + textureMemory) / 1024 / 1024); // MB
-    }
-    
-    /**
-     * 애니메이션 정보 추출
-     */
-    extractAnimationInfo(gltf) {
-        if (!gltf.animations || gltf.animations.length === 0) {
-            return [];
-        }
+    estimateMemoryUsage(stats) {
+        // 대략적인 추정 (바이트 단위)
+        const vertexSize = 3 * 4; // position (3 floats)
+        const normalSize = 3 * 4; // normal (3 floats)
+        const uvSize = 2 * 4; // uv (2 floats)
+        const indexSize = 4; // uint32
         
-        return gltf.animations.map((animation, index) => ({
-            name: animation.name || `Animation_${index}`,
-            duration: animation.duration || 0,
-            tracks: animation.tracks.length,
-            channels: animation.tracks.reduce((sum, track) => sum + track.keys.length, 0)
-        }));
-    }
-    
-    /**
-     * 카메라 정보 추출
-     */
-    extractCameraInfo(gltf) {
-        if (!gltf.cameras || gltf.cameras.length === 0) {
-            return [];
-        }
+        let memory = 0;
+        memory += stats.vertices * (vertexSize + normalSize + uvSize);
+        memory += stats.triangles * 3 * indexSize;
+        memory += stats.textures * 1024 * 1024 * 4; // 1024x1024 RGBA 텍스처 가정
         
-        return gltf.cameras.map((camera, index) => ({
-            name: camera.name || `Camera_${index}`,
-            type: camera.type,
-            fov: camera.fov || null,
-            near: camera.near,
-            far: camera.far,
-            position: camera.position ? {
-                x: camera.position.x,
-                y: camera.position.y,
-                z: camera.position.z
-            } : null
-        }));
-    }
-    
-    /**
-     * 머티리얼 정보 추출
-     */
-    extractMaterialInfo(gltf) {
-        const materials = new Map();
-        
-        gltf.scene.traverse((child) => {
-            if (child.material) {
-                const matArray = Array.isArray(child.material) ? child.material : [child.material];
-                matArray.forEach(material => {
-                    if (!materials.has(material.uuid)) {
-                        materials.set(material.uuid, {
-                            name: material.name || 'Unnamed',
-                            type: material.type,
-                            transparent: material.transparent,
-                            opacity: material.opacity,
-                            color: material.color ? `#${material.color.getHexString()}` : null,
-                            emissive: material.emissive ? `#${material.emissive.getHexString()}` : null,
-                            roughness: material.roughness || null,
-                            metalness: material.metalness || null
-                        });
-                    }
-                });
-            }
-        });
-        
-        return Array.from(materials.values());
-    }
-    
-    /**
-     * 모델 메타데이터 로드
-     */
-    async loadModelMetadata(modelData) {
-        const basePath = getConfig('models.basePath', 'gltf/');
-        const metadataPath = `${basePath}${modelData.folder}/info.json`;
-        
-        try {
-            const response = await fetch(metadataPath);
-            if (response.ok) {
-                const metadata = await response.json();
-                console.log(`[ModelLoader] ✓ 메타데이터 로드: ${modelData.name}`);
-                return metadata;
-            }
-        } catch (error) {
-            // 메타데이터는 선택사항이므로 에러 무시
-        }
-        
-        return {};
+        return memory;
     }
     
     /**
      * 로드된 모델 후처리
      */
     async processLoadedModel(gltf, modelInfo) {
-        // 중앙 정렬
-        this.centerModel(gltf.scene, modelInfo.stats.boundingBox);
+        const scene = gltf.scene;
         
         // 그림자 설정
-        if (getConfig('scene.lighting.enableShadows', true)) {
-            this.setupShadows(gltf.scene);
+        if (getConfig('models.enableShadows', true)) {
+            scene.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
         }
         
         // 텍스처 최적화
         if (this.optimization.textureOptimization) {
-            this.optimizeTextures(gltf.scene);
+            await this.optimizeTextures(scene);
         }
         
-        // 재질 최적화
-        this.optimizeMaterials(gltf.scene);
-        
-        console.log('[ModelLoader] ✓ 모델 후처리 완료');
-    }
-    
-    /**
-     * 모델 중앙 정렬
-     */
-    centerModel(model, boundingBox = null) {
-        if (!boundingBox) {
-            const box = new THREE.Box3().setFromObject(model);
-            const center = box.getCenter(new THREE.Vector3());
-            model.position.sub(center);
-        } else {
-            model.position.set(-boundingBox.center.x, -boundingBox.center.y, -boundingBox.center.z);
+        // LOD 설정
+        if (getConfig('models.enableLOD', false)) {
+            this.setupLOD(scene);
         }
-    }
-    
-    /**
-     * 그림자 설정
-     */
-    setupShadows(model) {
-        model.traverse((child) => {
-            if (child.isMesh) {
-                child.castShadow = getConfig('scene.lighting.meshCastShadow', true);
-                child.receiveShadow = getConfig('scene.lighting.meshReceiveShadow', true);
-            }
-        });
+        
+        // 애니메이션 최적화
+        if (gltf.animations?.length > 0) {
+            this.optimizeAnimations(gltf.animations);
+        }
     }
     
     /**
      * 텍스처 최적화
      */
-    optimizeTextures(model) {
-        const maxTextureSize = getConfig('models.maxTextureSize', 2048);
-        const textureFormat = getConfig('models.textureFormat', 'auto');
+    async optimizeTextures(scene) {
+        const textures = new Set();
         
-        model.traverse((child) => {
-            if (child.material) {
+        scene.traverse((child) => {
+            if (child.isMesh && child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(material => {
-                    Object.values(material).forEach(value => {
-                        if (value && value.isTexture) {
-                            // 텍스처 크기 제한
-                            if (value.image) {
-                                const { width, height } = value.image;
-                                if (width > maxTextureSize || height > maxTextureSize) {
-                                    // 텍스처 리사이징 (구현 필요)
-                                    console.warn(`[ModelLoader] 큰 텍스처 발견: ${width}x${height}`);
-                                }
-                            }
-                            
-                            // 텍스처 설정 최적화
-                            value.generateMipmaps = getConfig('models.generateMipmaps', true);
-                            value.minFilter = THREE.LinearMipmapLinearFilter;
-                            value.magFilter = THREE.LinearFilter;
+                materials.forEach(mat => {
+                    ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'].forEach(mapName => {
+                        if (mat[mapName]) {
+                            textures.add(mat[mapName]);
                         }
                     });
                 });
             }
         });
+        
+        textures.forEach(texture => {
+            // 이방성 필터링
+            texture.anisotropy = Math.min(
+                getConfig('models.maxAnisotropy', 4),
+                this.sceneManager.renderer.capabilities.getMaxAnisotropy()
+            );
+            
+            // 밉맵 생성
+            texture.generateMipmaps = true;
+            texture.minFilter = THREE.LinearMipmapLinearFilter;
+            
+            // 텍스처 압축 (WebGL2)
+            if (this.sceneManager.renderer.capabilities.isWebGL2) {
+                texture.format = THREE.RGBAFormat;
+                texture.type = THREE.UnsignedByteType;
+            }
+        });
     }
     
     /**
-     * 재질 최적화
+     * LOD 설정
      */
-    optimizeMaterials(model) {
-        const enableFrustumCulling = getConfig('models.enableFrustumCulling', true);
-        
-        model.traverse((child) => {
-            if (child.isMesh) {
-                // Frustum Culling 설정
-                child.frustumCulled = enableFrustumCulling;
-                
-                // 재질 최적화
-                if (child.material) {
-                    const materials = Array.isArray(child.material) ? child.material : [child.material];
-                    materials.forEach(material => {
-                        // 불필요한 기능 비활성화
-                        if (!material.transparent) {
-                            material.alphaTest = 0;
-                        }
-                    });
-                }
-            }
+    setupLOD(scene) {
+        // LOD 구현 (필요시 추가)
+        console.log('[ModelLoader] LOD 설정은 아직 구현되지 않았습니다.');
+    }
+    
+    /**
+     * 애니메이션 최적화
+     */
+    optimizeAnimations(animations) {
+        animations.forEach(animation => {
+            animation.optimize();
         });
     }
     
@@ -900,8 +559,9 @@ export class ModelLoader {
      * GLTF 복제
      */
     cloneGLTF(gltf) {
+        // 간단한 복제 (전체 deep clone은 복잡함)
         const cloned = {
-            scene: gltf.scene.clone(),
+            scene: gltf.scene.clone(true),
             animations: gltf.animations ? [...gltf.animations] : [],
             cameras: gltf.cameras ? [...gltf.cameras] : [],
             asset: gltf.asset ? { ...gltf.asset } : {},
@@ -969,53 +629,118 @@ export class ModelLoader {
         this.stats.totalErrors++;
         this.emit('loading:error', { error, modelData, index });
         
-        // 재시도 로직
+        // 재시도 또는 폴백
         if (this.loadingState.retryCount < this.errorRecovery.maxRetries) {
-            this.loadingState.retryCount++;
-            console.log(`[ModelLoader] 재시도 ${this.loadingState.retryCount}/${this.errorRecovery.maxRetries}: ${modelData.name}`);
-            
-            await this.delay(this.errorRecovery.retryDelay);
-            return await this.loadModelByData(modelData, index);
+            return await this.retryLoading(index, error);
+        } else if (this.errorRecovery.enableFallback) {
+            return await this.loadFallbackModel(error);
         }
         
-        // 폴백 모델 시도
-        if (this.errorRecovery.enableFallback && this.errorRecovery.fallbackModels.length > 0) {
-            console.log(`[ModelLoader] 폴백 모델 시도: ${modelData.name}`);
-            
-            for (const fallbackIndex of this.errorRecovery.fallbackModels) {
-                try {
-                    return await this.loadModel(fallbackIndex);
-                } catch (fallbackError) {
-                    console.warn(`[ModelLoader] 폴백 모델 ${fallbackIndex} 실패:`, fallbackError);
-                }
+        throw error;
+    }
+    
+    async retryLoading(index, previousError) {
+        this.loadingState.retryCount++;
+        console.log(`[ModelLoader] 재시도 ${this.loadingState.retryCount}/${this.errorRecovery.maxRetries}`);
+        
+        await new Promise(resolve => setTimeout(resolve, this.errorRecovery.retryDelay));
+        
+        try {
+            return await this.loadModel(index);
+        } catch (error) {
+            if (this.loadingState.retryCount >= this.errorRecovery.maxRetries) {
+                throw previousError;
+            }
+            return await this.retryLoading(index, error);
+        }
+    }
+    
+    async loadFallbackModel(originalError) {
+        if (this.errorRecovery.fallbackModels.length === 0) {
+            throw originalError;
+        }
+        
+        console.log('[ModelLoader] 폴백 모델 로드 시도');
+        
+        for (const fallbackIndex of this.errorRecovery.fallbackModels) {
+            try {
+                return await this.loadModel(fallbackIndex);
+            } catch (error) {
+                console.error(`[ModelLoader] 폴백 모델 ${fallbackIndex} 로드 실패:`, error);
             }
         }
         
-        // 최종 실패
-        return {
-            success: false,
-            error: error.message || error.toString(),
-            modelData: modelData,
-            retryCount: this.loadingState.retryCount
-        };
+        throw new Error('모든 폴백 모델 로드 실패');
     }
     
     /**
-     * 지연 함수
+     * 프리로딩
      */
-    delay(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-    
-    /**
-     * 로딩 상태 관리
-     */
-    setLoadingState(loading, modelData = null) {
-        this.loadingState.isLoading = loading;
-        this.loadingState.currentModelData = modelData;
-        this.loadingState.progress = 0;
+    startPreloading() {
+        if (!this.optimization.enablePreloading) return;
         
-        if (loading) {
+        // 기본 모델 주변의 모델들을 미리 로드
+        const preloadIndices = [];
+        
+        if (this.defaultModelIndex !== null) {
+            // 기본 모델 전후 모델들 추가
+            if (this.defaultModelIndex > 0) {
+                preloadIndices.push(this.defaultModelIndex - 1);
+            }
+            if (this.defaultModelIndex < this.models.length - 1) {
+                preloadIndices.push(this.defaultModelIndex + 1);
+            }
+        }
+        
+        // 백그라운드에서 로드
+        preloadIndices.forEach(index => {
+            if (index >= 0 && index < this.models.length) {
+                this.preloadModel(index);
+            }
+        });
+    }
+    
+    async preloadModel(index) {
+        if (!this.validateModelIndex(index)) return;
+        
+        const modelData = this.models[index];
+        const cacheKey = this.generateCacheKey(modelData);
+        
+        // 이미 캐시에 있으면 스킵
+        if (this.modelCache.has(cacheKey)) return;
+        
+        console.log(`[ModelLoader] 프리로드 시작: ${modelData.name}`);
+        
+        try {
+            // 낮은 우선순위로 로드
+            const result = await this.loadFromFile(modelData, index);
+            console.log(`[ModelLoader] 프리로드 완료: ${modelData.name}`);
+        } catch (error) {
+            console.warn(`[ModelLoader] 프리로드 실패: ${modelData.name}`, error);
+        }
+    }
+    
+    /**
+     * 유효성 검사
+     */
+    validateModelIndex(index) {
+        if (typeof index !== 'number' || index < 0 || index >= this.models.length) {
+            console.error(`[ModelLoader] 잘못된 모델 인덱스: ${index}`);
+            return false;
+        }
+        return true;
+    }
+    
+    /**
+     * 로딩 상태 설정
+     */
+    setLoadingState(isLoading, modelIndex = null, modelData = null) {
+        this.loadingState.isLoading = isLoading;
+        
+        if (isLoading) {
+            this.loadingState.currentModel = modelIndex;
+            this.loadingState.currentModelData = modelData;
+            this.loadingState.progress = 0;
             this.loadingState.loadStartTime = performance.now();
             this.loadingState.retryCount = 0;
             this.loadingState.phase = 'idle';
@@ -1066,7 +791,13 @@ export class ModelLoader {
         const progress = itemsTotal > 0 ? (itemsLoaded / itemsTotal) * 100 : 0;
         this.loadingState.progress = progress;
         
-        this.emit('loading:progress', { progress, url, itemsLoaded, itemsTotal });
+        this.emit('loading:progress', { 
+            progress, 
+            url, 
+            itemsLoaded, 
+            itemsTotal,
+            message: `로딩 중... ${Math.round(progress)}%`
+        });
     }
     
     handleLoadingComplete() {
@@ -1094,12 +825,23 @@ export class ModelLoader {
             this.events.set(event, new Set());
         }
         this.events.get(event).add(callback);
+        return this;
     }
     
     off(event, callback) {
         if (this.events.has(event)) {
             this.events.get(event).delete(callback);
         }
+        return this;
+    }
+    
+    once(event, callback) {
+        const onceWrapper = (...args) => {
+            callback(...args);
+            this.off(event, onceWrapper);
+        };
+        this.on(event, onceWrapper);
+        return this;
     }
     
     emit(event, ...args) {
@@ -1112,6 +854,7 @@ export class ModelLoader {
                 }
             });
         }
+        return this;
     }
     
     /**
@@ -1150,6 +893,7 @@ export class ModelLoader {
         if (!getConfig('app.debug')) return;
         
         console.group('[ModelLoader] 디버그 정보');
+        console.log('기본 모델:', this.defaultModelIndex);
         console.log('로딩 상태:', this.loadingState);
         console.log('캐시 상태:', {
             모델: this.modelCache.size,
@@ -1172,8 +916,23 @@ export class ModelLoader {
             phase: this.loadingState.phase,
             currentModel: this.loadingState.currentModelData?.name || null,
             stats: { ...this.stats },
-            cacheSize: this.modelCache.size
+            cacheSize: this.modelCache.size,
+            defaultModel: this.defaultModelIndex
         };
+    }
+    
+    /**
+     * 모델 목록 가져오기
+     */
+    getModelList() {
+        return this.models.map((model, index) => ({
+            index: index,
+            name: model.name,
+            fileName: model.fileName,
+            folder: model.folder,
+            isDefault: index === this.defaultModelIndex,
+            isCached: this.modelCache.has(this.generateCacheKey(model))
+        }));
     }
 }
 
