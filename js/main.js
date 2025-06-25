@@ -1,447 +1,737 @@
-// main.js - 즉시 수정 버전
-'use strict';
+// js/main.js
+// 새로운 메인 진입점 - 모든 하드코딩 제거 및 모듈화 완성
+// 기존 main.js를 완전히 대체하는 개선된 버전
 
-import { CONFIG } from './config.js';
-import { SceneManager } from './SceneManager.js';
-import { ModelLoader } from './ModelLoader.js';
-import { UIController } from './UIController.js';
-import { HotspotManager } from './HotspotManager.js';
-import { AnimationController } from './AnimationController.js';
+import { AppCore } from './core/AppCore.js';
+import { CONFIG_MANAGER, getConfig, setConfig } from './core/ConfigManager.js';
 
-// 모듈 스코프 변수
-let sceneManager, modelLoader, uiController, hotspotManager, animationController;
-let isInitialized = false;
-
-// CONFIG 로드 확인
-async function waitForConfig() {
-    console.log('CONFIG 로드 대기 중...');
-    let attempts = 0;
-    
-    while (typeof CONFIG === 'undefined' && attempts < 20) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
-    }
-    
-    if (typeof CONFIG === 'undefined') {
-        throw new Error('CONFIG를 로드할 수 없습니다. config.js 파일을 확인하세요.');
-    }
-    
-    console.log('CONFIG 로드 완료:', CONFIG);
-    return CONFIG;
-}
-
-// Three.js 로드 확인
-async function waitForThree() {
-    console.log('Three.js 로드 대기 중...');
-    let attempts = 0;
-    
-    while ((!window.THREE || !window.THREE.GLTFLoader || !window.THREE.OrbitControls) && attempts < 20) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
-    }
-    
-    if (!window.THREE) {
-        throw new Error('Three.js를 로드할 수 없습니다.');
-    }
-    
-    console.log('Three.js 로드 완료');
-    return true;
-}
-
-// DOM 요소 매핑 수정 - viewer.html의 improved DOM 구조에 맞춤
-// 이 코드를 main.js 파일 상단에 추가하거나, 별도 파일로 만들어 먼저 로드하세요
-
-// DOM 요소 ID 매핑 함수
-function mapDOMElements() {
-    console.log('DOM 요소 매핑 시작...');
-    
-    // viewer.html (improved)의 실제 구조에 맞춰 가상 요소 생성 또는 매핑
-    const mappings = {
-        'model-selector': () => {
-            // 모델 선택 화면 생성
-            const existing = document.getElementById('model-selector');
-            if (existing) return existing;
-            
-            const selector = document.createElement('div');
-            selector.id = 'model-selector';
-            selector.className = 'model-selector';
-            selector.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.95);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                z-index: 1000;
-            `;
-            
-            selector.innerHTML = `
-                <div class="selector-container" style="
-                    text-align: center;
-                    padding: 40px;
-                    background: rgba(255, 255, 255, 0.05);
-                    border-radius: 20px;
-                    border: 1px solid rgba(255, 255, 255, 0.1);
-                    max-width: 800px;
-                    width: 90%;
-                ">
-                    <h1 style="
-                        margin-bottom: 20px;
-                        font-size: 32px;
-                        background: linear-gradient(45deg, #007bff, #00ff88);
-                        -webkit-background-clip: text;
-                        -webkit-text-fill-color: transparent;
-                    ">옹벽 3D 모니터링 시스템</h1>
-                    <p style="margin-bottom: 30px; color: #aaa;">확인하실 옹벽 모델을 선택하세요</p>
-                    <div id="model-list" class="model-list" style="
-                        display: grid;
-                        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-                        gap: 20px;
-                        margin-top: 30px;
-                    "></div>
-                </div>
-            `;
-            
-            document.body.appendChild(selector);
-            return selector;
-        },
+/**
+ * 애플리케이션 초기화 및 실행
+ * - 환경별 자동 설정
+ * - 에러 복구 시스템
+ * - 개발 도구 통합
+ */
+class WallViewerApplication {
+    constructor() {
+        this.app = null;
+        this.initialized = false;
+        this.startTime = performance.now();
         
-        'model-list': () => {
-            const existing = document.getElementById('model-list');
-            if (existing) return existing;
-            
-            // model-selector가 먼저 생성되어야 함
-            const selector = document.getElementById('model-selector') || mappings['model-selector']();
-            const list = selector.querySelector('#model-list');
-            return list;
-        },
+        // 전역 에러 핸들러 설정
+        this.setupGlobalErrorHandling();
         
-        'canvas-container': () => {
-            // viewer.html에서는 실제로 canvas-container ID가 존재함
-            let container = document.getElementById('canvas-container');
-            if (container) return container;
+        console.log(`[WallViewer] 애플리케이션 시작 - 환경: ${CONFIG_MANAGER.environment}`);
+    }
+    
+    /**
+     * 메인 초기화 함수
+     */
+    async initialize() {
+        try {
+            // 1. 환경 설정 최적화
+            this.optimizeForEnvironment();
             
-            // viewer-container 내부의 canvas-container를 찾음
-            const viewerContainer = document.getElementById('viewer-container');
-            if (viewerContainer) {
-                container = viewerContainer.querySelector('#canvas-container');
-                if (container) return container;
-            }
+            // 2. DOM 준비 대기
+            await this.waitForDOM();
             
-            // 없으면 생성
-            container = document.createElement('div');
-            container.id = 'canvas-container';
-            container.style.cssText = 'width: 100%; height: 100%;';
+            // 3. 추가 설정 로드 (사용자 정의)
+            await this.loadUserConfigurations();
             
-            if (viewerContainer) {
-                viewerContainer.appendChild(container);
-            } else {
-                document.body.appendChild(container);
-            }
+            // 4. AppCore 생성 및 초기화
+            await this.createAndInitializeApp();
             
-            return container;
-        },
+            // 5. 개발 도구 설정
+            this.setupDevTools();
+            
+            // 6. 성능 모니터링 시작
+            this.startPerformanceMonitoring();
+            
+            const initTime = ((performance.now() - this.startTime) / 1000).toFixed(2);
+            console.log(`[WallViewer] 초기화 완료 (${initTime}초)`);
+            
+            this.initialized = true;
+            
+            // 초기화 완료 이벤트 발생
+            this.dispatchCustomEvent('wallviewer:initialized', {
+                app: this.app,
+                initTime: parseFloat(initTime)
+            });
+            
+        } catch (error) {
+            console.error('[WallViewer] 초기화 실패:', error);
+            await this.handleInitializationFailure(error);
+        }
+    }
+    
+    /**
+     * 환경별 설정 최적화
+     */
+    optimizeForEnvironment() {
+        const env = CONFIG_MANAGER.environment;
         
-        'loading': () => {
-            let loading = document.getElementById('loading');
-            if (loading) return loading;
+        console.log(`[WallViewer] 환경 최적화: ${env}`);
+        
+        if (env === 'development') {
+            // 개발 환경 최적화
+            setConfig('app.debug', true);
+            setConfig('app.verbose', true);
+            setConfig('timing.maxRetryAttempts', 50);
+            setConfig('devTools.showStats', true);
+            setConfig('errors.autoRecovery', false); // 개발 시 에러 확인용
             
-            loading = document.createElement('div');
-            loading.id = 'loading';
-            loading.className = 'loading-overlay';
-            loading.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.9);
-                display: none;
-                align-items: center;
-                justify-content: center;
-                z-index: 2000;
-                flex-direction: column;
-            `;
-            loading.innerHTML = `
-                <div class="loading-spinner" style="
-                    width: 50px;
-                    height: 50px;
-                    border: 3px solid rgba(255, 255, 255, 0.1);
-                    border-top: 3px solid #007bff;
-                    border-radius: 50%;
-                    animation: spin 1s linear infinite;
-                    margin-bottom: 20px;
-                "></div>
-                <div style="color: white; font-size: 18px;">모델을 로딩중입니다...</div>
-                <div class="loading-progress" style="margin-top: 20px; text-align: center;">
-                    <div class="progress-bar" style="
-                        width: 200px;
-                        height: 4px;
-                        background: rgba(255, 255, 255, 0.1);
-                        border-radius: 2px;
-                        overflow: hidden;
-                    ">
-                        <div id="progress-fill" class="progress-fill" style="
-                            width: 0%;
-                            height: 100%;
-                            background: #007bff;
-                            transition: width 0.3s ease;
-                        "></div>
-                    </div>
-                    <span id="progress-text" style="color: #aaa; font-size: 14px; margin-top: 10px; display: block;">0%</span>
-                </div>
-            `;
+            // 개발용 글로벌 참조
+            window.CONFIG_MANAGER = CONFIG_MANAGER;
+            window.getConfig = getConfig;
+            window.setConfig = setConfig;
             
-            // 애니메이션 추가
-            const style = document.createElement('style');
-            style.textContent = `
-                @keyframes spin {
-                    0% { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
+        } else {
+            // 프로덕션 환경 최적화
+            setConfig('app.debug', false);
+            setConfig('app.verbose', false);
+            setConfig('timing.maxRetryAttempts', 10);
+            setConfig('performance.enableLOD', true);
+            setConfig('errors.autoRecovery', true);
+            setConfig('errors.reportErrors', true);
+        }
+        
+        // 디바이스별 최적화
+        this.optimizeForDevice();
+    }
+    
+    /**
+     * 디바이스별 최적화
+     */
+    optimizeForDevice() {
+        const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const isLowEnd = navigator.hardwareConcurrency <= 2;
+        
+        if (isMobile || isLowEnd) {
+            console.log('[WallViewer] 저사양 디바이스 감지 - 성능 최적화 적용');
+            
+            // 저사양 디바이스 최적화
+            setConfig('scene.renderer.shadowMapSize', 512);
+            setConfig('scene.renderer.pixelRatio', 1);
+            setConfig('performance.maxTriangles', 500000);
+            setConfig('performance.maxTextureSize', 1024);
+            setConfig('performance.enableLOD', true);
+            setConfig('performance.targetFPS', 30);
+        }
+    }
+    
+    /**
+     * DOM 준비 대기
+     */
+    async waitForDOM() {
+        const maxWaitTime = getConfig('timing.loadingTimeout');
+        const checkInterval = 50;
+        let waited = 0;
+        
+        return new Promise((resolve, reject) => {
+            const checkDOM = () => {
+                if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                    console.log('[WallViewer] ✓ DOM 준비 완료');
+                    resolve();
+                    return;
                 }
-            `;
-            document.head.appendChild(style);
+                
+                waited += checkInterval;
+                if (waited >= maxWaitTime) {
+                    reject(new Error('DOM 로딩 타임아웃'));
+                    return;
+                }
+                
+                setTimeout(checkDOM, checkInterval);
+            };
             
-            document.body.appendChild(loading);
-            return loading;
-        },
-        
-        'error': () => {
-            let error = document.getElementById('error');
-            if (error) return error;
-            
-            error = document.createElement('div');
-            error.id = 'error';
-            error.className = 'error-message';
-            error.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: rgba(255, 0, 0, 0.1);
-                border: 1px solid rgba(255, 0, 0, 0.3);
-                color: #ff6b6b;
-                padding: 15px 20px;
-                border-radius: 8px;
-                display: none;
-                z-index: 3000;
-                max-width: 400px;
-            `;
-            
-            document.body.appendChild(error);
-            return error;
-        },
-        
-        'bottom-controls': () => {
-            // 기존 bottom-controls가 있으면 반환
-            const existing = document.getElementById('bottom-controls');
-            if (existing) return existing;
-            
-            // 없으면 null 반환 (optional element)
-            return null;
-        },
-        
-        'right-panel': () => {
-            // 기존 right-panel이 있으면 반환
-            const existing = document.getElementById('right-panel');
-            if (existing) return existing;
-            
-            // 없으면 null 반환 (optional element)
-            return null;
-        }
-    };
+            checkDOM();
+        });
+    }
     
-    // 모든 매핑 실행
-    Object.keys(mappings).forEach(id => {
-        const element = mappings[id]();
-        if (element) {
-            console.log(`✓ DOM 요소 매핑 완료: #${id}`);
-        } else {
-            console.log(`- DOM 요소 선택적: #${id}`);
+    /**
+     * 사용자 정의 설정 로드
+     */
+    async loadUserConfigurations() {
+        try {
+            // URL 파라미터에서 설정 가져오기
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            // 지원되는 URL 설정들
+            const urlConfigs = {
+                'debug': 'app.debug',
+                'theme': 'ui.theme',
+                'lang': 'ui.language',
+                'quality': 'performance.targetFPS',
+                'fov': 'scene.camera.fov'
+            };
+            
+            Object.entries(urlConfigs).forEach(([param, configKey]) => {
+                const value = urlParams.get(param);
+                if (value !== null) {
+                    try {
+                        const parsedValue = this.parseConfigValue(value);
+                        setConfig(configKey, parsedValue);
+                        console.log(`[WallViewer] URL 설정 적용: ${configKey} = ${parsedValue}`);
+                    } catch (error) {
+                        console.warn(`[WallViewer] URL 설정 파싱 실패: ${param}=${value}`);
+                    }
+                }
+            });
+            
+            // localStorage에서 사용자 설정 복원
+            await this.loadUserPreferences();
+            
+        } catch (error) {
+            console.warn('[WallViewer] 사용자 설정 로드 실패:', error);
         }
-    });
+    }
     
-    console.log('DOM 요소 매핑 완료!');
-}
-
-// DOMContentLoaded 이벤트에서 실행
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', mapDOMElements);
-} else {
-    // 이미 로드된 경우 즉시 실행
-    mapDOMElements();
-}
-
-// 전역에서 접근 가능하도록 설정
-window.mapDOMElements = mapDOMElements;
-
-// DOM 준비 확인
-function waitForDOM() {
-    return new Promise((resolve) => {
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-            resolve();
-        } else {
-            document.addEventListener('DOMContentLoaded', resolve);
-        }
-    });
-}
-
-// 초기화 함수
-async function init() {
-    console.log('=== 옹벽 3D 뷰어 초기화 시작 ===');
-    
-    try {
-        // 1. DOM 준비 대기
-        await waitForDOM();
-        console.log('✓ DOM 준비 완료');
-        
-        // 2. CONFIG 로드 대기
-        await waitForConfig();
-        console.log('✓ CONFIG 로드 완료');
-        
-        // 3. Three.js 로드 대기
-        await waitForThree();
-        console.log('✓ Three.js 로드 완료');
-        
-        // 4. 필수 DOM 요소 확인
-        const requiredElements = ['model-selector', 'model-list', 'canvas-container'];
-        for (const id of requiredElements) {
-            if (!document.getElementById(id)) {
-                console.warn(`경고: #${id} 요소를 찾을 수 없습니다.`);
+    /**
+     * 사용자 기본 설정 로드
+     */
+    async loadUserPreferences() {
+        try {
+            const saved = localStorage.getItem('wallviewer-preferences');
+            if (saved) {
+                const preferences = JSON.parse(saved);
+                
+                // 허용된 설정만 적용
+                const allowedKeys = [
+                    'ui.theme',
+                    'ui.language',
+                    'animation.defaultSpeed',
+                    'scene.camera.fov'
+                ];
+                
+                allowedKeys.forEach(key => {
+                    if (preferences[key] !== undefined) {
+                        setConfig(key, preferences[key]);
+                    }
+                });
+                
+                console.log('[WallViewer] 사용자 기본 설정 복원됨');
             }
+        } catch (error) {
+            console.warn('[WallViewer] 기본 설정 복원 실패:', error);
+        }
+    }
+    
+    /**
+     * 설정값 파싱
+     */
+    parseConfigValue(value) {
+        // 불린값
+        if (value === 'true') return true;
+        if (value === 'false') return false;
+        
+        // 숫자값
+        const num = parseFloat(value);
+        if (!isNaN(num)) return num;
+        
+        // 문자열
+        return value;
+    }
+    
+    /**
+     * AppCore 생성 및 초기화
+     */
+    async createAndInitializeApp() {
+        // 컨테이너 결정
+        const containerSelector = getConfig('selectors.canvasContainer', '#canvas-container');
+        
+        console.log(`[WallViewer] AppCore 생성 중... (컨테이너: ${containerSelector})`);
+        
+        // AppCore 인스턴스 생성
+        this.app = new AppCore(containerSelector, {
+            environment: CONFIG_MANAGER.environment,
+            startTime: this.startTime
+        });
+        
+        // 이벤트 리스너 설정
+        this.setupAppEventListeners();
+        
+        // 초기화 실행
+        await this.app.init();
+        
+        // 전역 접근 (디버깅용)
+        if (getConfig('app.debug')) {
+            window.wallViewerApp = this.app;
+            window.wallViewer = this;
+            console.log('[WallViewer] 전역 접근 활성화');
+        }
+    }
+    
+    /**
+     * 앱 이벤트 리스너 설정
+     */
+    setupAppEventListeners() {
+        this.app.on('loading:start', () => {
+            console.log('[WallViewer] 로딩 시작');
+            this.showLoadingIndicator();
+        });
+        
+        this.app.on('loading:progress', (progress) => {
+            this.updateLoadingProgress(progress);
+        });
+        
+        this.app.on('model:loaded', (index, result) => {
+            console.log(`[WallViewer] 모델 로드 완료: ${index} (${result.loadTime}초)`);
+            this.hideLoadingIndicator();
+            this.saveUserPreference('lastModel', index);
+        });
+        
+        this.app.on('model:error', (index, error) => {
+            console.error(`[WallViewer] 모델 로드 실패: ${index}`, error);
+            this.showErrorNotification(`모델 로드 실패: ${error.message}`);
+        });
+        
+        this.app.on('error', (error) => {
+            console.error('[WallViewer] 앱 오류:', error);
+            this.handleAppError(error);
+        });
+    }
+    
+    /**
+     * 개발 도구 설정
+     */
+    setupDevTools() {
+        if (!getConfig('app.debug')) return;
+        
+        console.log('[WallViewer] 개발 도구 설정 중...');
+        
+        // 통계 표시
+        if (getConfig('devTools.showStats')) {
+            this.setupStats();
         }
         
-        // 5. 모듈 초기화
-        console.log('모듈 초기화 시작...');
+        // 키보드 단축키
+        this.setupKeyboardShortcuts();
         
-        // SceneManager
-        sceneManager = new SceneManager();
-        console.log('✓ SceneManager 생성 완료');
+        // 성능 모니터링
+        this.setupPerformanceMonitoring();
         
-        // AnimationController
-        animationController = new AnimationController();
-        console.log('✓ AnimationController 생성 완료');
+        // 개발자 콘솔 메시지
+        this.showDevConsoleInfo();
+    }
+    
+    /**
+     * Stats.js 설정
+     */
+    setupStats() {
+        try {
+            if (typeof Stats !== 'undefined') {
+                const stats = new Stats();
+                stats.showPanel(0); // FPS 패널
+                document.body.appendChild(stats.dom);
+                
+                // 애니메이션 루프에 연결
+                this.app.on('render', () => {
+                    stats.update();
+                });
+                
+                console.log('[WallViewer] ✓ Stats.js 활성화');
+            }
+        } catch (error) {
+            console.warn('[WallViewer] Stats.js 설정 실패:', error);
+        }
+    }
+    
+    /**
+     * 키보드 단축키 설정
+     */
+    setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (event) => {
+            // Ctrl/Cmd + 조합키만 처리
+            if (!event.ctrlKey && !event.metaKey) return;
+            
+            switch (event.code) {
+                case 'KeyD': // Ctrl+D: 디버그 정보 토글
+                    event.preventDefault();
+                    this.toggleDebugInfo();
+                    break;
+                    
+                case 'KeyR': // Ctrl+R: 앱 재시작 (개발 모드만)
+                    if (event.shiftKey) {
+                        event.preventDefault();
+                        this.restartApp();
+                    }
+                    break;
+                    
+                case 'KeyS': // Ctrl+S: 스크린샷
+                    event.preventDefault();
+                    this.takeScreenshot();
+                    break;
+                    
+                case 'KeyH': // Ctrl+H: 도움말
+                    event.preventDefault();
+                    this.showKeyboardHelp();
+                    break;
+            }
+        });
         
-        // HotspotManager
-        hotspotManager = new HotspotManager(sceneManager);
-        console.log('✓ HotspotManager 생성 완료');
+        console.log('[WallViewer] ✓ 키보드 단축키 활성화');
+    }
+    
+    /**
+     * 성능 모니터링 시작
+     */
+    startPerformanceMonitoring() {
+        if (!getConfig('performance.adaptiveQuality')) return;
         
-        // ModelLoader
-        modelLoader = new ModelLoader(sceneManager, animationController);
-        console.log('✓ ModelLoader 생성 완료');
+        const targetFPS = getConfig('performance.targetFPS');
+        let frameCount = 0;
+        let lastTime = performance.now();
+        let avgFPS = targetFPS;
         
-        // UIController
-        uiController = new UIController(sceneManager, modelLoader, animationController, hotspotManager);
-        console.log('✓ UIController 생성 완료');
-        
-        // 6. 전역 객체에 할당 (디버깅용)
-        window.viewerApp = {
-            sceneManager,
-            modelLoader,
-            uiController,
-            animationController,
-            hotspotManager,
-            CONFIG
+        const monitor = () => {
+            frameCount++;
+            const currentTime = performance.now();
+            
+            if (currentTime - lastTime >= 1000) { // 1초마다 측정
+                avgFPS = frameCount;
+                frameCount = 0;
+                lastTime = currentTime;
+                
+                // 성능 자동 조절
+                this.adjustQualityBasedOnFPS(avgFPS, targetFPS);
+            }
+            
+            if (this.app && this.app.isRunning) {
+                requestAnimationFrame(monitor);
+            }
         };
         
-        // 7. 애니메이션 루프 시작
-        function animate() {
-            requestAnimationFrame(animate);
-            
-            if (sceneManager && sceneManager.controls) {
-                sceneManager.controls.update();
-            }
-            
-            if (animationController) {
-                animationController.update();
-            }
-            
-            if (hotspotManager) {
-                hotspotManager.updateHotspots();
-            }
-            
-            if (sceneManager) {
-                sceneManager.render();
-            }
-        }
+        requestAnimationFrame(monitor);
+        console.log('[WallViewer] ✓ 성능 모니터링 시작');
+    }
+    
+    /**
+     * FPS 기반 품질 자동 조절
+     */
+    adjustQualityBasedOnFPS(currentFPS, targetFPS) {
+        const fpsRatio = currentFPS / targetFPS;
         
-        animate();
-        console.log('✓ 애니메이션 루프 시작됨');
-        
-        isInitialized = true;
-        console.log('=== 초기화 완료 ===');
-        
-        // 8. URL 파라미터 확인 (viewer.html인 경우)
-        const urlParams = new URLSearchParams(window.location.search);
-        const modelId = urlParams.get('model');
-        
-        if (modelId !== null) {
-            const index = parseInt(modelId);
-            if (!isNaN(index) && index >= 0 && index < CONFIG.models.length) {
-                console.log(`URL 파라미터로 모델 ${index} 자동 로드`);
-                setTimeout(() => {
-                    uiController.selectModel(CONFIG.models[index]);
-                }, 500);
+        if (fpsRatio < 0.8) { // 80% 미만일 때 품질 하향
+            const currentPixelRatio = getConfig('scene.renderer.pixelRatio');
+            if (currentPixelRatio > 1) {
+                setConfig('scene.renderer.pixelRatio', Math.max(1, currentPixelRatio - 0.1));
+                console.log(`[WallViewer] 성능 최적화: pixelRatio 감소 → ${getConfig('scene.renderer.pixelRatio')}`);
+            }
+        } else if (fpsRatio > 1.2) { // 120% 초과일 때 품질 상향
+            const currentPixelRatio = getConfig('scene.renderer.pixelRatio');
+            const maxPixelRatio = Math.min(window.devicePixelRatio, 2);
+            if (currentPixelRatio < maxPixelRatio) {
+                setConfig('scene.renderer.pixelRatio', Math.min(maxPixelRatio, currentPixelRatio + 0.1));
+                console.log(`[WallViewer] 품질 향상: pixelRatio 증가 → ${getConfig('scene.renderer.pixelRatio')}`);
             }
         }
+    }
+    
+    /**
+     * 전역 에러 핸들링 설정
+     */
+    setupGlobalErrorHandling() {
+        // 개발 모드에서는 에러를 더 상세히 표시
+        const showDetailedErrors = getConfig('app.debug', false);
         
-        // 9. 디버그 정보
-        if (CONFIG.debug) {
-            console.log('디버그 모드 활성화됨');
-            console.log('전역 객체: window.viewerApp');
-            console.log('사용 가능한 명령어:');
-            console.log('- viewerApp.modelLoader.loadModel(0)');
-            console.log('- viewerApp.uiController.selectModel(CONFIG.models[0])');
+        window.addEventListener('error', (event) => {
+            console.error('[WallViewer] 전역 JavaScript 오류:', {
+                message: event.message,
+                filename: event.filename,
+                line: event.lineno,
+                column: event.colno,
+                error: event.error
+            });
+            
+            if (showDetailedErrors) {
+                this.showErrorNotification(`JavaScript 오류: ${event.message}`);
+            }
+        });
+        
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('[WallViewer] 처리되지 않은 Promise 거부:', event.reason);
+            
+            if (showDetailedErrors) {
+                this.showErrorNotification(`Promise 오류: ${event.reason}`);
+            }
+        });
+    }
+    
+    /**
+     * 로딩 인디케이터 표시
+     */
+    showLoadingIndicator() {
+        const loadingSelector = getConfig('selectors.loadingScreen');
+        const loadingElement = document.querySelector(loadingSelector);
+        
+        if (loadingElement) {
+            loadingElement.style.display = 'flex';
+        }
+    }
+    
+    /**
+     * 로딩 진행률 업데이트
+     */
+    updateLoadingProgress(progress) {
+        const progressSelector = getConfig('selectors.progressBar');
+        const textSelector = getConfig('selectors.progressText');
+        
+        const progressBar = document.querySelector(progressSelector);
+        const progressText = document.querySelector(textSelector);
+        
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
         }
         
-    } catch (error) {
-        console.error('초기화 중 오류 발생:', error);
+        if (progressText) {
+            progressText.textContent = `${Math.round(progress)}%`;
+        }
+    }
+    
+    /**
+     * 로딩 인디케이터 숨김
+     */
+    hideLoadingIndicator() {
+        const loadingSelector = getConfig('selectors.loadingScreen');
+        const loadingElement = document.querySelector(loadingSelector);
         
-        // 오류 표시
-        const errorDiv = document.getElementById('error');
-        if (errorDiv) {
-            errorDiv.textContent = `초기화 오류: ${error.message}`;
-            errorDiv.style.display = 'block';
+        if (loadingElement) {
+            loadingElement.style.display = 'none';
+        }
+    }
+    
+    /**
+     * 에러 알림 표시
+     */
+    showErrorNotification(message) {
+        console.error('[WallViewer] 오류:', message);
+        
+        // 간단한 토스트 알림
+        const toast = document.createElement('div');
+        toast.textContent = message;
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #ff6b6b;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 6px;
+            z-index: 10000;
+            max-width: 400px;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        `;
+        
+        document.body.appendChild(toast);
+        
+        // 3초 후 자동 제거
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, getConfig('ui.notificationDuration'));
+    }
+    
+    /**
+     * 사용자 기본 설정 저장
+     */
+    saveUserPreference(key, value) {
+        try {
+            const saved = localStorage.getItem('wallviewer-preferences');
+            const preferences = saved ? JSON.parse(saved) : {};
+            preferences[key] = value;
+            localStorage.setItem('wallviewer-preferences', JSON.stringify(preferences));
+        } catch (error) {
+            console.warn('[WallViewer] 기본 설정 저장 실패:', error);
+        }
+    }
+    
+    /**
+     * 커스텀 이벤트 발생
+     */
+    dispatchCustomEvent(eventName, detail) {
+        const event = new CustomEvent(eventName, { detail });
+        window.dispatchEvent(event);
+    }
+    
+    /**
+     * 초기화 실패 처리
+     */
+    async handleInitializationFailure(error) {
+        console.error('[WallViewer] 치명적 오류 - 애플리케이션을 시작할 수 없습니다:', error);
+        
+        // 사용자에게 친화적인 오류 메시지 표시
+        const container = document.querySelector(getConfig('selectors.canvasContainer', 'body'));
+        if (container) {
+            container.innerHTML = `
+                <div style="
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    background: linear-gradient(135deg, #1e1e1e, #2a2a2a);
+                    color: #fff;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                    text-align: center;
+                    padding: 20px;
+                ">
+                    <div style="
+                        background: rgba(255, 107, 107, 0.1);
+                        border: 1px solid #ff6b6b;
+                        border-radius: 12px;
+                        padding: 30px;
+                        max-width: 500px;
+                        backdrop-filter: blur(10px);
+                    ">
+                        <h2 style="color: #ff6b6b; margin: 0 0 20px 0; font-weight: 600;">
+                            ⚠️ 로딩 실패
+                        </h2>
+                        <p style="margin: 0 0 15px 0; opacity: 0.9; line-height: 1.5;">
+                            3D 뷰어를 시작할 수 없습니다.<br>
+                            브라우저 호환성을 확인하거나 페이지를 새로고침해주세요.
+                        </p>
+                        <div style="margin: 20px 0;">
+                            <button onclick="location.reload()" style="
+                                background: #007bff;
+                                color: white;
+                                border: none;
+                                padding: 12px 24px;
+                                border-radius: 6px;
+                                cursor: pointer;
+                                font-size: 14px;
+                                margin-right: 10px;
+                                transition: background 0.2s;
+                            " onmouseover="this.style.background='#0056b3'" onmouseout="this.style.background='#007bff'">
+                                🔄 새로고침
+                            </button>
+                            <button onclick="this.parentElement.parentElement.querySelector('details').open = !this.parentElement.parentElement.querySelector('details').open" style="
+                                background: transparent;
+                                color: #ccc;
+                                border: 1px solid #666;
+                                padding: 12px 24px;
+                                border-radius: 6px;
+                                cursor: pointer;
+                                font-size: 14px;
+                            ">
+                                🔍 자세히
+                            </button>
+                        </div>
+                        <details style="margin-top: 20px; text-align: left;">
+                            <summary style="cursor: pointer; opacity: 0.7; font-size: 13px;">기술적 세부사항</summary>
+                            <pre style="
+                                background: rgba(0,0,0,0.3);
+                                padding: 15px;
+                                margin-top: 10px;
+                                border-radius: 6px;
+                                font-size: 11px;
+                                overflow: auto;
+                                white-space: pre-wrap;
+                                word-wrap: break-word;
+                            ">${error.message}
+
+${error.stack || 'Stack trace not available'}</pre>
+                        </details>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    /**
+     * 개발자 콘솔 정보 표시
+     */
+    showDevConsoleInfo() {
+        const styles = {
+            title: 'font-size: 20px; font-weight: bold; color: #00ff88;',
+            info: 'font-size: 14px; color: #00aaff;',
+            command: 'font-size: 12px; color: #ffaa00; font-family: monospace;'
+        };
+        
+        console.log('%c🏗️ Wall 3D Viewer - 개발 모드', styles.title);
+        console.log('%c개발자 도구가 활성화되었습니다.', styles.info);
+        console.log('%c\n사용 가능한 전역 객체:', styles.info);
+        console.log('%c• window.wallViewerApp - 메인 앱 인스턴스', styles.command);
+        console.log('%c• window.wallViewer - 애플리케이션 래퍼', styles.command);
+        console.log('%c• window.CONFIG_MANAGER - 설정 매니저', styles.command);
+        console.log('%c• getConfig(key) - 설정 가져오기', styles.command);
+        console.log('%c• setConfig(key, value) - 설정 변경', styles.command);
+        console.log('%c\n키보드 단축키:', styles.info);
+        console.log('%c• Ctrl+D - 디버그 정보 토글', styles.command);
+        console.log('%c• Ctrl+Shift+R - 앱 재시작', styles.command);
+        console.log('%c• Ctrl+S - 스크린샷', styles.command);
+        console.log('%c• Ctrl+H - 도움말', styles.command);
+    }
+    
+    /**
+     * 디버그 정보 토글
+     */
+    toggleDebugInfo() {
+        if (this.app) {
+            this.app.debug();
+            CONFIG_MANAGER.debug();
+        }
+    }
+    
+    /**
+     * 앱 재시작 (개발 모드)
+     */
+    async restartApp() {
+        if (!getConfig('app.debug')) return;
+        
+        console.log('[WallViewer] 앱 재시작 중...');
+        
+        if (this.app) {
+            this.app.destroy();
         }
         
-        // 디버그 정보 출력
-        console.log('\n=== 디버그 정보 ===');
-        console.log('CONFIG:', typeof CONFIG);
-        console.log('THREE:', typeof THREE);
-        console.log('DOM Ready:', document.readyState);
+        this.initialized = false;
+        this.startTime = performance.now();
         
-        throw error;
+        await this.initialize();
+    }
+    
+    /**
+     * 스크린샷 촬영
+     */
+    takeScreenshot() {
+        if (this.app && this.app.sceneManager) {
+            this.app.sceneManager.takeScreenshot();
+        }
+    }
+    
+    /**
+     * 키보드 도움말 표시
+     */
+    showKeyboardHelp() {
+        console.group('🎮 키보드 단축키');
+        console.log('Ctrl+D: 디버그 정보 출력');
+        console.log('Ctrl+Shift+R: 앱 재시작 (개발 모드)');
+        console.log('Ctrl+S: 스크린샷 촬영');
+        console.log('Ctrl+H: 이 도움말');
+        console.groupEnd();
     }
 }
 
-// 전역 init 함수 노출
-window.init = init;
-
-// 자동 초기화
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-} else {
-    // 이미 로드된 경우 약간의 지연 후 실행
-    setTimeout(init, 100);
+/**
+ * 애플리케이션 시작 함수
+ */
+async function startWallViewer() {
+    const viewer = new WallViewerApplication();
+    await viewer.initialize();
+    return viewer;
 }
 
-// 전역 에러 처리
-window.addEventListener('error', function(event) {
-    console.error('전역 오류:', event.error);
-    console.error('파일:', event.filename);
-    console.error('라인:', event.lineno, '컬럼:', event.colno);
-});
+/**
+ * DOM이 준비되면 자동 시작
+ */
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startWallViewer);
+} else {
+    startWallViewer();
+}
 
-window.addEventListener('unhandledrejection', function(event) {
-    console.error('처리되지 않은 Promise 거부:', event.reason);
-});
-
-// 개발자 콘솔 안내
-console.log('%c옹벽 3D 뷰어', 'font-size: 20px; color: #007bff; font-weight: bold;');
-console.log('버전: 1.0.0');
-console.log('Three.js 버전: r128');
-console.log('문제가 발생하면 F12 콘솔에서 에러를 확인하세요.', 'color: #ff6b6b;');
-
-export { sceneManager, modelLoader, uiController, animationController, hotspotManager };
+// ES 모듈 내보내기
+export { WallViewerApplication, startWallViewer };
+export default startWallViewer;

@@ -1,750 +1,1370 @@
-// UIController.js - 완전한 UI 컨트롤러
-import { CONFIG } from './config.js';
+// js/UIController.js
+// ConfigManager 기반 완전 개선 버전 - 모든 하드코딩 제거
 
+import { getConfig, setConfig } from './core/ConfigManager.js';
+
+/**
+ * UI 컨트롤러 클래스
+ * - ConfigManager 기반 설정 관리
+ * - 모든 DOM 셀렉터 설정화
+ * - 이벤트 기반 통신
+ * - 반응형 UI 지원
+ */
 export class UIController {
     constructor(sceneManager, modelLoader, animationController, hotspotManager) {
+        // 서비스 의존성
         this.sceneManager = sceneManager;
         this.modelLoader = modelLoader;
         this.animationController = animationController;
         this.hotspotManager = hotspotManager;
-
+        
+        // DOM 요소 캐시
+        this.elements = new Map();
+        
+        // 상태 관리
+        this.state = {
+            currentModel: null,
+            loading: false,
+            panelsVisible: {
+                left: true,
+                right: true,
+                bottom: true
+            },
+            selectedHotspot: null
+        };
+        
+        // 성능 모니터링
         this.fps = 0;
         this.frameCount = 0;
         this.lastTime = performance.now();
         
-        // 카메라 컨트롤 상태
-        this.cameraControlState = {
-            currentOrbitAngle: 0,
-            isTransitioning: false,
-            savedStates: new Map()
-        };
+        // 이벤트 시스템
+        this.events = new Map();
+        
+        // 앱 참조 (의존성 주입용)
+        this.app = null;
         
         // 초기화
         this.init();
-    }
-    
-    init() {
-        console.log('[UIController] 초기화 시작');
-        
-        // DOM 요소 캐싱
-        this.cacheDOMElements();
-        
-        // DOM 요소 확인
-        this.verifyDOMElements();
-        
-        // 이벤트 리스너 설정
-        this.setupEventListeners();
-        
-        // 카메라 컨트롤 설정 (개선된 기능)
-        this.setupCameraControls();
-        
-        // 카메라 속도 컨트롤 생성 (새로운 기능)
-        this.createCameraSpeedControls();
-        
-        // 모델 선택 화면 표시
-        this.showModelSelector();
-        
-        // FPS 모니터 시작
-        this.startFPSMonitor();
         
         console.log('[UIController] 초기화 완료');
     }
     
-    cacheDOMElements() {
-        // 필수 요소들
-        this.modelSelector = document.getElementById('model-selector');
-        this.modelList = document.getElementById('model-list');
-        this.changeModelBtn = document.getElementById('changeModel');
-        
-        // viewer.html 전용 요소들
-        this.loadingScreen = document.getElementById('loading');
-        this.progressBar = document.getElementById('progress-fill');
-        this.progressText = document.getElementById('progress-text');
-        
-        // 정보 표시 요소들
-        this.meshCount = document.getElementById('mesh-count');
-        this.vertexCount = document.getElementById('vertex-count');
-        this.triangleCount = document.getElementById('triangle-count');
-        this.hotspotCount = document.getElementById('hotspot-count');
-        
-        // 카메라 관련 요소들
-        this.cameraView = document.getElementById('camera-view');
-        this.cameraSpeed = document.getElementById('camera-speed');
-        this.cameraEasing = document.getElementById('camera-easing');
-        
-        // 컨트롤 패널 요소들
-        this.controlPanel = document.getElementById('control-panel');
-        this.fpsDisplay = document.getElementById('fps');
-        
-        // 애니메이션 컨트롤
-        this.playBtn = document.getElementById('play-pause');
-        this.timelineSlider = document.getElementById('timeline-slider');
-        this.currentTimeDisplay = document.getElementById('current-time');
-        this.totalTimeDisplay = document.getElementById('total-time');
-        
-        // 추가 컨트롤들
-        this.gridToggle = document.getElementById('grid-toggle');
-        this.panelToggle = document.getElementById('panel-toggle');
-    }
-    
-    verifyDOMElements() {
-        const requiredElements = ['model-selector', 'model-list'];
-        const missingElements = requiredElements.filter(id => !document.getElementById(id));
-        
-        if (missingElements.length > 0) {
-            console.warn('[UIController] 누락된 DOM 요소:', missingElements);
-        }
-    }
-    
-    setupEventListeners() {
-        // 모델 변경 버튼
-        if (this.changeModelBtn) {
-            this.changeModelBtn.addEventListener('click', () => {
-                this.showModelSelector();
-            });
-        }
-        
-        // 그리드 토글
-        if (this.gridToggle) {
-            this.gridToggle.addEventListener('change', (e) => {
-                this.sceneManager.toggleGrid();
-            });
-        }
-        
-        // 패널 토글
-        if (this.panelToggle) {
-            this.panelToggle.addEventListener('click', () => {
-                this.toggleControlPanel();
-            });
-        }
-        
-        // 애니메이션 컨트롤
-        if (this.playBtn) {
-            this.playBtn.addEventListener('click', () => {
-                this.toggleAnimation();
-            });
-        }
-        
-        if (this.timelineSlider) {
-            this.timelineSlider.addEventListener('input', (e) => {
-                this.animationController.setProgress(parseFloat(e.target.value));
-            });
-        }
-        
-        // 카메라 뷰 선택
-        if (this.cameraView) {
-            this.cameraView.addEventListener('change', (e) => {
-                this.sceneManager.setCameraView(e.target.value);
-            });
-        }
-        
-        // 홈 버튼
-        const homeBtn = document.getElementById('home-btn');
-        if (homeBtn) {
-            homeBtn.addEventListener('click', () => {
-                window.location.href = 'index.html';
-            });
-        }
-    }
-    
-    // 카메라 컨트롤 설정 - 개선된 버전
-    setupCameraControls() {
-        // 카메라 전환 상태 표시
-        this.cameraTransitionIndicator = null;
-        
-        // 프리셋 뷰 버튼 추가
-        this.createPresetViewButtons();
-        
-        // 모델 포커스 버튼
-        const focusModelBtn = document.getElementById('focus-model');
-        if (focusModelBtn) {
-            focusModelBtn.addEventListener('click', () => {
-                this.showCameraTransitionIndicator('모델 포커스');
-                this.sceneManager.setCameraView('focus-model', {
-                    duration: 1.2,
-                    easeType: 'easeOutCubic'
-                });
-            });
-        }
-        
-        // 회전 뷰 버튼
-        const orbitViewBtn = document.getElementById('orbit-view');
-        if (orbitViewBtn) {
-            orbitViewBtn.addEventListener('click', () => {
-                this.cameraControlState.currentOrbitAngle = (this.cameraControlState.currentOrbitAngle + 90) % 360;
-                this.showCameraTransitionIndicator(`${this.cameraControlState.currentOrbitAngle}° 회전`);
-                this.sceneManager.setCameraView(`orbit-${this.cameraControlState.currentOrbitAngle}`, {
-                    duration: 1.5,
-                    easeType: 'easeInOutSine'
-                });
-            });
-        }
-        
-        // 줌 버튼 추가
-        this.createZoomControls();
-        
-        // 카메라 전환 속도 설정
-        if (this.cameraSpeed) {
-            this.cameraSpeed.addEventListener('change', (e) => {
-                const duration = parseFloat(e.target.value);
-                this.sceneManager.setCameraTransitionDuration(duration);
-            });
-        }
-        
-        // 이징 타입 선택
-        if (this.cameraEasing) {
-            this.cameraEasing.addEventListener('change', (e) => {
-                this.sceneManager.setCameraTransitionEasing(e.target.value);
-            });
-        }
-        
-        // 키보드 단축키
-        this.setupKeyboardShortcuts();
-        
-        // 카메라 전환 이벤트 리스너
-        if (this.sceneManager) {
-            this.sceneManager.onCameraTransitionStart = (viewName) => {
-                this.cameraControlState.isTransitioning = true;
-                this.disableInteractionDuringTransition();
-            };
+    /**
+     * 초기화
+     */
+    init() {
+        try {
+            // DOM 요소 캐싱
+            this.cacheDOMElements();
             
-            this.sceneManager.onCameraTransitionEnd = (viewName) => {
-                this.cameraControlState.isTransitioning = false;
-                this.enableInteractionAfterTransition();
-                this.hideCameraTransitionIndicator();
-            };
+            // DOM 요소 검증
+            this.validateDOMElements();
+            
+            // 이벤트 리스너 설정
+            this.setupEventListeners();
+            
+            // 초기 UI 상태 설정
+            this.initializeUIState();
+            
+            // 모델 선택 화면 구성
+            this.setupModelSelector();
+            
+            // 성능 모니터링 시작
+            this.startPerformanceMonitoring();
+            
+            // 반응형 UI 설정
+            this.setupResponsiveUI();
+            
+            this.emit('initialized');
+            
+        } catch (error) {
+            console.error('[UIController] 초기화 실패:', error);
+            this.emit('error', error);
+            throw error;
         }
     }
     
-    // 카메라 속도 컨트롤 생성 - 새로운 기능
-    createCameraSpeedControls() {
-        const viewControls = document.querySelector('.view-controls');
-        if (!viewControls) return;
+    /**
+     * DOM 요소 캐싱 (ConfigManager 기반)
+     */
+    cacheDOMElements() {
+        // ConfigManager에서 셀렉터 가져오기
+        const selectors = getConfig('selectors');
         
-        const speedControlsHtml = `
-            <div class="camera-speed-controls">
-                <h5>카메라 속도 조절</h5>
-                <div class="speed-control-group">
-                    <label>회전 속도:</label>
-                    <input type="range" id="rotate-speed" min="0.1" max="2" step="0.1" value="${CONFIG.controls.rotateSpeed}">
-                    <span id="rotate-speed-value">${CONFIG.controls.rotateSpeed}</span>
-                </div>
-                <div class="speed-control-group">
-                    <label>줌 속도:</label>
-                    <input type="range" id="zoom-speed" min="0.1" max="2" step="0.1" value="${CONFIG.controls.zoomSpeed}">
-                    <span id="zoom-speed-value">${CONFIG.controls.zoomSpeed}</span>
-                </div>
-                <div class="speed-control-group">
-                    <label>팬 속도:</label>
-                    <input type="range" id="pan-speed" min="0.1" max="2" step="0.1" value="${CONFIG.controls.panSpeed}">
-                    <span id="pan-speed-value">${CONFIG.controls.panSpeed}</span>
-                </div>
-                <div class="speed-control-group">
-                    <label>감속 강도:</label>
-                    <input type="range" id="damping-factor" min="0.05" max="0.25" step="0.01" value="${CONFIG.controls.dampingFactor}">
-                    <span id="damping-factor-value">${CONFIG.controls.dampingFactor}</span>
-                </div>
-            </div>
-        `;
+        // 모든 셀렉터를 순회하며 요소 캐싱
+        Object.entries(selectors).forEach(([key, selector]) => {
+            const element = document.querySelector(selector);
+            if (element) {
+                this.elements.set(key, element);
+            } else {
+                console.warn(`[UIController] 요소를 찾을 수 없음: ${key} (${selector})`);
+            }
+        });
         
-        const speedControlDiv = document.createElement('div');
-        speedControlDiv.innerHTML = speedControlsHtml;
-        viewControls.appendChild(speedControlDiv);
+        // 추가 요소들 (동적 생성되는 것들)
+        this.findOptionalElements();
         
-        // 이벤트 리스너 추가
-        this.setupSpeedControlListeners();
+        console.log(`[UIController] ✓ DOM 요소 캐싱 완료: ${this.elements.size}개`);
     }
     
-    // 속도 컨트롤 이벤트 리스너
-    setupSpeedControlListeners() {
-        const controls = [
-            { id: 'rotate-speed', property: 'rotateSpeed' },
-            { id: 'zoom-speed', property: 'zoomSpeed' },
-            { id: 'pan-speed', property: 'panSpeed' },
-            { id: 'damping-factor', property: 'dampingFactor' }
+    /**
+     * 선택적 요소들 찾기
+     */
+    findOptionalElements() {
+        const optionalSelectors = {
+            // 패널들
+            leftPanelToggle: '#left-panel-toggle',
+            rightPanelToggle: '#right-panel-toggle',
+            bottomPanelToggle: '#bottom-panel-toggle',
+            
+            // 뷰어 전용
+            viewerContainer: '#viewer-container',
+            toolbar: '#toolbar',
+            statusBar: '#status-bar',
+            
+            // 애니메이션 관련
+            playButton: '#play-button',
+            pauseButton: '#pause-button',
+            stopButton: '#stop-button',
+            timelineSlider: '#timeline-slider',
+            speedControl: '#speed-control',
+            
+            // 카메라 관련
+            cameraPresets: '#camera-presets',
+            resetCameraBtn: '#reset-camera',
+            
+            // 설정 관련
+            settingsPanel: '#settings-panel',
+            themeToggle: '#theme-toggle',
+            languageSelector: '#language-selector'
+        };
+        
+        Object.entries(optionalSelectors).forEach(([key, selector]) => {
+            const element = document.querySelector(selector);
+            if (element) {
+                this.elements.set(key, element);
+            }
+        });
+    }
+    
+    /**
+     * DOM 요소 검증
+     */
+    validateDOMElements() {
+        const requiredElements = [
+            'modelSelector',
+            'modelList',
+            'canvasContainer'
         ];
         
-        controls.forEach(control => {
-            const slider = document.getElementById(control.id);
-            const valueSpan = document.getElementById(`${control.id}-value`);
+        const missingElements = requiredElements.filter(key => !this.elements.has(key));
+        
+        if (missingElements.length > 0) {
+            console.warn('[UIController] 필수 요소 누락:', missingElements);
             
-            if (slider && valueSpan) {
-                slider.addEventListener('input', (e) => {
-                    const value = parseFloat(e.target.value);
-                    valueSpan.textContent = value.toFixed(2);
-                    
-                    if (control.property === 'dampingFactor') {
-                        if (this.sceneManager.controls) {
-                            this.sceneManager.controls.dampingFactor = value;
-                        }
-                    } else {
-                        // 속도 설정 업데이트
-                        const currentSpeeds = {
-                            rotateSpeed: parseFloat(document.getElementById('rotate-speed').value),
-                            zoomSpeed: parseFloat(document.getElementById('zoom-speed').value),
-                            panSpeed: parseFloat(document.getElementById('pan-speed').value)
-                        };
-                        
-                        this.sceneManager.setCameraSpeed(
-                            currentSpeeds.rotateSpeed,
-                            currentSpeeds.zoomSpeed,
-                            currentSpeeds.panSpeed
-                        );
-                    }
+            // 자동 생성 시도 (개발 모드)
+            if (getConfig('app.debug')) {
+                this.createMissingElements(missingElements);
+            }
+        }
+    }
+    
+    /**
+     * 누락된 요소 자동 생성
+     */
+    createMissingElements(missingKeys) {
+        const selectors = getConfig('selectors');
+        
+        missingKeys.forEach(key => {
+            const selector = selectors[key];
+            if (!selector) return;
+            
+            try {
+                const element = document.createElement('div');
+                element.id = selector.replace('#', '');
+                element.className = key.toLowerCase().replace(/([A-Z])/g, '-$1');
+                
+                // 기본 스타일 적용
+                this.applyDefaultStyles(element, key);
+                
+                // 적절한 부모에 추가
+                const parent = this.findAppropriateParent(key);
+                parent.appendChild(element);
+                
+                // 캐시에 추가
+                this.elements.set(key, element);
+                
+                console.log(`[UIController] 요소 생성: ${key}`);
+                
+            } catch (error) {
+                console.error(`[UIController] 요소 생성 실패: ${key}`, error);
+            }
+        });
+    }
+    
+    /**
+     * 기본 스타일 적용
+     */
+    applyDefaultStyles(element, key) {
+        const styles = {
+            modelSelector: {
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                minHeight: '100vh',
+                background: 'linear-gradient(135deg, #1e1e1e, #2a2a2a)',
+                color: '#fff',
+                fontFamily: 'Arial, sans-serif'
+            },
+            modelList: {
+                display: 'flex',
+                gap: '20px',
+                flexWrap: 'wrap',
+                justifyContent: 'center'
+            },
+            canvasContainer: {
+                width: '100%',
+                height: '100vh',
+                position: 'relative',
+                overflow: 'hidden'
+            }
+        };
+        
+        const style = styles[key];
+        if (style) {
+            Object.assign(element.style, style);
+        }
+    }
+    
+    /**
+     * 적절한 부모 요소 찾기
+     */
+    findAppropriateParent(key) {
+        // 우선순위: 지정된 컨테이너 → body
+        const containers = ['#app', '#main', '#container'];
+        
+        for (const selector of containers) {
+            const container = document.querySelector(selector);
+            if (container) return container;
+        }
+        
+        return document.body;
+    }
+    
+    /**
+     * 이벤트 리스너 설정
+     */
+    setupEventListeners() {
+        // 윈도우 이벤트
+        window.addEventListener('resize', this.handleResize.bind(this));
+        window.addEventListener('orientationchange', this.handleOrientationChange.bind(this));
+        
+        // 키보드 이벤트
+        document.addEventListener('keydown', this.handleKeyDown.bind(this));
+        
+        // 모델 변경 버튼
+        const changeModelBtn = this.elements.get('changeModelBtn');
+        if (changeModelBtn) {
+            changeModelBtn.addEventListener('click', this.showModelSelector.bind(this));
+        }
+        
+        // 패널 토글 버튼들
+        this.setupPanelToggles();
+        
+        // 애니메이션 컨트롤
+        this.setupAnimationControls();
+        
+        // 카메라 컨트롤
+        this.setupCameraControls();
+        
+        // 설정 컨트롤
+        this.setupSettingsControls();
+        
+        // 서비스 이벤트 리스너
+        this.setupServiceEventListeners();
+        
+        console.log('[UIController] ✓ 이벤트 리스너 설정 완료');
+    }
+    
+    /**
+     * 패널 토글 설정
+     */
+    setupPanelToggles() {
+        const panels = ['left', 'right', 'bottom'];
+        
+        panels.forEach(panel => {
+            const toggleBtn = this.elements.get(`${panel}PanelToggle`);
+            const panelElement = this.elements.get(`${panel}Panel`);
+            
+            if (toggleBtn && panelElement) {
+                toggleBtn.addEventListener('click', () => {
+                    this.togglePanel(panel);
                 });
             }
         });
     }
     
-    // 프리셋 뷰 버튼 생성
-    createPresetViewButtons() {
-        const viewControls = document.querySelector('.view-controls');
-        if (!viewControls) return;
+    /**
+     * 애니메이션 컨트롤 설정
+     */
+    setupAnimationControls() {
+        // 재생/일시정지/정지 버튼
+        const controls = ['play', 'pause', 'stop'];
         
-        const presetContainer = document.createElement('div');
-        presetContainer.className = 'preset-view-buttons';
-        presetContainer.innerHTML = `
-            <div class="view-preset-group">
-                <button class="view-btn preset-btn" data-view="front" title="정면">
-                    <span>⬜</span>
-                </button>
-                <button class="view-btn preset-btn" data-view="right" title="우측">
-                    <span>➡️</span>
-                </button>
-                <button class="view-btn preset-btn" data-view="top" title="상단">
-                    <span>⬆️</span>
-                </button>
-                <button class="view-btn preset-btn" data-view="isometric" title="등각">
-                    <span>◻️</span>
+        controls.forEach(action => {
+            const btn = this.elements.get(`${action}Button`);
+            if (btn) {
+                btn.addEventListener('click', () => {
+                    this.handleAnimationControl(action);
+                });
+            }
+        });
+        
+        // 타임라인 슬라이더
+        const timelineSlider = this.elements.get('timelineSlider');
+        if (timelineSlider) {
+            timelineSlider.addEventListener('input', (event) => {
+                this.handleTimelineChange(parseFloat(event.target.value));
+            });
+        }
+        
+        // 속도 컨트롤
+        const speedControl = this.elements.get('speedControl');
+        if (speedControl) {
+            speedControl.addEventListener('input', (event) => {
+                this.handleSpeedChange(parseFloat(event.target.value));
+            });
+        }
+    }
+    
+    /**
+     * 카메라 컨트롤 설정
+     */
+    setupCameraControls() {
+        // 카메라 리셋 버튼
+        const resetBtn = this.elements.get('resetCameraBtn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                this.resetCamera();
+            });
+        }
+        
+        // 카메라 프리셋 버튼들
+        const presetsContainer = this.elements.get('cameraPresets');
+        if (presetsContainer) {
+            presetsContainer.addEventListener('click', (event) => {
+                if (event.target.dataset.preset) {
+                    this.applyCameraPreset(event.target.dataset.preset);
+                }
+            });
+        }
+        
+        // FOV 컨트롤
+        const fovControl = this.elements.get('cameraFov');
+        if (fovControl) {
+            fovControl.addEventListener('input', (event) => {
+                this.handleFovChange(parseFloat(event.target.value));
+            });
+        }
+    }
+    
+    /**
+     * 설정 컨트롤 설정
+     */
+    setupSettingsControls() {
+        // 테마 토글
+        const themeToggle = this.elements.get('themeToggle');
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                this.toggleTheme();
+            });
+        }
+        
+        // 언어 선택
+        const languageSelector = this.elements.get('languageSelector');
+        if (languageSelector) {
+            languageSelector.addEventListener('change', (event) => {
+                this.changeLanguage(event.target.value);
+            });
+        }
+        
+        // 품질 설정
+        const qualitySelector = this.elements.get('qualitySelector');
+        if (qualitySelector) {
+            qualitySelector.addEventListener('change', (event) => {
+                this.changeQuality(event.target.value);
+            });
+        }
+    }
+    
+    /**
+     * 서비스 이벤트 리스너 설정
+     */
+    setupServiceEventListeners() {
+        // SceneManager 이벤트
+        if (this.sceneManager) {
+            this.sceneManager.on('model:added', (gltf, modelInfo) => {
+                this.handleModelLoaded(modelInfo);
+            });
+            
+            this.sceneManager.on('stats:updated', (stats) => {
+                this.updateModelStats(stats);
+            });
+        }
+        
+        // ModelLoader 이벤트
+        if (this.modelLoader) {
+            this.modelLoader.on('loading:start', () => {
+                this.showLoading();
+            });
+            
+            this.modelLoader.on('loading:progress', (progress) => {
+                this.updateLoadingProgress(progress);
+            });
+            
+            this.modelLoader.on('loading:complete', () => {
+                this.hideLoading();
+            });
+            
+            this.modelLoader.on('loading:error', (error) => {
+                this.showError(error.message);
+            });
+        }
+        
+        // AnimationController 이벤트
+        if (this.animationController) {
+            this.animationController.on('play', () => {
+                this.updateAnimationUI('playing');
+            });
+            
+            this.animationController.on('pause', () => {
+                this.updateAnimationUI('paused');
+            });
+            
+            this.animationController.on('stop', () => {
+                this.updateAnimationUI('stopped');
+            });
+            
+            this.animationController.on('frame:changed', (frame) => {
+                this.updateTimelineUI(frame);
+            });
+        }
+        
+        // HotspotManager 이벤트
+        if (this.hotspotManager) {
+            this.hotspotManager.on('hotspot:click', (hotspot) => {
+                this.handleHotspotClick(hotspot);
+            });
+            
+            this.hotspotManager.on('hotspot:hover', (hotspot) => {
+                this.handleHotspotHover(hotspot);
+            });
+        }
+    }
+    
+    /**
+     * 초기 UI 상태 설정
+     */
+    initializeUIState() {
+        // 로딩 화면 숨김
+        this.hideLoading();
+        
+        // 모델 선택 화면 표시 여부 결정
+        const urlParams = new URLSearchParams(window.location.search);
+        const autoLoad = urlParams.get('model') !== null;
+        
+        if (autoLoad) {
+            this.hideModelSelector();
+        } else {
+            this.showModelSelector();
+        }
+        
+        // UI 테마 적용
+        const theme = getConfig('ui.theme', 'dark');
+        this.applyTheme(theme);
+        
+        // 언어 설정
+        const language = getConfig('ui.language', 'ko');
+        this.applyLanguage(language);
+        
+        // 패널 초기 상태
+        const panelsConfig = getConfig('ui.panels', {});
+        Object.entries(panelsConfig).forEach(([panel, visible]) => {
+            this.setPanelVisibility(panel, visible);
+        });
+    }
+    
+    /**
+     * 모델 선택기 설정
+     */
+    setupModelSelector() {
+        const modelList = this.elements.get('modelList');
+        if (!modelList) return;
+        
+        const models = getConfig('models.defaultModels', []);
+        
+        // 기존 내용 제거
+        modelList.innerHTML = '';
+        
+        // 모델 카드 생성
+        models.forEach((model, index) => {
+            const card = this.createModelCard(model, index);
+            modelList.appendChild(card);
+        });
+        
+        console.log(`[UIController] ✓ 모델 선택기 구성: ${models.length}개 모델`);
+    }
+    
+    /**
+     * 모델 카드 생성
+     */
+    createModelCard(model, index) {
+        const card = document.createElement('div');
+        card.className = 'model-card';
+        card.dataset.modelIndex = index;
+        
+        // 카드 내용
+        card.innerHTML = `
+            <div class="model-card-icon">${model.icon || '🏗️'}</div>
+            <h3 class="model-card-title">${model.name}</h3>
+            <p class="model-card-description">${model.description || ''}</p>
+            <div class="model-card-actions">
+                <button class="load-model-btn" data-model-index="${index}">
+                    ${this.getLocalizedText('loadModel', '모델 보기')}
                 </button>
             </div>
         `;
         
-        viewControls.appendChild(presetContainer);
+        // 카드 스타일 적용
+        this.applyModelCardStyles(card);
         
-        // 프리셋 버튼 이벤트
-        presetContainer.querySelectorAll('.preset-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const view = btn.dataset.view;
-                this.showCameraTransitionIndicator(`${view} 뷰`);
-                this.sceneManager.setCameraView(view);
-            });
+        // 이벤트 리스너
+        card.addEventListener('click', () => {
+            this.selectModel(model, index);
+        });
+        
+        return card;
+    }
+    
+    /**
+     * 모델 카드 스타일 적용
+     */
+    applyModelCardStyles(card) {
+        const styles = {
+            background: 'rgba(255, 255, 255, 0.1)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            borderRadius: '12px',
+            padding: '24px',
+            textAlign: 'center',
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+            minWidth: '250px',
+            maxWidth: '300px'
+        };
+        
+        Object.assign(card.style, styles);
+        
+        // 호버 효과
+        card.addEventListener('mouseenter', () => {
+            card.style.transform = 'translateY(-5px)';
+            card.style.background = 'rgba(255, 255, 255, 0.15)';
+        });
+        
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'translateY(0)';
+            card.style.background = 'rgba(255, 255, 255, 0.1)';
         });
     }
     
-    // 줌 컨트롤 생성
-    createZoomControls() {
-        const viewControls = document.querySelector('.view-controls');
-        if (!viewControls) return;
-        
-        const zoomContainer = document.createElement('div');
-        zoomContainer.className = 'zoom-controls';
-        zoomContainer.innerHTML = `
-            <button class="view-btn zoom-btn" id="zoom-in" title="확대">
-                <span>🔍+</span>
-            </button>
-            <button class="view-btn zoom-btn" id="zoom-out" title="축소">
-                <span>🔍-</span>
-            </button>
-            <button class="view-btn zoom-btn" id="zoom-fit" title="화면 맞춤">
-                <span>⬜</span>
-            </button>
-        `;
-        
-        viewControls.appendChild(zoomContainer);
-        
-        // 줌 버튼 이벤트
-        document.getElementById('zoom-in')?.addEventListener('click', () => {
-            this.sceneManager.setCameraView('zoom-in');
-        });
-        
-        document.getElementById('zoom-out')?.addEventListener('click', () => {
-            this.sceneManager.setCameraView('zoom-out');
-        });
-        
-        document.getElementById('zoom-fit')?.addEventListener('click', () => {
-            this.showCameraTransitionIndicator('화면 맞춤');
-            this.sceneManager.setCameraView('focus-model');
-        });
-    }
-    
-    // 키보드 단축키 설정
-    setupKeyboardShortcuts() {
-        document.addEventListener('keydown', (e) => {
-            if (this.cameraControlState.isTransitioning) return;
-            
-            // 숫자 키로 프리셋 뷰
-            const viewMap = {
-                '1': 'front',
-                '2': 'right',
-                '3': 'top',
-                '4': 'isometric',
-                '0': 'default'
-            };
-            
-            if (viewMap[e.key]) {
-                this.showCameraTransitionIndicator(`${viewMap[e.key]} 뷰`);
-                this.sceneManager.setCameraView(viewMap[e.key]);
-            }
-            
-            // 방향키로 회전
-            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                e.preventDefault();
-                const angle = e.key === 'ArrowLeft' ? -90 : 90;
-                this.rotateCameraView(angle);
-            }
-            
-            // +/- 키로 줌
-            if (e.key === '+' || e.key === '=') {
-                this.sceneManager.setCameraView('zoom-in');
-            } else if (e.key === '-' || e.key === '_') {
-                this.sceneManager.setCameraView('zoom-out');
-            }
-            
-            // F 키로 포커스
-            if (e.key === 'f' || e.key === 'F') {
-                this.showCameraTransitionIndicator('모델 포커스');
-                this.sceneManager.setCameraView('focus-model');
-            }
-            
-            // 스페이스바로 애니메이션 재생/일시정지
-            if (e.key === ' ') {
-                e.preventDefault();
-                this.toggleAnimation();
-            }
-        });
-    }
-    
-    // 카메라 회전
-    rotateCameraView(angle) {
-        const currentAngle = this.cameraControlState.currentOrbitAngle;
-        const newAngle = (currentAngle + angle + 360) % 360;
-        this.cameraControlState.currentOrbitAngle = newAngle;
-        
-        this.showCameraTransitionIndicator(`${newAngle}° 회전`);
-        this.sceneManager.setCameraView(`orbit-${newAngle}`);
-    }
-    
-    // 카메라 전환 중 표시
-    showCameraTransitionIndicator(message) {
-        if (!this.cameraTransitionIndicator) {
-            this.cameraTransitionIndicator = document.createElement('div');
-            this.cameraTransitionIndicator.className = 'camera-hint';
-            document.body.appendChild(this.cameraTransitionIndicator);
-        }
-        
-        this.cameraTransitionIndicator.textContent = message;
-        this.cameraTransitionIndicator.style.display = 'block';
-        
-        // 애니메이션 재시작
-        this.cameraTransitionIndicator.style.animation = 'none';
-        setTimeout(() => {
-            this.cameraTransitionIndicator.style.animation = 'camera-transition-hint 2s ease-out';
-        }, 10);
-    }
-    
-    // 카메라 전환 표시 숨기기
-    hideCameraTransitionIndicator() {
-        if (this.cameraTransitionIndicator) {
-            setTimeout(() => {
-                this.cameraTransitionIndicator.style.display = 'none';
-            }, 2000);
-        }
-    }
-    
-    // 전환 중 상호작용 비활성화
-    disableInteractionDuringTransition() {
-        document.querySelectorAll('.view-btn, .preset-btn, .zoom-btn').forEach(btn => {
-            btn.disabled = true;
-            btn.style.opacity = '0.5';
-        });
-        
-        // 카메라 뷰 선택도 비활성화
-        if (this.cameraView) {
-            this.cameraView.disabled = true;
-        }
-    }
-    
-    // 전환 후 상호작용 재활성화
-    enableInteractionAfterTransition() {
-        document.querySelectorAll('.view-btn, .preset-btn, .zoom-btn').forEach(btn => {
-            btn.disabled = false;
-            btn.style.opacity = '1';
-        });
-        
-        // 카메라 뷰 선택 재활성화
-        if (this.cameraView) {
-            this.cameraView.disabled = false;
-        }
-    }
-    
-    // 모델 선택 화면 표시
-    showModelSelector() {
-        if (this.modelSelector) {
-            this.modelSelector.style.display = 'flex';
-            this.loadModelList();
-        }
-    }
-    
-    hideModelSelector() {
-        if (this.modelSelector) {
-            this.modelSelector.style.display = 'none';
-        }
-    }
-    
-    // 모델 목록 로드
-    loadModelList() {
-        if (!this.modelList) return;
-        
-        this.modelList.innerHTML = '';
-        
-        CONFIG.models.forEach((model, index) => {
-            const modelCard = document.createElement('div');
-            modelCard.className = 'model-card';
-            modelCard.innerHTML = `
-                <div class="model-icon">${model.icon}</div>
-                <h3>${model.name}</h3>
-                <p>${model.description}</p>
-            `;
-            
-            modelCard.addEventListener('click', () => {
-                this.selectModel(index);
-            });
-            
-            this.modelList.appendChild(modelCard);
-        });
-    }
-    
-    // 모델 선택
-    async selectModel(index) {
-        const model = CONFIG.models[index];
-        if (!model) return;
-        
-        console.log(`[UIController] 모델 선택: ${model.name}`);
-        
+    /**
+     * 모델 선택 처리
+     */
+    async selectModel(model, index) {
         try {
-            this.hideModelSelector();
+            this.state.currentModel = index;
+            
+            // 로딩 시작
             this.showLoading();
+            this.hideModelSelector();
             
-            const result = await this.modelLoader.loadModel(index);
+            // 모델 로드 요청
+            this.emit('model:select', model, index);
             
-            if (result.success) {
-                console.log('[UIController] 모델 로드 성공');
-                this.hideLoading();
-                
-                // 모델 정보 업데이트
-                this.updateModelInfo(result.info, model.name, result.loadTime);
-                
-                // 애니메이션 컨트롤 업데이트
-                this.updateAnimationControls();
-                
-                // 모델 변경 버튼 표시
-                if (this.changeModelBtn) {
-                    this.changeModelBtn.style.display = 'inline-block';
-                }
-            } else {
-                throw new Error(result.error || '모델 로드 실패');
+            // 앱이 있으면 앱을 통해 로드
+            if (this.app && typeof this.app.loadModel === 'function') {
+                await this.app.loadModel(index);
             }
-        } catch (error) {
-            console.error('[UIController] 모델 로드 실패:', error);
-            this.hideLoading();
-            this.showError(`모델 로드 실패: ${error.message}`);
             
-            // 에러 발생 시 다시 모델 선택 화면으로
-            setTimeout(() => {
-                this.showModelSelector();
-            }, 3000);
+        } catch (error) {
+            console.error('[UIController] 모델 선택 실패:', error);
+            this.showError(`모델 로드 실패: ${error.message}`);
+            this.showModelSelector();
         }
     }
     
-    // 모델 정보 업데이트
-    updateModelInfo(info, modelName = '', loadTime = '') {
-        console.log('[UIController] 모델 정보 업데이트:', info);
+    /**
+     * 성능 모니터링 시작
+     */
+    startPerformanceMonitoring() {
+        const updateInterval = getConfig('ui.fpsUpdateInterval', 1000);
         
-        // 모델 이름 표시
-        const modelNameEl = document.getElementById('model-name');
-        if (modelNameEl && modelName) {
-            modelNameEl.textContent = modelName;
+        const updateFPS = () => {
+            this.frameCount++;
+            const currentTime = performance.now();
+            
+            if (currentTime - this.lastTime >= updateInterval) {
+                this.fps = Math.round(this.frameCount * 1000 / (currentTime - this.lastTime));
+                this.frameCount = 0;
+                this.lastTime = currentTime;
+                
+                // FPS 표시 업데이트
+                this.updateFPSDisplay();
+                
+                // 성능 이벤트 발생
+                this.emit('performance:update', { fps: this.fps });
+            }
+            
+            requestAnimationFrame(updateFPS);
+        };
+        
+        requestAnimationFrame(updateFPS);
+    }
+    
+    /**
+     * 반응형 UI 설정
+     */
+    setupResponsiveUI() {
+        const updateLayout = () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+            const isMobile = width <= 768;
+            const isTablet = width <= 1024 && width > 768;
+            
+            // 반응형 클래스 적용
+            document.body.classList.toggle('mobile', isMobile);
+            document.body.classList.toggle('tablet', isTablet);
+            document.body.classList.toggle('desktop', !isMobile && !isTablet);
+            
+            // 모바일에서는 일부 패널 자동 숨김
+            if (isMobile) {
+                this.setPanelVisibility('left', false);
+                this.setPanelVisibility('right', false);
+            }
+            
+            this.emit('layout:change', { width, height, isMobile, isTablet });
+        };
+        
+        // 초기 실행 및 리사이즈 시 실행
+        updateLayout();
+        window.addEventListener('resize', updateLayout);
+    }
+    
+    /**
+     * 모델 로드 완료 처리
+     */
+    handleModelLoaded(modelInfo) {
+        this.hideLoading();
+        this.state.currentModel = modelInfo;
+        
+        // UI 업데이트
+        this.updateModelInfo(modelInfo);
+        this.showViewerUI();
+        
+        // 성공 알림
+        this.showNotification(`${modelInfo.name} 로드 완료`, 'success');
+        
+        this.emit('model:loaded', modelInfo);
+    }
+    
+    /**
+     * 모델 정보 업데이트
+     */
+    updateModelInfo(modelInfo) {
+        // 모델명 표시
+        const modelNameElement = this.elements.get('modelName');
+        if (modelNameElement) {
+            modelNameElement.textContent = modelInfo.name;
         }
         
         // 로드 시간 표시
-        const loadTimeEl = document.getElementById('load-time');
-        if (loadTimeEl && loadTime) {
-            loadTimeEl.textContent = `${loadTime}s`;
+        const loadTimeElement = this.elements.get('loadTime');
+        if (loadTimeElement && modelInfo.loadTime) {
+            loadTimeElement.textContent = `${modelInfo.loadTime}s`;
         }
+    }
+    
+    /**
+     * 모델 통계 업데이트
+     */
+    updateModelStats(stats) {
+        const statsMap = {
+            'meshCount': stats.meshes,
+            'vertexCount': stats.vertices,
+            'triangleCount': stats.triangles
+        };
         
-        // 통계 정보
-        if (this.meshCount) this.meshCount.textContent = info.meshCount;
-        if (this.vertexCount) this.vertexCount.textContent = info.vertexCount.toLocaleString();
-        if (this.triangleCount) this.triangleCount.textContent = info.triangleCount.toLocaleString();
-        if (this.hotspotCount) this.hotspotCount.textContent = info.hotspots.length;
-
-        // 카메라 뷰 옵션 업데이트
-        if (this.cameraView) {
-            this.cameraView.innerHTML = '<option value="default">기본 뷰</option>';
-            
-            // 프리셋 뷰 추가
-            const presetViews = [
-                { value: 'front', text: '정면 뷰' },
-                { value: 'right', text: '우측 뷰' },
-                { value: 'top', text: '상단 뷰' },
-                { value: 'isometric', text: '등각 뷰' }
-            ];
-            
-            presetViews.forEach(view => {
-                const option = document.createElement('option');
-                option.value = view.value;
-                option.textContent = view.text;
-                this.cameraView.appendChild(option);
-            });
-            
-            // GLTF 카메라 추가
-            const gltfCameras = this.modelLoader.getCameras();
-            if (gltfCameras && gltfCameras.length > 0) {
-                const optgroup = document.createElement('optgroup');
-                optgroup.label = 'GLTF 카메라';
-                
-                gltfCameras.forEach((camera, index) => {
-                    const option = document.createElement('option');
-                    option.value = `gltf_${index}`;
-                    option.textContent = camera.name || `카메라 ${index + 1}`;
-                    optgroup.appendChild(option);
-                });
-                
-                this.cameraView.appendChild(optgroup);
-                console.log(`[UIController] ${gltfCameras.length}개의 GLTF 카메라 추가됨`);
+        Object.entries(statsMap).forEach(([key, value]) => {
+            const element = this.elements.get(key);
+            if (element) {
+                element.textContent = this.formatNumber(value);
             }
-        }
-    }
-    
-    // 애니메이션 컨트롤 업데이트
-    updateAnimationControls() {
-        const animControls = document.getElementById('animation-controls') || document.querySelector('.animation-controls');
-        const frameControls = document.getElementById('frame-controls') || document.querySelector('.timeline-container');
+        });
         
-        if (this.animationController.hasAnimations()) {
-            if (animControls) animControls.style.display = 'flex';
-            if (frameControls) frameControls.style.display = 'flex';
+        // 핫스팟 수 업데이트
+        const hotspotCountElement = this.elements.get('hotspotCount');
+        if (hotspotCountElement && this.hotspotManager) {
+            const hotspotCount = this.hotspotManager.getHotspotCount?.() || 0;
+            hotspotCountElement.textContent = hotspotCount;
+        }
+    }
+    
+    /**
+     * FPS 표시 업데이트
+     */
+    updateFPSDisplay() {
+        const fpsElement = this.elements.get('fpsDisplay');
+        if (fpsElement) {
+            fpsElement.textContent = `${this.fps} FPS`;
             
-            // 타임라인 설정
-            if (this.timelineSlider) {
-                this.timelineSlider.max = this.animationController.getDuration();
-                this.timelineSlider.value = 0;
+            // FPS에 따른 색상 변경
+            if (this.fps >= 50) {
+                fpsElement.style.color = '#4CAF50'; // 녹색
+            } else if (this.fps >= 30) {
+                fpsElement.style.color = '#FF9800'; // 주황색
+            } else {
+                fpsElement.style.color = '#F44336'; // 빨간색
             }
-            
-            // 총 시간 표시
-            if (this.totalTimeDisplay) {
-                this.totalTimeDisplay.textContent = this.formatTime(this.animationController.getDuration());
-            }
-        } else {
-            if (animControls) animControls.style.display = 'none';
-            if (frameControls) frameControls.style.display = 'none';
         }
     }
     
-    // 애니메이션 토글
-    toggleAnimation() {
-        if (this.animationController.isPlaying) {
-            this.animationController.pause();
-            if (this.playBtn) this.playBtn.textContent = '▶️';
-        } else {
-            this.animationController.play();
-            if (this.playBtn) this.playBtn.textContent = '⏸️';
-        }
-    }
-    
-    // 컨트롤 패널 토글
-    toggleControlPanel() {
-        if (this.controlPanel) {
-            this.controlPanel.classList.toggle('collapsed');
-        }
-    }
-    
-    // 로딩 표시
+    /**
+     * 로딩 화면 표시
+     */
     showLoading() {
-        if (this.loadingScreen) {
-            this.loadingScreen.style.display = 'flex';
+        this.state.loading = true;
+        
+        const loadingElement = this.elements.get('loadingScreen');
+        if (loadingElement) {
+            loadingElement.style.display = 'flex';
         }
+        
+        this.emit('loading:show');
     }
     
+    /**
+     * 로딩 진행률 업데이트
+     */
+    updateLoadingProgress(progress) {
+        const progressBar = this.elements.get('progressBar');
+        const progressText = this.elements.get('progressText');
+        
+        if (progressBar) {
+            progressBar.style.width = `${progress}%`;
+        }
+        
+        if (progressText) {
+            progressText.textContent = `${Math.round(progress)}%`;
+        }
+        
+        this.emit('loading:progress', progress);
+    }
+    
+    /**
+     * 로딩 화면 숨김
+     */
     hideLoading() {
-        if (this.loadingScreen) {
-            this.loadingScreen.style.display = 'none';
-        }
-    }
-    
-    updateProgress(progress) {
-        if (this.progressBar) {
-            this.progressBar.style.width = `${progress}%`;
-        }
-        if (this.progressText) {
-            this.progressText.textContent = `${Math.round(progress)}%`;
-        }
-    }
-    
-    // 에러 표시
-    showError(message) {
-        const errorEl = document.createElement('div');
-        errorEl.className = 'error-message';
-        errorEl.textContent = message;
-        errorEl.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 0, 0, 0.9);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            z-index: 10000;
-        `;
+        this.state.loading = false;
         
-        document.body.appendChild(errorEl);
+        const loadingElement = this.elements.get('loadingScreen');
+        if (loadingElement) {
+            loadingElement.style.display = 'none';
+        }
         
-        setTimeout(() => {
-            errorEl.remove();
-        }, 3000);
+        this.emit('loading:hide');
     }
     
-    // FPS 모니터
-    startFPSMonitor() {
-        setInterval(() => {
-            if (this.fpsDisplay) {
-                this.fpsDisplay.textContent = this.fps.toFixed(0);
+    /**
+     * 모델 선택기 표시
+     */
+    showModelSelector() {
+        const selectorElement = this.elements.get('modelSelector');
+        if (selectorElement) {
+            selectorElement.style.display = 'flex';
+        }
+        
+        this.hideViewerUI();
+        this.emit('selector:show');
+    }
+    
+    /**
+     * 모델 선택기 숨김
+     */
+    hideModelSelector() {
+        const selectorElement = this.elements.get('modelSelector');
+        if (selectorElement) {
+            selectorElement.style.display = 'none';
+        }
+        
+        this.emit('selector:hide');
+    }
+    
+    /**
+     * 뷰어 UI 표시
+     */
+    showViewerUI() {
+        const viewerContainer = this.elements.get('viewerContainer');
+        if (viewerContainer) {
+            viewerContainer.style.display = 'block';
+        }
+        
+        // 패널들 표시
+        this.showPanels();
+        
+        this.emit('viewer:show');
+    }
+    
+    /**
+     * 뷰어 UI 숨김
+     */
+    hideViewerUI() {
+        const viewerContainer = this.elements.get('viewerContainer');
+        if (viewerContainer) {
+            viewerContainer.style.display = 'none';
+        }
+        
+        this.emit('viewer:hide');
+    }
+    
+    /**
+     * 패널 표시
+     */
+    showPanels() {
+        const panels = ['left', 'right', 'bottom'];
+        panels.forEach(panel => {
+            if (this.state.panelsVisible[panel]) {
+                this.setPanelVisibility(panel, true);
             }
+        });
+    }
+    
+    /**
+     * 패널 가시성 설정
+     */
+    setPanelVisibility(panel, visible) {
+        const panelElement = this.elements.get(`${panel}Panel`);
+        const toggleBtn = this.elements.get(`${panel}PanelToggle`);
+        
+        if (panelElement) {
+            panelElement.style.display = visible ? 'block' : 'none';
+        }
+        
+        if (toggleBtn) {
+            toggleBtn.classList.toggle('active', visible);
+        }
+        
+        this.state.panelsVisible[panel] = visible;
+        this.emit('panel:toggle', panel, visible);
+    }
+    
+    /**
+     * 패널 토글
+     */
+    togglePanel(panel) {
+        const currentVisibility = this.state.panelsVisible[panel];
+        this.setPanelVisibility(panel, !currentVisibility);
+    }
+    
+    /**
+     * 애니메이션 컨트롤 처리
+     */
+    handleAnimationControl(action) {
+        if (!this.animationController) return;
+        
+        switch (action) {
+            case 'play':
+                this.animationController.play();
+                break;
+            case 'pause':
+                this.animationController.pause();
+                break;
+            case 'stop':
+                this.animationController.stop();
+                break;
+        }
+        
+        this.emit('animation:control', action);
+    }
+    
+    /**
+     * 타임라인 변경 처리
+     */
+    handleTimelineChange(frame) {
+        if (this.animationController) {
+            this.animationController.setFrame(frame);
+        }
+        
+        this.emit('timeline:change', frame);
+    }
+    
+    /**
+     * 속도 변경 처리
+     */
+    handleSpeedChange(speed) {
+        if (this.animationController) {
+            this.animationController.setSpeed(speed);
+        }
+        
+        // 설정에도 저장
+        setConfig('animation.defaultSpeed', speed);
+        
+        this.emit('speed:change', speed);
+    }
+    
+    /**
+     * 애니메이션 UI 업데이트
+     */
+    updateAnimationUI(state) {
+        const buttons = {
+            play: this.elements.get('playButton'),
+            pause: this.elements.get('pauseButton'),
+            stop: this.elements.get('stopButton')
+        };
+        
+        // 모든 버튼 비활성화
+        Object.values(buttons).forEach(btn => {
+            if (btn) btn.classList.remove('active');
+        });
+        
+        // 현재 상태 버튼 활성화
+        if (buttons[state]) {
+            buttons[state].classList.add('active');
+        }
+    }
+    
+    /**
+     * 타임라인 UI 업데이트
+     */
+    updateTimelineUI(frame) {
+        const timelineSlider = this.elements.get('timelineSlider');
+        if (timelineSlider) {
+            timelineSlider.value = frame;
+        }
+    }
+    
+    /**
+     * 카메라 리셋
+     */
+    resetCamera() {
+        if (this.sceneManager) {
+            const cameraConfig = getConfig('scene.camera');
+            const pos = cameraConfig.position;
+            const target = cameraConfig.target;
+            
+            this.sceneManager.animateCameraTo(
+                new THREE.Vector3(pos.x, pos.y, pos.z),
+                new THREE.Vector3(target.x, target.y, target.z)
+            );
+        }
+        
+        this.emit('camera:reset');
+    }
+    
+    /**
+     * 카메라 프리셋 적용
+     */
+    applyCameraPreset(preset) {
+        // 프리셋 정의
+        const presets = {
+            front: { position: [0, 0, 20], target: [0, 0, 0] },
+            back: { position: [0, 0, -20], target: [0, 0, 0] },
+            left: { position: [-20, 0, 0], target: [0, 0, 0] },
+            right: { position: [20, 0, 0], target: [0, 0, 0] },
+            top: { position: [0, 20, 0], target: [0, 0, 0] },
+            bottom: { position: [0, -20, 0], target: [0, 0, 0] },
+            isometric: { position: [15, 15, 15], target: [0, 0, 0] }
+        };
+        
+        const presetData = presets[preset];
+        if (presetData && this.sceneManager) {
+            this.sceneManager.animateCameraTo(
+                new THREE.Vector3(...presetData.position),
+                new THREE.Vector3(...presetData.target)
+            );
+        }
+        
+        this.emit('camera:preset', preset);
+    }
+    
+    /**
+     * FOV 변경 처리
+     */
+    handleFovChange(fov) {
+        setConfig('scene.camera.fov', fov);
+        
+        if (this.sceneManager && this.sceneManager.camera) {
+            this.sceneManager.camera.fov = fov;
+            this.sceneManager.camera.updateProjectionMatrix();
+        }
+        
+        this.emit('camera:fov', fov);
+    }
+    
+    /**
+     * 테마 토글
+     */
+    toggleTheme() {
+        const currentTheme = getConfig('ui.theme', 'dark');
+        const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        
+        setConfig('ui.theme', newTheme);
+        this.applyTheme(newTheme);
+        
+        this.emit('theme:change', newTheme);
+    }
+    
+    /**
+     * 테마 적용
+     */
+    applyTheme(theme) {
+        document.body.classList.remove('theme-dark', 'theme-light');
+        document.body.classList.add(`theme-${theme}`);
+        
+        // CSS 변수 업데이트 (선택적)
+        if (theme === 'light') {
+            document.documentElement.style.setProperty('--bg-primary', '#ffffff');
+            document.documentElement.style.setProperty('--text-primary', '#000000');
+        } else {
+            document.documentElement.style.setProperty('--bg-primary', '#1a1a1a');
+            document.documentElement.style.setProperty('--text-primary', '#ffffff');
+        }
+    }
+    
+    /**
+     * 언어 변경
+     */
+    changeLanguage(language) {
+        setConfig('ui.language', language);
+        this.applyLanguage(language);
+        
+        this.emit('language:change', language);
+    }
+    
+    /**
+     * 언어 적용
+     */
+    applyLanguage(language) {
+        document.documentElement.lang = language;
+        
+        // 텍스트 업데이트 (간단한 구현)
+        const elements = document.querySelectorAll('[data-i18n]');
+        elements.forEach(element => {
+            const key = element.dataset.i18n;
+            const text = this.getLocalizedText(key, element.textContent);
+            element.textContent = text;
+        });
+    }
+    
+    /**
+     * 품질 변경
+     */
+    changeQuality(quality) {
+        const qualitySettings = {
+            low: {
+                'scene.renderer.pixelRatio': 1,
+                'performance.targetFPS': 30,
+                'scene.renderer.shadowMapSize': 512
+            },
+            medium: {
+                'scene.renderer.pixelRatio': 1.5,
+                'performance.targetFPS': 60,
+                'scene.renderer.shadowMapSize': 1024
+            },
+            high: {
+                'scene.renderer.pixelRatio': Math.min(window.devicePixelRatio, 2),
+                'performance.targetFPS': 60,
+                'scene.renderer.shadowMapSize': 2048
+            }
+        };
+        
+        const settings = qualitySettings[quality];
+        if (settings) {
+            Object.entries(settings).forEach(([key, value]) => {
+                setConfig(key, value);
+            });
+        }
+        
+        this.emit('quality:change', quality);
+    }
+    
+    /**
+     * 핫스팟 클릭 처리
+     */
+    handleHotspotClick(hotspot) {
+        this.state.selectedHotspot = hotspot;
+        this.showHotspotDetails(hotspot);
+        
+        this.emit('hotspot:select', hotspot);
+    }
+    
+    /**
+     * 핫스팟 호버 처리
+     */
+    handleHotspotHover(hotspot) {
+        // 툴팁 표시 등
+        this.emit('hotspot:hover', hotspot);
+    }
+    
+    /**
+     * 핫스팟 상세정보 표시
+     */
+    showHotspotDetails(hotspot) {
+        // 우측 패널에 상세정보 표시
+        const rightPanel = this.elements.get('rightPanel');
+        if (rightPanel) {
+            rightPanel.innerHTML = `
+                <div class="hotspot-details">
+                    <h3>${hotspot.name}</h3>
+                    <div class="hotspot-info">
+                        ${this.generateHotspotInfo(hotspot)}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 우측 패널 표시
+        this.setPanelVisibility('right', true);
+    }
+    
+    /**
+     * 핫스팟 정보 생성
+     */
+    generateHotspotInfo(hotspot) {
+        if (!hotspot.userData) return '';
+        
+        return Object.entries(hotspot.userData)
+            .filter(([key]) => !['icon', 'title'].includes(key))
+            .map(([key, value]) => `
+                <div class="info-row">
+                    <span class="info-label">${this.formatLabel(key)}:</span>
+                    <span class="info-value">${value}</span>
+                </div>
+            `).join('');
+    }
+    
+    /**
+     * 에러 표시
+     */
+    showError(message) {
+        this.showNotification(message, 'error');
+        this.emit('error:show', message);
+    }
+    
+    /**
+     * 알림 표시
+     */
+    showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.textContent = message;
+        
+        // 스타일 적용
+        Object.assign(notification.style, {
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            padding: '12px 20px',
+            borderRadius: '6px',
+            color: '#fff',
+            zIndex: '10000',
+            maxWidth: '400px',
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '14px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            background: this.getNotificationColor(type)
+        });
+        
+        document.body.appendChild(notification);
+        
+        // 자동 제거
+        const duration = getConfig('ui.notificationDuration', 3000);
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, duration);
+        
+        this.emit('notification:show', message, type);
+    }
+    
+    /**
+     * 알림 색상 가져오기
+     */
+    getNotificationColor(type) {
+        const colors = {
+            info: '#2196F3',
+            success: '#4CAF50',
+            warning: '#FF9800',
+            error: '#F44336'
+        };
+        
+        return colors[type] || colors.info;
+    }
+    
+    /**
+     * 이벤트 핸들러들
+     */
+    handleResize() {
+        // 반응형 UI 업데이트는 setupResponsiveUI에서 처리
+        this.emit('resize');
+    }
+    
+    handleOrientationChange() {
+        // 방향 변경 시 UI 재조정
+        setTimeout(() => {
+            this.handleResize();
         }, 100);
     }
     
-    updateFPS() {
-        this.frameCount++;
-        const currentTime = performance.now();
-        
-        if (currentTime >= this.lastTime + 1000) {
-            this.fps = (this.frameCount * 1000) / (currentTime - this.lastTime);
-            this.frameCount = 0;
-            this.lastTime = currentTime;
+    handleKeyDown(event) {
+        // 키보드 단축키 처리
+        if (event.ctrlKey || event.metaKey) {
+            switch (event.code) {
+                case 'KeyM':
+                    event.preventDefault();
+                    this.showModelSelector();
+                    break;
+                    
+                case 'KeyF':
+                    event.preventDefault();
+                    this.toggleFullscreen();
+                    break;
+                    
+                case 'Space':
+                    event.preventDefault();
+                    this.handleAnimationControl('play');
+                    break;
+            }
         }
     }
     
-    // 시간 포맷
-    formatTime(seconds) {
-        const mins = Math.floor(seconds / 60);
-        const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    /**
+     * 전체화면 토글
+     */
+    toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            document.exitFullscreen();
+        }
+        
+        this.emit('fullscreen:toggle');
     }
     
-    // 애니메이션 프레임 업데이트
-    updateAnimationFrame() {
-        if (!this.animationController.hasAnimations()) return;
+    /**
+     * 유틸리티 메서드들
+     */
+    formatNumber(num) {
+        return num?.toLocaleString() || '0';
+    }
+    
+    formatLabel(str) {
+        return str.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+    }
+    
+    getLocalizedText(key, fallback) {
+        // 간단한 다국어 지원 (확장 가능)
+        const language = getConfig('ui.language', 'ko');
+        const texts = {
+            ko: {
+                loadModel: '모델 보기',
+                loading: '로딩 중...',
+                error: '오류',
+                // 더 많은 텍스트...
+            },
+            en: {
+                loadModel: 'View Model',
+                loading: 'Loading...',
+                error: 'Error',
+                // 더 많은 텍스트...
+            }
+        };
         
-        const currentTime = this.animationController.getCurrentTime();
-        
-        if (this.timelineSlider && !this.timelineSlider.matches(':active')) {
-            this.timelineSlider.value = currentTime;
+        return texts[language]?.[key] || fallback || key;
+    }
+    
+    /**
+     * 앱 참조 설정 (의존성 주입)
+     */
+    setApp(app) {
+        this.app = app;
+    }
+    
+    /**
+     * 이벤트 시스템
+     */
+    on(event, callback) {
+        if (!this.events.has(event)) {
+            this.events.set(event, new Set());
         }
-        
-        if (this.currentTimeDisplay) {
-            this.currentTimeDisplay.textContent = this.formatTime(currentTime);
+        this.events.get(event).add(callback);
+    }
+    
+    off(event, callback) {
+        if (this.events.has(event)) {
+            this.events.get(event).delete(callback);
         }
+    }
+    
+    emit(event, ...args) {
+        if (this.events.has(event)) {
+            this.events.get(event).forEach(callback => {
+                try {
+                    callback(...args);
+                } catch (error) {
+                    console.error(`[UIController] 이벤트 콜백 오류 (${event}):`, error);
+                }
+            });
+        }
+    }
+    
+    /**
+     * 정리
+     */
+    destroy() {
+        console.log('[UIController] 정리 중...');
+        
+        // 이벤트 리스너 제거
+        window.removeEventListener('resize', this.handleResize);
+        window.removeEventListener('orientationchange', this.handleOrientationChange);
+        document.removeEventListener('keydown', this.handleKeyDown);
+        
+        // DOM 요소 캐시 정리
+        this.elements.clear();
+        
+        // 이벤트 정리
+        this.events.clear();
+        
+        this.emit('destroyed');
+        console.log('[UIController] 정리 완료');
+    }
+    
+    /**
+     * 디버그 정보
+     */
+    debug() {
+        if (!getConfig('app.debug')) return;
+        
+        console.group('[UIController] 디버그 정보');
+        console.log('상태:', this.state);
+        console.log('캐시된 요소 수:', this.elements.size);
+        console.log('FPS:', this.fps);
+        console.log('등록된 이벤트:', Array.from(this.events.keys()));
+        console.log('현재 테마:', getConfig('ui.theme'));
+        console.log('현재 언어:', getConfig('ui.language'));
+        console.groupEnd();
     }
 }
+
+export default UIController;
