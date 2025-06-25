@@ -78,420 +78,234 @@
         
         .zoom-btn {
             flex: 1;
-            font-size: 14px;
-        }
-        
-        /* 이징 컨트롤 스타일 */
-        .easing-control {
-            margin-top: 10px;
-        }
-        
-        .easing-control label {
-            font-size: 12px;
-            color: #aaa;
-            display: block;
-            margin-bottom: 5px;
-        }
-        
-        /* 핫스팟 상세 정보 스타일 */
-        .hotspot-info-container {
-            padding: 10px 0;
-        }
-        
-        .hotspot-info-container h4 {
-            margin: 0 0 15px 0;
-            color: #00ff88;
-            font-size: 18px;
-        }
-        
-        .info-list {
-            margin-bottom: 20px;
-        }
-        
-        .info-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        
-        .info-label {
-            color: #aaa;
-            font-size: 14px;
-        }
-        
-        .info-value {
-            color: #00ff88;
-            font-weight: 500;
-            font-size: 14px;
-        }
-        
-        .hotspot-actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-        
-        .action-btn {
-            flex: 1;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.05);
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 6px;
             color: white;
             cursor: pointer;
-            font-size: 14px;
             transition: all 0.3s ease;
         }
         
-        .action-btn:hover {
-            background: rgba(0, 123, 255, 0.2);
-            border-color: #007bff;
-            transform: translateY(-1px);
+        .zoom-btn:hover {
+            background: rgba(0, 123, 255, 0.3);
         }
         
-        /* 녹화 버튼 애니메이션 */
-        #record-btn.recording span {
-            animation: pulse-record 1.5s ease-in-out infinite;
+        /* 홈 버튼 추가 스타일 */
+        #home-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
         }
         
-        @keyframes pulse-record {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(1.1); }
+        #home-btn:hover {
+            background: rgba(0, 123, 255, 0.5);
+            transform: scale(1.1);
         }
         
-        /* 로딩 중 표시 */
-        .model-toggle-btn.loading {
-            pointer-events: none;
-            opacity: 0.7;
-        }
-        
-        .model-toggle-btn.loading .icon {
-            animation: spin 1s linear infinite;
+        #home-btn span {
+            font-size: 20px;
         }
     </style>
-    <link rel="stylesheet" href="css/camera-controls.css">
-
 </head>
 <body>
-    <div id="app-container">
-        <!-- 헤더 영역 -->
-        <header id="app-header">
-            <div class="header-left">
-                <h1 class="app-title">
-                    <span class="logo">🏗️</span>
-                    옹벽 3D 모니터링 시스템
-                </h1>
+    <!-- 헤더 -->
+    <header class="app-header">
+        <div class="header-left">
+            <h1>옹벽 3D 모니터링 시스템</h1>
+        </div>
+        <div class="header-center">
+            <div class="model-toggle">
+                <button class="model-toggle-btn" data-model="block">블록 옹벽</button>
+                <button class="model-toggle-btn" data-model="cantilever">캔틸레버 옹벽</button>
+                <button class="model-toggle-btn" data-model="mse">MSE 옹벽</button>
             </div>
-            
-            <!-- 모델 선택 토글 버튼 -->
-            <div class="model-toggle-group">
-                <button class="model-toggle-btn active" data-model="block">
-                    <span class="icon">🧱</span>
-                    블록 옹벽
-                </button>
-                <button class="model-toggle-btn" data-model="cantilever">
-                    <span class="icon">🏗️</span>
-                    캔틸레버
-                </button>
-                <button class="model-toggle-btn" data-model="mse">
-                    <span class="icon">🏛️</span>
-                    MSE 옹벽
-                </button>
-            </div>
-            
-            <div class="header-right">
-                <button class="header-btn" id="home-btn" title="홈으로">
-                    <span>🏠</span>
-                </button>
-                <button class="header-btn" id="model-info-btn" title="모델 정보">
-                    <span>ℹ️</span>
-                </button>
-                <button class="header-btn" id="settings-btn" title="설정">
-                    <span>⚙️</span>
-                </button>
-                <button class="header-btn" id="fullscreen-btn" title="전체화면">
-                    <span>⛶</span>
-                </button>
-            </div>
-        </header>
+        </div>
+        <div class="header-right">
+            <!-- 홈 버튼 추가 -->
+            <button id="home-btn" class="header-btn" title="홈으로">
+                <span>🏠</span>
+            </button>
+            <button id="fullscreen-btn" class="header-btn" title="전체화면">
+                <span>⛶</span>
+            </button>
+            <button id="settings-btn" class="header-btn" title="설정">
+                <span>⚙️</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 메인 뷰어 컨테이너 -->
+    <div id="viewer-container" class="viewer-container">
+        <!-- 3D 캔버스 -->
+        <div id="canvas-container"></div>
         
-        <!-- 메인 컨텐츠 영역 -->
-        <div id="main-container">
-            <!-- 3D 뷰어 영역 -->
-            <div id="viewer-container">
-                <div id="canvas-container"></div>
-                
-                <!-- 뷰 컨트롤 버튼 (floating) -->
-                <div class="view-controls">
-                    <button class="view-btn" id="toggle-grid" title="그리드">
-                        <span>📏</span>
-                    </button>
-                    <button class="view-btn active" id="toggle-hotspots" title="핫스팟">
-                        <span>📍</span>
-                    </button>
-                    <select id="camera-view" class="camera-select" title="카메라 뷰">
-                        <option value="default">기본 뷰</option>
-                    </select>
-                    
-                    <!-- 카메라 프리셋 버튼 -->
-                    <div class="preset-view-buttons">
-                        <div class="view-preset-group">
-                            <button class="view-btn preset-btn" data-view="front" title="정면">
-                                <span>⬜</span>
-                            </button>
-                            <button class="view-btn preset-btn" data-view="right" title="우측">
-                                <span>➡️</span>
-                            </button>
-                            <button class="view-btn preset-btn" data-view="top" title="상단">
-                                <span>⬆️</span>
-                            </button>
-                            <button class="view-btn preset-btn" data-view="isometric" title="등각">
-                                <span>◻️</span>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <!-- 추가 카메라 컨트롤 -->
-                    <div class="camera-preset-buttons">
-                        <button class="view-btn" id="focus-model" title="모델 포커스">
-                            <span>🎯</span>
-                        </button>
-                        <button class="view-btn" id="orbit-view" title="회전 뷰">
-                            <span>🔄</span>
-                        </button>
-                    </div>
-                    
-                    <!-- 줌 컨트롤 -->
-                    <div class="zoom-controls">
-                        <button class="view-btn zoom-btn" id="zoom-in" title="확대">
-                            <span>🔍+</span>
-                        </button>
-                        <button class="view-btn zoom-btn" id="zoom-out" title="축소">
-                            <span>🔍-</span>
-                        </button>
-                        <button class="view-btn zoom-btn" id="zoom-fit" title="화면 맞춤">
-                            <span>⬜</span>
-                        </button>
-                    </div>
-                    
-                    <!-- 카메라 전환 설정 -->
-                    <div class="camera-speed-control">
-                        <label>전환 속도:</label>
-                        <select id="camera-speed" class="camera-select-sm">
-                            <option value="0.5">빠름</option>
-                            <option value="1.5" selected>보통</option>
-                            <option value="3.0">느림</option>
-                        </select>
-                    </div>
-                    
-                    <!-- 이징 효과 선택 -->
-                    <div class="easing-control">
-                        <label>전환 효과:</label>
-                        <select id="camera-easing" class="camera-select-sm">
-                            <option value="linear">선형</option>
-                            <option value="easeInOutCubic" selected>부드럽게</option>
-                            <option value="easeOutElastic">탄성</option>
-                            <option value="easeInOutSine">사인파</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <!-- FPS 표시 -->
-                <div class="fps-display">
-                    FPS: <span id="fps">0</span>
-                </div>
-                
-                <!-- 초기 모델 선택 화면 -->
-                <div id="model-selector" class="model-selector">
-                    <div class="selector-container">
-                        <h1>옹벽 모델을 선택하세요</h1>
-                        <p>3D 모니터링을 시작하려면 아래 모델 중 하나를 선택하세요</p>
-                        <div id="model-list" class="model-list">
-                            <!-- 모델 카드가 여기에 동적으로 생성됨 -->
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- 로딩 화면 -->
-                <div id="loading" class="loading-screen">
-                    <div class="loading-spinner"></div>
-                    <div>모델을 로딩중입니다...</div>
-                    <div class="loading-progress">
-                        <div class="progress-bar">
-                            <div id="progress-fill" class="progress-fill"></div>
-                        </div>
-                        <span id="progress-text">0%</span>
-                    </div>
-                </div>
-                
-                <!-- 에러 메시지 -->
-                <div id="error" class="error-message"></div>
-                
-                <!-- 카메라 전환 인디케이터 -->
-                <div class="camera-transition-indicator"></div>
-            </div>
-            
-            <!-- 우측 핫스팟 상세 패널 -->
-            <aside id="right-panel" class="side-panel">
-                <div class="panel-header">
-                    <h3>핫스팟 상세</h3>
-                    <button class="panel-toggle" id="right-panel-toggle">▶</button>
-                </div>
-                <div class="panel-content">
-                    <div id="hotspot-detail" class="hotspot-detail">
-                        <div class="empty-state">
-                            <span class="empty-icon">📍</span>
-                            <p>핫스팟을 선택하면<br>상세 정보가 표시됩니다</p>
-                        </div>
-                    </div>
-                </div>
-            </aside>
+        <!-- 로딩 화면 -->
+        <div id="loading" class="loading-screen">
+            <div class="loading-spinner"></div>
+            <div>모델 로딩 중...</div>
         </div>
         
-        <!-- 하단 컨트롤 바 -->
-        <footer id="bottom-controls">
-            <div class="controls-left">
-                <!-- 애니메이션 컨트롤 -->
-                <div class="animation-controls">
-                    <button class="control-btn" id="play-btn" title="재생">
-                        <span>▶️</span>
-                    </button>
-                    <button class="control-btn" id="pause-btn" title="일시정지">
-                        <span>⏸️</span>
-                    </button>
-                    <button class="control-btn" id="stop-btn" title="정지">
-                        <span>⏹️</span>
-                    </button>
+        <!-- 에러 메시지 -->
+        <div id="error" class="error-message" style="display: none;"></div>
+        
+        <!-- 모델 정보 패널 -->
+        <div id="info-panel" class="info-panel">
+            <button class="close-btn" onclick="this.parentElement.classList.remove('show')">×</button>
+            <h3 id="info-title">모델 정보</h3>
+            <div id="info-content"></div>
+        </div>
+        
+        <!-- 우측 컨트롤 패널 -->
+        <div id="right-panel" class="right-panel collapsed">
+            <button class="panel-toggle" onclick="this.parentElement.classList.toggle('collapsed')">
+                <span class="toggle-icon">◀</span>
+            </button>
+            
+            <div class="panel-content">
+                <div class="panel-section">
+                    <h3>카메라 컨트롤</h3>
+                    <div class="camera-controls">
+                        <select id="camera-view" class="control-select">
+                            <option value="default">기본 뷰</option>
+                            <option value="front">정면</option>
+                            <option value="side">측면</option>
+                            <option value="top">상단</option>
+                        </select>
+                        
+                        <div class="preset-view-buttons">
+                            <div class="view-preset-group">
+                                <button class="preset-btn" data-view="iso1">ISO1</button>
+                                <button class="preset-btn" data-view="iso2">ISO2</button>
+                                <button class="preset-btn" data-view="detail1">상세1</button>
+                                <button class="preset-btn" data-view="detail2">상세2</button>
+                            </div>
+                        </div>
+                        
+                        <div class="zoom-controls">
+                            <button class="zoom-btn" id="zoom-in">확대 +</button>
+                            <button class="zoom-btn" id="zoom-out">축소 -</button>
+                            <button class="zoom-btn" id="zoom-fit">화면 맞춤</button>
+                        </div>
+                    </div>
                 </div>
                 
-                <!-- 타임라인 -->
-                <div class="timeline-container">
-                    <div class="timeline-track">
-                        <input type="range" id="timeline-slider" min="0" max="100" value="0">
-                        <div class="timeline-progress"></div>
+                <div class="panel-section">
+                    <h3>표시 옵션</h3>
+                    <div class="display-options">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-grid" checked>
+                            <span>그리드 표시</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-axes" checked>
+                            <span>축 표시</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-hotspots" checked>
+                            <span>핫스팟 표시</span>
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-wireframe">
+                            <span>와이어프레임</span>
+                        </label>
                     </div>
-                    <span class="timeline-time" id="timeline-display">00:00 / 00:00</span>
+                </div>
+                
+                <div class="panel-section">
+                    <h3>조명 설정</h3>
+                    <div class="lighting-controls">
+                        <label class="slider-label">
+                            <span>밝기</span>
+                            <input type="range" id="brightness" min="0" max="200" value="100">
+                            <span class="value">100%</span>
+                        </label>
+                        <label class="slider-label">
+                            <span>주변광</span>
+                            <input type="range" id="ambient-light" min="0" max="100" value="40">
+                            <span class="value">40%</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="panel-section">
+                    <h3>모델 정보</h3>
+                    <div id="model-stats" class="model-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">이름:</span>
+                            <span class="stat-value" id="model-name">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">폴리곤:</span>
+                            <span class="stat-value" id="polygon-count">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">로드 시간:</span>
+                            <span class="stat-value" id="load-time">-</span>
+                        </div>
+                    </div>
                 </div>
             </div>
-            
-            <div class="controls-center">
-                <!-- 재생 속도 -->
+        </div>
+        
+        <!-- 하단 애니메이션 컨트롤 -->
+        <div id="bottom-controls" class="bottom-controls">
+            <div class="animation-controls">
+                <button id="play-pause-btn" class="control-btn" title="재생/일시정지">
+                    <span class="play-icon">▶</span>
+                    <span class="pause-icon" style="display: none;">⏸</span>
+                </button>
+                <button id="stop-btn" class="control-btn" title="정지">
+                    <span>⏹</span>
+                </button>
+                <div class="timeline-container">
+                    <input type="range" id="animation-slider" class="timeline-slider" min="0" max="100" value="0">
+                    <div class="time-display">
+                        <span id="current-time">0:00</span> / <span id="total-time">0:00</span>
+                    </div>
+                </div>
                 <div class="speed-control">
                     <label>속도:</label>
-                    <select id="playback-speed" class="control-select-sm">
+                    <select id="playback-speed">
                         <option value="0.5">0.5x</option>
                         <option value="1" selected>1x</option>
                         <option value="1.5">1.5x</option>
                         <option value="2">2x</option>
                     </select>
                 </div>
-                
-                <!-- 루프 모드 -->
-                <div class="loop-control">
-                    <button class="control-btn-sm" id="loop-btn" title="반복 재생">
-                        <span>🔁</span>
-                    </button>
-                </div>
             </div>
-            
-            <div class="controls-right">
-                <!-- 추가 컨트롤 -->
-                <div class="extra-controls">
-                    <button class="control-btn-sm" id="screenshot-btn" title="스크린샷">
-                        <span>📸</span>
-                    </button>
-                    <button class="control-btn-sm" id="record-btn" title="녹화">
-                        <span>🔴</span>
-                    </button>
-                </div>
-                
-                <!-- 조명/밝기 조절 -->
-                <div class="lighting-control">
-                    <label>밝기:</label>
-                    <input type="range" id="brightness-slider" min="0.5" max="2" step="0.1" value="1.2">
-                </div>
-            </div>
-        </footer>
+        </div>
+        
+        <!-- 카메라 전환 인디케이터 -->
+        <div class="camera-transition-indicator" id="camera-indicator">
+            카메라 뷰 전환 중...
+        </div>
     </div>
-    
+
     <!-- Three.js 라이브러리 -->
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
-    <!-- Quick Fix 스크립트 (개발 모드용) -->
+    <!-- DOM 호환성 레이어 -->
     <script>
-        // 기본 오류 처리 및 디버깅 도구
-        window.addEventListener('error', function(e) {
-            console.error('오류 발생:', e.message, '\n파일:', e.filename, '\n라인:', e.lineno);
-        });
-        
-        // 간단한 디버그 유틸리티
-        window.debug = {
-            checkSystem: function() {
-                console.log('=== 시스템 체크 ===');
-                console.log('Three.js:', typeof THREE !== 'undefined' ? '✅' : '❌');
-                console.log('GLTFLoader:', typeof THREE?.GLTFLoader !== 'undefined' ? '✅' : '❌');
-                console.log('OrbitControls:', typeof THREE?.OrbitControls !== 'undefined' ? '✅' : '❌');
-                console.log('WebGL:', !!document.createElement('canvas').getContext('webgl') ? '✅' : '❌');
-            }
-        };
-    </script>
-
-<!-- viewer.html의 </body> 태그 바로 위에 다음 코드를 추가하세요 -->
-
-<!-- DOM 요소 매핑 및 호환성 레이어 -->
-<script>
-    // DOM 요소 호환성 레이어
+    // DOM 요소 호환성을 위한 즉시 실행 함수
     (function() {
-        console.log('🔧 viewer.html DOM 호환성 레이어 활성화');
+        'use strict';
         
         // 1. 필수 DOM 요소 확인 및 생성
         function ensureElements() {
-            // model-selector 생성 (숨김 상태)
+            // model-selector가 없으면 생성
             if (!document.getElementById('model-selector')) {
                 const modelSelector = document.createElement('div');
                 modelSelector.id = 'model-selector';
                 modelSelector.className = 'model-selector';
-                modelSelector.style.display = 'none'; // 기본적으로 숨김
-                modelSelector.innerHTML = `
-                    <div class="selector-container">
-                        <h1>옹벽 모델 선택</h1>
-                        <p>확인하실 옹벽 모델을 선택하세요</p>
-                        <div id="model-list" class="model-list"></div>
-                    </div>
-                `;
-                document.body.appendChild(modelSelector);
-            }
-            
-            // loading 요소 확인
-            if (!document.getElementById('loading')) {
-                const loading = document.querySelector('.loading-overlay');
-                if (loading) {
-                    loading.id = 'loading';
-                } else {
-                    // 새로 생성
-                    const newLoading = document.createElement('div');
-                    newLoading.id = 'loading';
-                    newLoading.className = 'loading-overlay';
-                    newLoading.style.display = 'none';
-                    newLoading.innerHTML = `
-                        <div class="loading-spinner"></div>
-                        <div>모델 로딩 중...</div>
-                        <div class="progress-text">0%</div>
-                    `;
-                    document.body.appendChild(newLoading);
-                }
-            }
-            
-            // error 요소 확인
-            if (!document.getElementById('error')) {
-                const error = document.createElement('div');
-                error.id = 'error';
-                error.className = 'error-message';
-                error.style.cssText = 'display: none; position: fixed; top: 20px; right: 20px; background: rgba(255,0,0,0.1); color: #ff6b6b; padding: 15px; border-radius: 8px; z-index: 3000;';
-                document.body.appendChild(error);
+                modelSelector.style.display = 'none';
+                
+                const modelList = document.createElement('div');
+                modelList.id = 'model-list';
+                modelList.className = 'model-list';
+                
+                modelSelector.appendChild(modelList);
+                document.getElementById('viewer-container').appendChild(modelSelector);
             }
         }
         
