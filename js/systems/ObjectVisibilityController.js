@@ -1,5 +1,5 @@
 // js/systems/ObjectVisibilityController.js
-// 객체 표시/숨김 제어 시스템 - 고급 가시성 관리
+// 객체 표시/숨김 제어 시스템 - 완전한 가시성 관리
 
 import { getConfig, setConfig } from '../core/ConfigManager.js';
 
@@ -10,6 +10,8 @@ import { getConfig, setConfig } from '../core/ConfigManager.js';
  * - 레이어 기반 제어
  * - 애니메이션 효과
  * - 상태 저장/복원
+ * - 필터링 시스템
+ * - 하이라이트 기능
  */
 export class ObjectVisibilityController {
     constructor(sceneManager) {
@@ -28,10 +30,16 @@ export class ObjectVisibilityController {
         // 애니메이션 관리
         this.animations = new Map();
         this.animationQueue = [];
+        this.animationId = null;
         
         // 필터링
         this.filters = new Map();
         this.activeFilters = new Set();
+        
+        // 하이라이트 시스템
+        this.highlightedObjects = new Set();
+        this.originalMaterials = new Map();
+        this.highlightMaterial = null;
         
         // 설정
         this.config = {
@@ -41,13 +49,99 @@ export class ObjectVisibilityController {
             fadeOutEasing: getConfig('objectVisibility.fadeOutEasing', 'easeIn'),
             enableGrouping: getConfig('objectVisibility.enableGrouping', true),
             enableLayers: getConfig('objectVisibility.enableLayers', true),
-            enableMaterialPreservation: getConfig('objectVisibility.enableMaterialPreservation', true)
+            enableMaterialPreservation: getConfig('objectVisibility.enableMaterialPreservation', true),
+            enableHighlight: getConfig('objectVisibility.enableHighlight', true),
+            highlightColor: getConfig('objectVisibility.highlightColor', '#ffff00'),
+            highlightEmissive: getConfig('objectVisibility.highlightEmissive', 0.3)
         };
         
         // 이벤트 시스템
         this.events = new Map();
         
+        // 앱 참조 (의존성 주입용)
+        this.app = null;
+        
+        // 초기화
+        this.init();
+        
         console.log('[ObjectVisibilityController] 초기화됨');
+    }
+    
+    /**
+     * 초기화
+     */
+    init() {
+        // 하이라이트 머티리얼 생성
+        this.createHighlightMaterial();
+        
+        // 애니메이션 시스템 시작
+        this.startAnimationSystem();
+        
+        // 기본 필터 등록
+        this.registerDefaultFilters();
+    }
+    
+    /**
+     * 하이라이트 머티리얼 생성
+     */
+    createHighlightMaterial() {
+        if (!this.config.enableHighlight) return;
+        
+        this.highlightMaterial = new THREE.MeshPhongMaterial({
+            color: this.config.highlightColor,
+            emissive: this.config.highlightColor,
+            emissiveIntensity: this.config.highlightEmissive,
+            transparent: true,
+            opacity: 0.8
+        });
+    }
+    
+    /**
+     * 애니메이션 시스템 시작
+     */
+    startAnimationSystem() {
+        if (!this.config.enableAnimations) return;
+        
+        const animate = () => {
+            this.animationId = requestAnimationFrame(animate);
+            this.updateAnimations();
+        };
+        
+        animate();
+    }
+    
+    /**
+     * 기본 필터 등록
+     */
+    registerDefaultFilters() {
+        // 재질별 필터
+        this.registerFilter('material', (object) => {
+            if (object.material && object.material.name) {
+                return object.material.name;
+            }
+            return 'default';
+        });
+        
+        // 크기별 필터
+        this.registerFilter('size', (object) => {
+            const bbox = new THREE.Box3().setFromObject(object);
+            const size = bbox.getSize(new THREE.Vector3());
+            const volume = size.x * size.y * size.z;
+            
+            if (volume > 100) return 'large';
+            if (volume > 10) return 'medium';
+            return 'small';
+        });
+        
+        // 타입별 필터 (이름 기반)
+        this.registerFilter('type', (object) => {
+            const name = object.name.toLowerCase();
+            if (name.includes('wall')) return 'wall';
+            if (name.includes('block')) return 'block';
+            if (name.includes('foundation')) return 'foundation';
+            if (name.includes('reinforcement')) return 'reinforcement';
+            return 'other';
+        });
     }
     
     /**
@@ -65,98 +159,87 @@ export class ObjectVisibilityController {
         
         // 모델 순회하여 객체 등록
         model.traverse((child) => {
-            if (child.isMesh || child.isGroup) {
+            if (child.isMesh && child.name) {
                 this.registerObject(child);
                 objectCount++;
             }
         });
         
-        // 자동 그룹핑
-        if (this.config.enableGrouping) {
-            this.autoCreateGroups();
-        }
+        // 자동 그룹 생성
+        this.createAutoGroups();
         
-        // 자동 레이어 분류
-        if (this.config.enableLayers) {
-            this.autoCreateLayers();
-        }
+        // 자동 레이어 생성
+        this.createAutoLayers();
         
-        console.log(`[ObjectVisibilityController] ${objectCount}개 객체 스캔 완료`);
-        this.emit('scan:complete', { objectCount, groups: this.groups.size, layers: this.layers.size });
+        // 통계 출력
+        console.log(`[ObjectVisibilityController] 스캔 완료: ${objectCount}개 객체, ${this.groups.size}개 그룹, ${this.layers.size}개 레이어`);
+        
+        this.emit('model:scanned', {
+            objectCount,
+            groupCount: this.groups.size,
+            layerCount: this.layers.size
+        });
     }
     
     /**
      * 객체 등록
      */
     registerObject(object) {
-        const name = object.name || `Object_${this.objects.size}`;
+        const name = object.name;
         
-        // 중복 이름 처리
-        let uniqueName = name;
-        let counter = 1;
-        while (this.objects.has(uniqueName)) {
-            uniqueName = `${name}_${counter}`;
-            counter++;
+        // 중복 확인
+        if (this.objects.has(name)) {
+            console.warn(`[ObjectVisibilityController] 중복 객체명: ${name}`);
+            return;
         }
         
         // 객체 등록
-        this.objects.set(uniqueName, object);
-        this.visibilityStates.set(uniqueName, object.visible);
+        this.objects.set(name, object);
+        this.visibilityStates.set(name, object.visible);
         
-        // 원본 재질 보존
-        if (this.config.enableMaterialPreservation) {
-            this.preserveOriginalMaterial(object);
+        // 원본 머티리얼 저장
+        if (object.material) {
+            this.originalMaterials.set(name, object.material.clone());
         }
         
-        // 사용자 데이터에 참조 저장
-        object.userData.visibilityName = uniqueName;
-        
-        return uniqueName;
-    }
-    
-    /**
-     * 원본 재질 보존
-     */
-    preserveOriginalMaterial(object) {
-        if (object.isMesh && object.material) {
-            object.userData.originalMaterial = object.material.clone();
-            object.userData.originalOpacity = object.material.opacity || 1.0;
-            object.userData.originalTransparent = object.material.transparent || false;
-        }
+        console.log(`[ObjectVisibilityController] 객체 등록: ${name}`);
     }
     
     /**
      * 자동 그룹 생성
      */
-    autoCreateGroups() {
-        // 이름 패턴 기반 그룹핑
-        const patterns = [
-            { pattern: /wall/i, group: 'Walls' },
-            { pattern: /floor/i, group: 'Floors' },
-            { pattern: /beam/i, group: 'Beams' },
-            { pattern: /column/i, group: 'Columns' },
-            { pattern: /foundation/i, group: 'Foundation' },
-            { pattern: /block/i, group: 'Blocks' },
-            { pattern: /panel/i, group: 'Panels' },
-            { pattern: /support/i, group: 'Supports' },
-            { pattern: /anchor/i, group: 'Anchors' },
-            { pattern: /reinforcement/i, group: 'Reinforcement' }
-        ];
+    createAutoGroups() {
+        if (!this.config.enableGrouping) return;
         
+        const groups = new Map();
+        
+        // 이름 패턴 기반 그룹화
         this.objects.forEach((object, name) => {
-            for (const { pattern, group } of patterns) {
-                if (pattern.test(name)) {
-                    this.addToGroup(name, group);
-                    break;
+            // 언더스코어 기준 그룹화
+            const parts = name.split('_');
+            if (parts.length > 1) {
+                const groupName = parts[0];
+                if (!groups.has(groupName)) {
+                    groups.set(groupName, new Set());
                 }
+                groups.get(groupName).add(name);
+            }
+            
+            // 숫자 패턴 제거하여 그룹화
+            const baseName = name.replace(/\d+$/, '');
+            if (baseName !== name) {
+                if (!groups.has(baseName)) {
+                    groups.set(baseName, new Set());
+                }
+                groups.get(baseName).add(name);
             }
         });
         
-        // 부모-자식 관계 기반 그룹핑
-        this.objects.forEach((object, name) => {
-            if (object.parent && object.parent.name) {
-                const parentName = object.parent.name;
-                this.addToGroup(name, `Parent_${parentName}`);
+        // 그룹 등록 (최소 2개 객체가 있는 그룹만)
+        groups.forEach((objects, groupName) => {
+            if (objects.size >= 2) {
+                this.groups.set(groupName, objects);
+                this.groupStates.set(groupName, true);
             }
         });
         
@@ -164,17 +247,19 @@ export class ObjectVisibilityController {
     }
     
     /**
-     * 자동 레이어 분류
+     * 자동 레이어 생성
      */
-    autoCreateLayers() {
-        // 재질 타입 기반 레이어
-        const materialLayers = new Map();
+    createAutoLayers() {
+        if (!this.config.enableLayers) return;
         
+        const materialLayers = new Map();
+        const heightLayers = new Map();
+        
+        // 재질별 레이어
         this.objects.forEach((object, name) => {
-            if (object.isMesh && object.material) {
-                const materialType = object.material.type;
-                const layerName = `Material_${materialType}`;
-                
+            const material = object.material;
+            if (material && material.name) {
+                const layerName = `Material_${material.name}`;
                 if (!materialLayers.has(layerName)) {
                     materialLayers.set(layerName, new Set());
                 }
@@ -182,18 +267,20 @@ export class ObjectVisibilityController {
             }
         });
         
-        // 높이 기반 레이어
-        const heightLayers = new Map();
-        const heightThresholds = [0, 2, 5, 10, 20]; // 미터 단위
-        
+        // 높이별 레이어
+        const heightBands = [0, 2, 5, 10, 20]; // 미터 단위
         this.objects.forEach((object, name) => {
             const bbox = new THREE.Box3().setFromObject(object);
-            const height = bbox.max.y;
+            const center = bbox.getCenter(new THREE.Vector3());
+            const height = center.y;
             
-            let layerName = 'Height_Ground';
-            for (let i = heightThresholds.length - 1; i >= 0; i--) {
-                if (height >= heightThresholds[i]) {
-                    layerName = `Height_${heightThresholds[i]}m+`;
+            let layerName = 'Height_0-2m';
+            for (let i = 0; i < heightBands.length - 1; i++) {
+                if (height >= heightBands[i] && height < heightBands[i + 1]) {
+                    layerName = `Height_${heightBands[i]}-${heightBands[i + 1]}m`;
+                    break;
+                } else if (height >= heightBands[heightBands.length - 1]) {
+                    layerName = `Height_${heightBands[heightBands.length - 1]}m+`;
                     break;
                 }
             }
@@ -207,37 +294,15 @@ export class ObjectVisibilityController {
         // 레이어 등록
         materialLayers.forEach((objects, layerName) => {
             this.layers.set(layerName, objects);
+            this.layerStates.set(layerName, true);
         });
         
         heightLayers.forEach((objects, layerName) => {
             this.layers.set(layerName, objects);
+            this.layerStates.set(layerName, true);
         });
         
         console.log(`[ObjectVisibilityController] ${this.layers.size}개 레이어 자동 생성됨`);
-    }
-    
-    /**
-     * 그룹에 객체 추가
-     */
-    addToGroup(objectName, groupName) {
-        if (!this.groups.has(groupName)) {
-            this.groups.set(groupName, new Set());
-            this.groupStates.set(groupName, true);
-        }
-        
-        this.groups.get(groupName).add(objectName);
-    }
-    
-    /**
-     * 레이어에 객체 추가
-     */
-    addToLayer(objectName, layerName) {
-        if (!this.layers.has(layerName)) {
-            this.layers.set(layerName, new Set());
-            this.layerStates.set(layerName, true);
-        }
-        
-        this.layers.get(layerName).add(objectName);
     }
     
     /**
@@ -268,151 +333,6 @@ export class ObjectVisibilityController {
     }
     
     /**
-     * 가시성 애니메이션
-     */
-    animateVisibility(object, visible) {
-        // 기존 애니메이션 중지
-        if (this.animations.has(object.uuid)) {
-            this.animations.get(object.uuid).stop();
-        }
-        
-        if (visible) {
-            // 페이드 인
-            object.visible = true;
-            this.fadeIn(object);
-        } else {
-            // 페이드 아웃
-            this.fadeOut(object);
-        }
-    }
-    
-    /**
-     * 페이드 인 애니메이션
-     */
-    fadeIn(object) {
-        if (!object.material) {
-            object.visible = true;
-            return;
-        }
-        
-        // 재질 설정
-        const material = object.material;
-        const originalOpacity = object.userData.originalOpacity || 1.0;
-        
-        material.transparent = true;
-        material.opacity = 0;
-        
-        // 애니메이션 생성
-        const animation = {
-            object: object,
-            startTime: performance.now(),
-            duration: this.config.animationDuration,
-            startOpacity: 0,
-            endOpacity: originalOpacity,
-            easing: this.config.fadeInEasing,
-            type: 'fadeIn'
-        };
-        
-        this.animations.set(object.uuid, animation);
-        this.startAnimation(animation);
-    }
-    
-    /**
-     * 페이드 아웃 애니메이션
-     */
-    fadeOut(object) {
-        if (!object.material) {
-            object.visible = false;
-            return;
-        }
-        
-        const material = object.material;
-        const startOpacity = material.opacity;
-        
-        material.transparent = true;
-        
-        // 애니메이션 생성
-        const animation = {
-            object: object,
-            startTime: performance.now(),
-            duration: this.config.animationDuration,
-            startOpacity: startOpacity,
-            endOpacity: 0,
-            easing: this.config.fadeOutEasing,
-            type: 'fadeOut'
-        };
-        
-        this.animations.set(object.uuid, animation);
-        this.startAnimation(animation);
-    }
-    
-    /**
-     * 애니메이션 시작
-     */
-    startAnimation(animation) {
-        const animate = () => {
-            const elapsed = performance.now() - animation.startTime;
-            const progress = Math.min(elapsed / animation.duration, 1);
-            
-            // 이징 적용
-            const easedProgress = this.applyEasing(progress, animation.easing);
-            
-            // 투명도 보간
-            const opacity = animation.startOpacity + 
-                           (animation.endOpacity - animation.startOpacity) * easedProgress;
-            
-            animation.object.material.opacity = opacity;
-            
-            if (progress < 1) {
-                requestAnimationFrame(animate);
-            } else {
-                // 애니메이션 완료
-                this.completeAnimation(animation);
-            }
-        };
-        
-        requestAnimationFrame(animate);
-    }
-    
-    /**
-     * 애니메이션 완료 처리
-     */
-    completeAnimation(animation) {
-        if (animation.type === 'fadeOut') {
-            animation.object.visible = false;
-        }
-        
-        // 원본 재질 속성 복원 (필요시)
-        if (animation.type === 'fadeIn') {
-            const originalTransparent = animation.object.userData.originalTransparent;
-            if (!originalTransparent) {
-                animation.object.material.transparent = false;
-            }
-        }
-        
-        this.animations.delete(animation.object.uuid);
-        this.emit('animation:complete', animation);
-    }
-    
-    /**
-     * 이징 함수 적용
-     */
-    applyEasing(t, easingType) {
-        switch (easingType) {
-            case 'linear':
-                return t;
-            case 'easeIn':
-                return t * t;
-            case 'easeOut':
-                return 1 - (1 - t) * (1 - t);
-            case 'easeInOut':
-                return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-            default:
-                return t;
-        }
-    }
-    
-    /**
      * 그룹 가시성 설정
      */
     setGroupVisibility(groupName, visible, animated = true) {
@@ -424,14 +344,16 @@ export class ObjectVisibilityController {
         
         this.groupStates.set(groupName, visible);
         
+        // 그룹 내 모든 객체에 적용
+        const promises = [];
         group.forEach(objectName => {
-            this.setObjectVisibility(objectName, visible, animated);
+            promises.push(this.setObjectVisibility(objectName, visible, animated));
         });
         
-        this.emit('group:visibility:change', { groupName, visible, count: group.size });
-        console.log(`[ObjectVisibilityController] ${groupName} 그룹: ${visible ? '표시' : '숨김'} (${group.size}개)`);
+        this.emit('group:visibility:change', { groupName, visible, animated, objectCount: group.size });
+        console.log(`[ObjectVisibilityController] 그룹 ${groupName}: ${visible ? '표시' : '숨김'} (${group.size}개 객체)`);
         
-        return true;
+        return Promise.all(promises);
     }
     
     /**
@@ -446,173 +368,207 @@ export class ObjectVisibilityController {
         
         this.layerStates.set(layerName, visible);
         
+        // 레이어 내 모든 객체에 적용
+        const promises = [];
         layer.forEach(objectName => {
-            this.setObjectVisibility(objectName, visible, animated);
+            promises.push(this.setObjectVisibility(objectName, visible, animated));
         });
         
-        this.emit('layer:visibility:change', { layerName, visible, count: layer.size });
-        console.log(`[ObjectVisibilityController] ${layerName} 레이어: ${visible ? '표시' : '숨김'} (${layer.size}개)`);
+        this.emit('layer:visibility:change', { layerName, visible, animated, objectCount: layer.size });
+        console.log(`[ObjectVisibilityController] 레이어 ${layerName}: ${visible ? '표시' : '숨김'} (${layer.size}개 객체)`);
         
-        return true;
+        return Promise.all(promises);
     }
     
     /**
-     * 패턴으로 객체 제어
+     * 가시성 애니메이션
      */
-    setVisibilityByPattern(pattern, visible, animated = true) {
-        const regex = new RegExp(pattern, 'i');
-        const matched = [];
+    animateVisibility(object, visible) {
+        const animationId = `${object.name}_visibility`;
         
-        this.objects.forEach((object, name) => {
-            if (regex.test(name)) {
-                this.setObjectVisibility(name, visible, animated);
-                matched.push(name);
+        // 기존 애니메이션 중지
+        if (this.animations.has(animationId)) {
+            this.animations.get(animationId).stop = true;
+            this.animations.delete(animationId);
+        }
+        
+        const startTime = performance.now();
+        const duration = this.config.animationDuration;
+        const startOpacity = object.material ? object.material.opacity : 1;
+        const targetOpacity = visible ? 1 : 0;
+        const easing = visible ? this.config.fadeInEasing : this.config.fadeOutEasing;
+        
+        // 투명도 애니메이션을 위한 머티리얼 설정
+        if (object.material && !object.material.transparent) {
+            object.material.transparent = true;
+        }
+        
+        const animation = {
+            object,
+            startTime,
+            duration,
+            startOpacity,
+            targetOpacity,
+            easing,
+            visible,
+            stop: false
+        };
+        
+        this.animations.set(animationId, animation);
+        
+        // 즉시 visible 설정 (투명도는 애니메이션으로 처리)
+        if (visible) {
+            object.visible = true;
+        }
+    }
+    
+    /**
+     * 애니메이션 업데이트
+     */
+    updateAnimations() {
+        const currentTime = performance.now();
+        const completedAnimations = [];
+        
+        this.animations.forEach((animation, id) => {
+            if (animation.stop) {
+                completedAnimations.push(id);
+                return;
+            }
+            
+            const elapsed = currentTime - animation.startTime;
+            const progress = Math.min(elapsed / animation.duration, 1);
+            
+            // 이징 함수 적용
+            const easedProgress = this.applyEasing(progress, animation.easing);
+            
+            // 투명도 보간
+            const currentOpacity = animation.startOpacity + (animation.targetOpacity - animation.startOpacity) * easedProgress;
+            
+            if (animation.object.material) {
+                animation.object.material.opacity = currentOpacity;
+            }
+            
+            // 애니메이션 완료 처리
+            if (progress >= 1) {
+                if (!animation.visible) {
+                    animation.object.visible = false;
+                }
+                
+                // 투명도 복원
+                if (animation.object.material) {
+                    animation.object.material.opacity = animation.targetOpacity;
+                }
+                
+                completedAnimations.push(id);
+                this.emit('animation:complete', { objectName: animation.object.name, visible: animation.visible });
             }
         });
         
-        this.emit('pattern:visibility:change', { pattern, visible, matched });
-        console.log(`[ObjectVisibilityController] 패턴 '${pattern}' 매칭: ${matched.length}개`);
-        
-        return matched;
+        // 완료된 애니메이션 제거
+        completedAnimations.forEach(id => {
+            this.animations.delete(id);
+        });
     }
     
     /**
-     * 필터 생성
+     * 이징 함수 적용
      */
-    createFilter(filterName, filterFunction) {
-        this.filters.set(filterName, filterFunction);
-        console.log(`[ObjectVisibilityController] 필터 생성: ${filterName}`);
+    applyEasing(t, easing) {
+        switch (easing) {
+            case 'linear': return t;
+            case 'easeIn': return t * t;
+            case 'easeOut': return 1 - (1 - t) * (1 - t);
+            case 'easeInOut': return t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t);
+            default: return t;
+        }
+    }
+    
+    /**
+     * 필터 등록
+     */
+    registerFilter(name, filterFunction) {
+        this.filters.set(name, filterFunction);
+        console.log(`[ObjectVisibilityController] 필터 등록: ${name}`);
     }
     
     /**
      * 필터 적용
      */
-    applyFilter(filterName, animated = true) {
+    applyFilter(filterName, filterValue, visible = false) {
         const filterFunction = this.filters.get(filterName);
         if (!filterFunction) {
             console.warn(`[ObjectVisibilityController] 필터를 찾을 수 없음: ${filterName}`);
-            return false;
+            return;
         }
         
-        this.activeFilters.add(filterName);
-        
         this.objects.forEach((object, name) => {
-            const visible = filterFunction(object, name);
-            this.setObjectVisibility(name, visible, animated);
-        });
-        
-        this.emit('filter:applied', { filterName });
-        console.log(`[ObjectVisibilityController] 필터 적용: ${filterName}`);
-        
-        return true;
-    }
-    
-    /**
-     * 필터 제거
-     */
-    removeFilter(filterName, animated = true) {
-        if (!this.activeFilters.has(filterName)) return false;
-        
-        this.activeFilters.delete(filterName);
-        
-        // 다른 활성 필터들 재적용
-        if (this.activeFilters.size > 0) {
-            this.reapplyFilters(animated);
-        } else {
-            // 모든 객체 표시
-            this.showAll(animated);
-        }
-        
-        this.emit('filter:removed', { filterName });
-        console.log(`[ObjectVisibilityController] 필터 제거: ${filterName}`);
-        
-        return true;
-    }
-    
-    /**
-     * 필터 재적용
-     */
-    reapplyFilters(animated = true) {
-        this.objects.forEach((object, name) => {
-            let visible = true;
-            
-            // 모든 활성 필터 적용 (AND 조건)
-            for (const filterName of this.activeFilters) {
-                const filterFunction = this.filters.get(filterName);
-                if (filterFunction && !filterFunction(object, name)) {
-                    visible = false;
-                    break;
-                }
+            const value = filterFunction(object);
+            if (value === filterValue) {
+                this.setObjectVisibility(name, visible, true);
             }
-            
-            this.setObjectVisibility(name, visible, animated);
         });
+        
+        if (visible) {
+            this.activeFilters.add(`${filterName}:${filterValue}`);
+        } else {
+            this.activeFilters.delete(`${filterName}:${filterValue}`);
+        }
+        
+        this.emit('filter:applied', { filterName, filterValue, visible });
+    }
+    
+    /**
+     * 모든 필터 초기화
+     */
+    clearFilters() {
+        this.activeFilters.clear();
+        this.showAll(true);
+        this.emit('filters:cleared');
     }
     
     /**
      * 객체 하이라이트
      */
-    highlightObject(objectName, highlightColor = '#ffff00') {
+    highlightObject(objectName, highlight = true) {
+        if (!this.config.enableHighlight) return;
+        
         const object = this.objects.get(objectName);
-        if (!object || !object.material) return false;
+        if (!object) return;
         
-        // 기존 하이라이트 제거
-        this.removeHighlight(objectName);
-        
-        // 하이라이트 재질 적용
-        const highlightMaterial = object.material.clone();
-        highlightMaterial.color.setHex(highlightColor.replace('#', '0x'));
-        highlightMaterial.emissive.setHex(highlightColor.replace('#', '0x'));
-        highlightMaterial.emissiveIntensity = 0.3;
-        
-        object.userData.currentMaterial = object.material;
-        object.material = highlightMaterial;
-        
-        this.emit('object:highlight', { objectName, color: highlightColor });
-        
-        return true;
-    }
-    
-    /**
-     * 하이라이트 제거
-     */
-    removeHighlight(objectName) {
-        const object = this.objects.get(objectName);
-        if (!object || !object.userData.currentMaterial) return false;
-        
-        // 원본 재질 복원
-        object.material = object.userData.currentMaterial;
-        delete object.userData.currentMaterial;
-        
-        this.emit('object:highlight:remove', { objectName });
-        
-        return true;
+        if (highlight) {
+            if (!this.highlightedObjects.has(objectName)) {
+                // 원본 머티리얼 저장
+                if (object.material) {
+                    this.originalMaterials.set(objectName, object.material);
+                }
+                
+                // 하이라이트 머티리얼 적용
+                object.material = this.highlightMaterial;
+                this.highlightedObjects.add(objectName);
+                
+                this.emit('object:highlighted', { objectName });
+            }
+        } else {
+            if (this.highlightedObjects.has(objectName)) {
+                // 원본 머티리얼 복원
+                const originalMaterial = this.originalMaterials.get(objectName);
+                if (originalMaterial) {
+                    object.material = originalMaterial;
+                }
+                
+                this.highlightedObjects.delete(objectName);
+                this.emit('object:unhighlighted', { objectName });
+            }
+        }
     }
     
     /**
      * 모든 하이라이트 제거
      */
     removeAllHighlights() {
-        this.objects.forEach((object, name) => {
-            this.removeHighlight(name);
+        this.highlightedObjects.forEach(objectName => {
+            this.highlightObject(objectName, false);
         });
-    }
-    
-    /**
-     * 특정 객체만 표시 (격리)
-     */
-    isolateObjects(objectNames, animated = true) {
-        if (!Array.isArray(objectNames)) {
-            objectNames = [objectNames];
-        }
-        
-        this.objects.forEach((object, name) => {
-            const visible = objectNames.includes(name);
-            this.setObjectVisibility(name, visible, animated);
-        });
-        
-        this.emit('objects:isolated', { objectNames });
-        console.log(`[ObjectVisibilityController] 객체 격리: ${objectNames.length}개`);
     }
     
     /**
@@ -623,8 +579,7 @@ export class ObjectVisibilityController {
             this.setObjectVisibility(name, true, animated);
         });
         
-        this.emit('visibility:show:all');
-        console.log('[ObjectVisibilityController] 모든 객체 표시');
+        this.emit('all:shown');
     }
     
     /**
@@ -635,110 +590,101 @@ export class ObjectVisibilityController {
             this.setObjectVisibility(name, false, animated);
         });
         
-        this.emit('visibility:hide:all');
-        console.log('[ObjectVisibilityController] 모든 객체 숨김');
+        this.emit('all:hidden');
     }
     
     /**
-     * 가시성 상태 저장
+     * 가시성 반전
      */
-    saveState(stateName = 'default') {
+    invertVisibility(animated = true) {
+        this.objects.forEach((object, name) => {
+            const currentState = this.visibilityStates.get(name);
+            this.setObjectVisibility(name, !currentState, animated);
+        });
+        
+        this.emit('visibility:inverted');
+    }
+    
+    /**
+     * 상태 저장
+     */
+    saveState() {
         const state = {
             timestamp: Date.now(),
             objects: Object.fromEntries(this.visibilityStates),
             groups: Object.fromEntries(this.groupStates),
             layers: Object.fromEntries(this.layerStates),
-            activeFilters: Array.from(this.activeFilters)
+            activeFilters: Array.from(this.activeFilters),
+            highlighted: Array.from(this.highlightedObjects)
         };
-        
-        // ConfigManager를 통해 저장
-        const savedStates = getConfig('objectVisibility.savedStates', {});
-        savedStates[stateName] = state;
-        setConfig('objectVisibility.savedStates', savedStates);
-        
-        this.emit('state:saved', { stateName, state });
-        console.log(`[ObjectVisibilityController] 상태 저장: ${stateName}`);
         
         return state;
     }
     
     /**
-     * 가시성 상태 복원
+     * 상태 복원
      */
-    restoreState(stateName = 'default', animated = true) {
-        const savedStates = getConfig('objectVisibility.savedStates', {});
-        const state = savedStates[stateName];
-        
-        if (!state) {
-            console.warn(`[ObjectVisibilityController] 저장된 상태를 찾을 수 없음: ${stateName}`);
-            return false;
-        }
+    restoreState(state, animated = true) {
+        if (!state) return;
         
         // 객체 상태 복원
-        Object.entries(state.objects).forEach(([objectName, visible]) => {
-            this.setObjectVisibility(objectName, visible, animated);
-        });
+        if (state.objects) {
+            Object.entries(state.objects).forEach(([name, visible]) => {
+                this.setObjectVisibility(name, visible, animated);
+            });
+        }
         
         // 그룹 상태 복원
-        Object.entries(state.groups).forEach(([groupName, visible]) => {
-            this.groupStates.set(groupName, visible);
-        });
+        if (state.groups) {
+            Object.entries(state.groups).forEach(([name, visible]) => {
+                this.groupStates.set(name, visible);
+            });
+        }
         
         // 레이어 상태 복원
-        Object.entries(state.layers).forEach(([layerName, visible]) => {
-            this.layerStates.set(layerName, visible);
-        });
+        if (state.layers) {
+            Object.entries(state.layers).forEach(([name, visible]) => {
+                this.layerStates.set(name, visible);
+            });
+        }
         
-        // 필터 상태 복원
-        this.activeFilters.clear();
-        state.activeFilters.forEach(filterName => {
-            this.activeFilters.add(filterName);
-        });
+        // 필터 복원
+        if (state.activeFilters) {
+            this.activeFilters.clear();
+            state.activeFilters.forEach(filter => {
+                this.activeFilters.add(filter);
+            });
+        }
         
-        this.emit('state:restored', { stateName, state });
-        console.log(`[ObjectVisibilityController] 상태 복원: ${stateName}`);
+        // 하이라이트 복원
+        if (state.highlighted) {
+            this.removeAllHighlights();
+            state.highlighted.forEach(objectName => {
+                this.highlightObject(objectName, true);
+            });
+        }
         
-        return true;
+        this.emit('state:restored', state);
     }
     
     /**
      * 통계 정보
      */
     getStatistics() {
-        const visible = Array.from(this.visibilityStates.values()).filter(v => v).length;
-        const hidden = this.objects.size - visible;
+        const totalObjects = this.objects.size;
+        const visibleObjects = Array.from(this.visibilityStates.values()).filter(v => v).length;
+        const hiddenObjects = totalObjects - visibleObjects;
         
         return {
-            total: this.objects.size,
-            visible: visible,
-            hidden: hidden,
+            totalObjects,
+            visibleObjects,
+            hiddenObjects,
             groups: this.groups.size,
             layers: this.layers.size,
             activeFilters: this.activeFilters.size,
+            highlightedObjects: this.highlightedObjects.size,
             runningAnimations: this.animations.size
         };
-    }
-    
-    /**
-     * 검색
-     */
-    searchObjects(query) {
-        const results = [];
-        const searchTerm = query.toLowerCase();
-        
-        this.objects.forEach((object, name) => {
-            if (name.toLowerCase().includes(searchTerm)) {
-                results.push({
-                    name: name,
-                    visible: this.visibilityStates.get(name),
-                    type: object.type,
-                    groups: this.getObjectGroups(name),
-                    layers: this.getObjectLayers(name)
-                });
-            }
-        });
-        
-        return results;
     }
     
     /**
@@ -768,6 +714,13 @@ export class ObjectVisibilityController {
     }
     
     /**
+     * 앱 참조 설정 (의존성 주입)
+     */
+    setApp(app) {
+        this.app = app;
+    }
+    
+    /**
      * 정리
      */
     clear() {
@@ -776,6 +729,11 @@ export class ObjectVisibilityController {
             animation.stop = true;
         });
         this.animations.clear();
+        
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
         
         // 하이라이트 제거
         this.removeAllHighlights();
@@ -788,9 +746,27 @@ export class ObjectVisibilityController {
         this.groupStates.clear();
         this.layerStates.clear();
         this.activeFilters.clear();
+        this.originalMaterials.clear();
         
         this.emit('cleared');
         console.log('[ObjectVisibilityController] 데이터 정리됨');
+    }
+    
+    /**
+     * 소멸자
+     */
+    destroy() {
+        this.clear();
+        
+        // 이벤트 리스너 정리
+        this.events.clear();
+        
+        // 머티리얼 정리
+        if (this.highlightMaterial) {
+            this.highlightMaterial.dispose();
+        }
+        
+        console.log('[ObjectVisibilityController] 소멸됨');
     }
     
     /**
@@ -833,6 +809,7 @@ export class ObjectVisibilityController {
         console.log('레이어:', Array.from(this.layers.keys()));
         console.log('활성 필터:', Array.from(this.activeFilters));
         console.log('실행 중인 애니메이션:', this.animations.size);
+        console.log('하이라이트된 객체:', Array.from(this.highlightedObjects));
         console.groupEnd();
     }
 }

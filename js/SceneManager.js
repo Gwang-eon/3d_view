@@ -9,13 +9,16 @@ import { getConfig, setConfig } from './core/ConfigManager.js';
  * - 의존성 주입 지원
  * - 자동 리사이징 및 성능 최적화
  * - 스크린샷 및 디버그 기능
+ * - 메모리 관리 및 정리
+ * - 카메라 전환 시스템
+ * - 환경 설정 관리
  */
 export class SceneManager {
     constructor(container = null) {
         // 컨테이너 설정
         this.container = this.resolveContainer(container);
         
-        // Three.js 객체들
+        // Three.js 핵심 객체들
         this.scene = null;
         this.camera = null;
         this.renderer = null;
@@ -23,24 +26,59 @@ export class SceneManager {
         
         // 조명 시스템
         this.lights = new Map();
+        this.lightHelpers = new Map();
         
-        // 현재 모델
+        // 환경 요소들
+        this.gridHelper = null;
+        this.axesHelper = null;
+        this.floor = null;
+        this.environment = null;
+        
+        // 현재 모델 정보
         this.currentModel = null;
         this.currentModelInfo = null;
+        this.modelBounds = null;
+        
+        // 카메라 시스템
+        this.gltfCameras = [];
+        this.defaultCameraPosition = null;
+        this.cameraTransitions = new Map();
         
         // 성능 모니터링
         this.stats = {
             triangles: 0,
             vertices: 0,
             meshes: 0,
-            lastFrameTime: 0
+            drawCalls: 0,
+            lastFrameTime: 0,
+            fps: 0,
+            memoryUsage: 0
+        };
+        
+        // 렌더링 상태
+        this.renderingState = {
+            isRendering: false,
+            needsUpdate: true,
+            lastRenderTime: 0,
+            frameCount: 0
         };
         
         // 이벤트 시스템
         this.events = new Map();
         
+        // 리사이즈 옵저버
+        this.resizeObserver = null;
+        
+        // 애니메이션 프레임 ID
+        this.animationId = null;
+        
         // 앱 참조 (의존성 주입용)
         this.app = null;
+        
+        // 바인드된 메서드들
+        this.handleResize = this.handleResize.bind(this);
+        this.handleConfigChange = this.handleConfigChange.bind(this);
+        this.animate = this.animate.bind(this);
         
         // 초기화
         this.init();
@@ -53,7 +91,8 @@ export class SceneManager {
      */
     resolveContainer(container) {
         if (container) {
-            return typeof container === 'string' ? document.querySelector(container) : container;
+            return typeof container === 'string' ? 
+                document.querySelector(container) : container;
         }
         
         // ConfigManager에서 기본 컨테이너 가져오기
@@ -72,12 +111,23 @@ export class SceneManager {
      */
     init() {
         try {
+            // 기본 위치 저장
+            this.saveDefaultCameraPosition();
+            
+            // Three.js 객체 생성
             this.createScene();
             this.createCamera();
             this.createRenderer();
             this.createLights();
             this.createControls();
+            this.createEnvironment();
+            
+            // 이벤트 및 옵저버 설정
             this.setupEventListeners();
+            this.setupResizeObserver();
+            this.setupConfigObserver();
+            
+            // 렌더링 루프 시작
             this.startRenderLoop();
             
             // 개발 도구 설정
@@ -95,25 +145,70 @@ export class SceneManager {
     }
     
     /**
+     * 기본 카메라 위치 저장
+     */
+    saveDefaultCameraPosition() {
+        const cameraConfig = getConfig('scene.camera');
+        this.defaultCameraPosition = new THREE.Vector3(
+            cameraConfig.position.x,
+            cameraConfig.position.y,
+            cameraConfig.position.z
+        );
+    }
+    
+    /**
      * 씬 생성
      */
     createScene() {
         this.scene = new THREE.Scene();
         
-        // 배경색 설정
-        const bgColor = getConfig('scene.renderer.backgroundColor', 0x000000);
-        this.scene.background = new THREE.Color(bgColor);
+        // 배경 설정
+        const bgConfig = getConfig('scene.background');
+        if (bgConfig.type === 'color') {
+            this.scene.background = new THREE.Color(bgConfig.color);
+        } else if (bgConfig.type === 'skybox' && bgConfig.skyboxPath) {
+            this.loadSkybox(bgConfig.skyboxPath);
+        }
         
-        // 안개 설정 (선택적)
-        const fogEnabled = getConfig('scene.fog.enabled', false);
-        if (fogEnabled) {
-            const fogColor = getConfig('scene.fog.color', 0x000000);
-            const fogNear = getConfig('scene.fog.near', 50);
-            const fogFar = getConfig('scene.fog.far', 200);
-            this.scene.fog = new THREE.Fog(fogColor, fogNear, fogFar);
+        // 안개 설정
+        const fogConfig = getConfig('scene.fog');
+        if (fogConfig.enabled) {
+            if (fogConfig.type === 'linear') {
+                this.scene.fog = new THREE.Fog(
+                    fogConfig.color,
+                    fogConfig.near,
+                    fogConfig.far
+                );
+            } else if (fogConfig.type === 'exponential') {
+                this.scene.fog = new THREE.FogExp2(
+                    fogConfig.color,
+                    fogConfig.density
+                );
+            }
         }
         
         console.log('[SceneManager] ✓ 씬 생성됨');
+    }
+    
+    /**
+     * 스카이박스 로드
+     */
+    async loadSkybox(path) {
+        try {
+            const loader = new THREE.CubeTextureLoader();
+            const texture = await loader.loadAsync([
+                `${path}/px.jpg`, `${path}/nx.jpg`,
+                `${path}/py.jpg`, `${path}/ny.jpg`,
+                `${path}/pz.jpg`, `${path}/nz.jpg`
+            ]);
+            
+            this.scene.background = texture;
+            this.scene.environment = texture;
+            
+            console.log('[SceneManager] ✓ 스카이박스 로드됨');
+        } catch (error) {
+            console.warn('[SceneManager] 스카이박스 로드 실패:', error);
+        }
     }
     
     /**
@@ -154,30 +249,51 @@ export class SceneManager {
         this.renderer = new THREE.WebGLRenderer({
             antialias: rendererConfig.antialias,
             alpha: rendererConfig.alpha,
-            powerPreference: getConfig('performance.powerPreference', 'high-performance')
+            powerPreference: getConfig('performance.powerPreference', 'high-performance'),
+            preserveDrawingBuffer: getConfig('scene.renderer.preserveDrawingBuffer', false)
         });
         
         // 크기 설정
         this.updateRendererSize();
         
         // 픽셀 비율 설정
-        this.renderer.setPixelRatio(rendererConfig.pixelRatio);
+        this.renderer.setPixelRatio(
+            Math.min(rendererConfig.pixelRatio, window.devicePixelRatio)
+        );
+        
+        // 색상 및 톤 매핑 설정
+        this.renderer.outputEncoding = THREE.sRGBEncoding;
+        this.renderer.toneMapping = this.getToneMappingType(rendererConfig.toneMapping);
+        this.renderer.toneMappingExposure = rendererConfig.exposure;
         
         // 그림자 설정
         if (rendererConfig.shadowMapEnabled) {
             this.renderer.shadowMap.enabled = true;
             this.renderer.shadowMap.type = this.getShadowMapType(rendererConfig.shadowMapType);
+            this.renderer.shadowMap.autoUpdate = rendererConfig.shadowMapAutoUpdate;
         }
         
-        // 색상 공간 설정
-        this.renderer.outputEncoding = THREE.sRGBEncoding;
-        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = getConfig('scene.renderer.exposure', 1.0);
+        // 물리적 기반 렌더링 설정
+        this.renderer.physicallyCorrectLights = rendererConfig.physicallyCorrectLights;
         
         // 컨테이너에 추가
         this.container.appendChild(this.renderer.domElement);
         
         console.log('[SceneManager] ✓ 렌더러 생성됨');
+    }
+    
+    /**
+     * 톤 매핑 타입 변환
+     */
+    getToneMappingType(typeString) {
+        const types = {
+            'NoToneMapping': THREE.NoToneMapping,
+            'LinearToneMapping': THREE.LinearToneMapping,
+            'ReinhardToneMapping': THREE.ReinhardToneMapping,
+            'CineonToneMapping': THREE.CineonToneMapping,
+            'ACESFilmicToneMapping': THREE.ACESFilmicToneMapping
+        };
+        return types[typeString] || THREE.ACESFilmicToneMapping;
     }
     
     /**
@@ -190,7 +306,6 @@ export class SceneManager {
             'PCFSoftShadowMap': THREE.PCFSoftShadowMap,
             'VSMShadowMap': THREE.VSMShadowMap
         };
-        
         return types[typeString] || THREE.PCFSoftShadowMap;
     }
     
@@ -201,161 +316,188 @@ export class SceneManager {
         const lightingConfig = getConfig('scene.lighting');
         
         // 주변광 (Ambient Light)
-        if (lightingConfig.ambient) {
+        if (lightingConfig.ambient?.enabled) {
             const ambient = lightingConfig.ambient;
             const ambientLight = new THREE.AmbientLight(
                 ambient.color,
                 ambient.intensity
             );
+            ambientLight.name = 'AmbientLight';
             
             this.scene.add(ambientLight);
             this.lights.set('ambient', ambientLight);
         }
         
         // 직사광 (Directional Light)
-        if (lightingConfig.directional) {
-            const dir = lightingConfig.directional;
+        if (lightingConfig.directional?.enabled) {
+            const directional = lightingConfig.directional;
             const directionalLight = new THREE.DirectionalLight(
-                dir.color,
-                dir.intensity
+                directional.color,
+                directional.intensity
             );
             
             // 위치 설정
-            if (dir.position) {
-                directionalLight.position.set(
-                    dir.position.x,
-                    dir.position.y,
-                    dir.position.z
-                );
-            }
+            const pos = directional.position;
+            directionalLight.position.set(pos.x, pos.y, pos.z);
             
             // 그림자 설정
-            if (dir.castShadow) {
+            if (directional.castShadow) {
                 directionalLight.castShadow = true;
-                
-                const shadowSize = dir.shadowMapSize || getConfig('scene.renderer.shadowMapSize', 2048);
-                directionalLight.shadow.mapSize.width = shadowSize;
-                directionalLight.shadow.mapSize.height = shadowSize;
-                
-                // 그림자 카메라 설정
-                const shadowCamera = directionalLight.shadow.camera;
-                shadowCamera.near = dir.shadowNear || 0.1;
-                shadowCamera.far = dir.shadowFar || 100;
-                shadowCamera.left = dir.shadowLeft || -50;
-                shadowCamera.right = dir.shadowRight || 50;
-                shadowCamera.top = dir.shadowTop || 50;
-                shadowCamera.bottom = dir.shadowBottom || -50;
-                
-                // 그림자 편향 설정
-                directionalLight.shadow.bias = dir.shadowBias || -0.0001;
+                directionalLight.shadow.mapSize.width = directional.shadowMapSize;
+                directionalLight.shadow.mapSize.height = directional.shadowMapSize;
+                directionalLight.shadow.camera.near = directional.shadowCameraNear;
+                directionalLight.shadow.camera.far = directional.shadowCameraFar;
+                directionalLight.shadow.camera.left = -directional.shadowCameraSize;
+                directionalLight.shadow.camera.right = directional.shadowCameraSize;
+                directionalLight.shadow.camera.top = directional.shadowCameraSize;
+                directionalLight.shadow.camera.bottom = -directional.shadowCameraSize;
+                directionalLight.shadow.bias = directional.shadowBias;
             }
             
+            directionalLight.name = 'DirectionalLight';
             this.scene.add(directionalLight);
             this.lights.set('directional', directionalLight);
+            
+            // 헬퍼 추가 (디버그 모드)
+            if (getConfig('app.debug') && directional.showHelper) {
+                const helper = new THREE.DirectionalLightHelper(directionalLight, 5);
+                this.scene.add(helper);
+                this.lightHelpers.set('directional', helper);
+            }
         }
         
-        // 추가 조명들 (점광원, 스포트라이트 등)
-        this.createAdditionalLights(lightingConfig);
-        
-        console.log('[SceneManager] ✓ 조명 생성됨:', this.lights.size);
-    }
-    
-    /**
-     * 추가 조명 생성
-     */
-    createAdditionalLights(lightingConfig) {
-        // 점광원 (Point Light)
-        if (lightingConfig.points) {
-            lightingConfig.points.forEach((pointConfig, index) => {
-                const pointLight = new THREE.PointLight(
-                    pointConfig.color,
-                    pointConfig.intensity,
-                    pointConfig.distance || 0,
-                    pointConfig.decay || 1
-                );
-                
-                if (pointConfig.position) {
-                    pointLight.position.set(
-                        pointConfig.position.x,
-                        pointConfig.position.y,
-                        pointConfig.position.z
-                    );
-                }
-                
-                this.scene.add(pointLight);
-                this.lights.set(`point_${index}`, pointLight);
-            });
+        // 반구광 (Hemisphere Light)
+        if (lightingConfig.hemisphere?.enabled) {
+            const hemisphere = lightingConfig.hemisphere;
+            const hemisphereLight = new THREE.HemisphereLight(
+                hemisphere.skyColor,
+                hemisphere.groundColor,
+                hemisphere.intensity
+            );
+            hemisphereLight.name = 'HemisphereLight';
+            
+            this.scene.add(hemisphereLight);
+            this.lights.set('hemisphere', hemisphereLight);
         }
         
-        // 스포트라이트 (Spot Light)
-        if (lightingConfig.spots) {
-            lightingConfig.spots.forEach((spotConfig, index) => {
-                const spotLight = new THREE.SpotLight(
-                    spotConfig.color,
-                    spotConfig.intensity,
-                    spotConfig.distance || 0,
-                    spotConfig.angle || Math.PI / 3,
-                    spotConfig.penumbra || 0,
-                    spotConfig.decay || 1
-                );
-                
-                if (spotConfig.position) {
-                    spotLight.position.set(
-                        spotConfig.position.x,
-                        spotConfig.position.y,
-                        spotConfig.position.z
-                    );
-                }
-                
-                if (spotConfig.target) {
-                    spotLight.target.position.set(
-                        spotConfig.target.x,
-                        spotConfig.target.y,
-                        spotConfig.target.z
-                    );
-                    this.scene.add(spotLight.target);
-                }
-                
-                this.scene.add(spotLight);
-                this.lights.set(`spot_${index}`, spotLight);
-            });
-        }
+        console.log(`[SceneManager] ✓ ${this.lights.size}개 조명 생성됨`);
     }
     
     /**
      * 컨트롤 생성
      */
     createControls() {
-        if (!THREE.OrbitControls) {
+        if (!window.THREE.OrbitControls) {
             console.warn('[SceneManager] OrbitControls를 사용할 수 없습니다.');
             return;
         }
         
-        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
-        
         const controlsConfig = getConfig('scene.controls');
         
-        // 설정 적용
-        Object.entries(controlsConfig).forEach(([key, value]) => {
-            if (this.controls.hasOwnProperty(key)) {
-                this.controls[key] = value;
-            }
-        });
+        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
         
-        // 이벤트 리스너
-        this.controls.addEventListener('change', () => {
-            this.emit('controls:change');
-        });
+        // 기본 설정
+        this.controls.enableDamping = controlsConfig.enableDamping;
+        this.controls.dampingFactor = controlsConfig.dampingFactor;
+        this.controls.enableZoom = controlsConfig.enableZoom;
+        this.controls.enableRotate = controlsConfig.enableRotate;
+        this.controls.enablePan = controlsConfig.enablePan;
         
-        this.controls.addEventListener('start', () => {
-            this.emit('controls:start');
-        });
+        // 제한 설정
+        this.controls.minDistance = controlsConfig.minDistance;
+        this.controls.maxDistance = controlsConfig.maxDistance;
+        this.controls.minPolarAngle = controlsConfig.minPolarAngle;
+        this.controls.maxPolarAngle = controlsConfig.maxPolarAngle;
         
-        this.controls.addEventListener('end', () => {
-            this.emit('controls:end');
-        });
+        // 속도 설정
+        this.controls.rotateSpeed = controlsConfig.rotateSpeed;
+        this.controls.zoomSpeed = controlsConfig.zoomSpeed;
+        this.controls.panSpeed = controlsConfig.panSpeed;
+        
+        // 타겟 설정
+        const target = controlsConfig.target;
+        this.controls.target.set(target.x, target.y, target.z);
+        
+        // 자동 회전
+        this.controls.autoRotate = controlsConfig.autoRotate;
+        this.controls.autoRotateSpeed = controlsConfig.autoRotateSpeed;
+        
+        this.controls.update();
         
         console.log('[SceneManager] ✓ 컨트롤 생성됨');
+    }
+    
+    /**
+     * 환경 요소 생성
+     */
+    createEnvironment() {
+        const envConfig = getConfig('scene.environment');
+        
+        // 그리드 헬퍼
+        if (envConfig.grid?.enabled) {
+            const grid = envConfig.grid;
+            this.gridHelper = new THREE.GridHelper(
+                grid.size,
+                grid.divisions,
+                grid.colorCenterLine,
+                grid.colorGrid
+            );
+            this.gridHelper.name = 'GridHelper';
+            this.scene.add(this.gridHelper);
+        }
+        
+        // 축 헬퍼 (디버그 모드)
+        if (getConfig('app.debug') && envConfig.axes?.enabled) {
+            const axes = envConfig.axes;
+            this.axesHelper = new THREE.AxesHelper(axes.size);
+            this.axesHelper.name = 'AxesHelper';
+            this.scene.add(this.axesHelper);
+        }
+        
+        // 바닥면
+        if (envConfig.floor?.enabled) {
+            this.createFloor(envConfig.floor);
+        }
+        
+        console.log('[SceneManager] ✓ 환경 요소 생성됨');
+    }
+    
+    /**
+     * 바닥면 생성
+     */
+    createFloor(floorConfig) {
+        const geometry = new THREE.PlaneGeometry(
+            floorConfig.size,
+            floorConfig.size
+        );
+        
+        let material;
+        if (floorConfig.texture) {
+            const textureLoader = new THREE.TextureLoader();
+            const texture = textureLoader.load(floorConfig.texture);
+            texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(floorConfig.textureRepeat, floorConfig.textureRepeat);
+            
+            material = new THREE.MeshLambertMaterial({
+                map: texture,
+                transparent: floorConfig.transparent,
+                opacity: floorConfig.opacity
+            });
+        } else {
+            material = new THREE.MeshLambertMaterial({
+                color: floorConfig.color,
+                transparent: floorConfig.transparent,
+                opacity: floorConfig.opacity
+            });
+        }
+        
+        this.floor = new THREE.Mesh(geometry, material);
+        this.floor.rotation.x = -Math.PI / 2;
+        this.floor.position.y = floorConfig.y;
+        this.floor.receiveShadow = floorConfig.receiveShadow;
+        this.floor.name = 'Floor';
+        
+        this.scene.add(this.floor);
     }
     
     /**
@@ -363,59 +505,153 @@ export class SceneManager {
      */
     setupEventListeners() {
         // 윈도우 리사이즈
-        window.addEventListener('resize', this.handleResize.bind(this));
+        window.addEventListener('resize', this.handleResize);
         
-        // 설정 변경 감지
-        if (this.app && this.app.configManager) {
-            this.app.configManager.addChangeListener(this.handleConfigChange.bind(this));
-        }
+        // 가시성 변경 (성능 최적화)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                this.pauseRendering();
+            } else {
+                this.resumeRendering();
+            }
+        });
         
-        // 키보드 이벤트 (개발 모드)
-        if (getConfig('app.debug')) {
-            document.addEventListener('keydown', this.handleKeyDown.bind(this));
+        console.log('[SceneManager] ✓ 이벤트 리스너 설정됨');
+    }
+    
+    /**
+     * 리사이즈 옵저버 설정
+     */
+    setupResizeObserver() {
+        if (!window.ResizeObserver) return;
+        
+        this.resizeObserver = new ResizeObserver(entries => {
+            for (const entry of entries) {
+                if (entry.target === this.container) {
+                    this.handleResize();
+                    break;
+                }
+            }
+        });
+        
+        this.resizeObserver.observe(this.container);
+    }
+    
+    /**
+     * 설정 변경 옵저버 설정
+     */
+    setupConfigObserver() {
+        // ConfigManager의 변경 알림 구독
+        if (typeof getConfig === 'function' && getConfig.addChangeListener) {
+            getConfig.addChangeListener(this.handleConfigChange);
         }
     }
     
     /**
-     * 렌더 루프 시작
+     * 디버그 도구 설정
+     */
+    setupDebugTools() {
+        // Stats.js 통합
+        if (window.Stats) {
+            this.statsMonitor = new Stats();
+            this.statsMonitor.showPanel(0); // FPS
+            document.body.appendChild(this.statsMonitor.dom);
+        }
+        
+        // 전역 접근 (디버깅용)
+        window.sceneManager = this;
+        
+        // 디버그 메뉴 생성
+        this.createDebugMenu();
+    }
+    
+    /**
+     * 디버그 메뉴 생성
+     */
+    createDebugMenu() {
+        const debugMenu = document.createElement('div');
+        debugMenu.id = 'scene-debug-menu';
+        debugMenu.style.cssText = `
+            position: fixed; top: 10px; left: 10px; z-index: 10000;
+            background: rgba(0,0,0,0.8); color: white; padding: 10px;
+            border-radius: 5px; font-family: monospace; font-size: 12px;
+        `;
+        
+        debugMenu.innerHTML = `
+            <div><strong>SceneManager Debug</strong></div>
+            <div>FPS: <span id="debug-fps">0</span></div>
+            <div>Objects: <span id="debug-objects">0</span></div>
+            <div>Triangles: <span id="debug-triangles">0</span></div>
+            <div>Memory: <span id="debug-memory">0</span>MB</div>
+            <button onclick="sceneManager.debug()">Log Info</button>
+            <button onclick="sceneManager.takeScreenshot()">Screenshot</button>
+        `;
+        
+        document.body.appendChild(debugMenu);
+    }
+    
+    /**
+     * 렌더링 루프 시작
      */
     startRenderLoop() {
-        // ConfigManager의 targetFPS 사용
-        const targetFPS = getConfig('performance.targetFPS', 60);
-        const frameInterval = 1000 / targetFPS;
-        let lastFrameTime = 0;
+        if (this.renderingState.isRendering) return;
         
-        const render = (currentTime) => {
-            if (currentTime - lastFrameTime >= frameInterval) {
-                this.update(currentTime);
-                this.render();
-                lastFrameTime = currentTime;
-            }
-            
-            requestAnimationFrame(render);
-        };
+        this.renderingState.isRendering = true;
+        this.animate();
         
-        requestAnimationFrame(render);
-        console.log('[SceneManager] ✓ 렌더 루프 시작됨');
+        console.log('[SceneManager] ✓ 렌더링 루프 시작됨');
     }
     
     /**
-     * 업데이트 (매 프레임)
+     * 애니메이션 루프
+     */
+    animate() {
+        if (!this.renderingState.isRendering) return;
+        
+        this.animationId = requestAnimationFrame(this.animate);
+        
+        const currentTime = performance.now();
+        const deltaTime = currentTime - this.renderingState.lastRenderTime;
+        
+        // FPS 제한 체크
+        const targetFPS = getConfig('performance.targetFPS', 60);
+        const frameInterval = 1000 / targetFPS;
+        
+        if (deltaTime >= frameInterval) {
+            // 성능 모니터링 시작
+            if (this.statsMonitor) {
+                this.statsMonitor.begin();
+            }
+            
+            // 업데이트
+            this.update(deltaTime);
+            
+            // 렌더링
+            this.render();
+            
+            // 통계 업데이트
+            this.updateStats(currentTime);
+            
+            this.renderingState.lastRenderTime = currentTime;
+            this.renderingState.frameCount++;
+            
+            // 성능 모니터링 종료
+            if (this.statsMonitor) {
+                this.statsMonitor.end();
+            }
+        }
+    }
+    
+    /**
+     * 업데이트
      */
     update(deltaTime) {
         // 컨트롤 업데이트
-        if (this.controls && this.controls.enableDamping) {
+        if (this.controls) {
             this.controls.update();
         }
         
-        // 통계 업데이트
-        this.updateStats();
-        
-        // 성능 모니터링
-        if (getConfig('performance.adaptiveQuality')) {
-            this.monitorPerformance(deltaTime);
-        }
-        
+        // 앱에서 추가 업데이트 처리
         this.emit('update', deltaTime);
     }
     
@@ -423,162 +659,106 @@ export class SceneManager {
      * 렌더링
      */
     render() {
-        if (this.renderer && this.scene && this.camera) {
-            this.renderer.render(this.scene, this.camera);
-            this.emit('render');
+        if (!this.renderer || !this.scene || !this.camera) return;
+        
+        this.renderer.render(this.scene, this.camera);
+        this.emit('render');
+    }
+    
+    /**
+     * 통계 업데이트
+     */
+    updateStats(currentTime) {
+        // FPS 계산
+        if (this.renderingState.frameCount % 60 === 0) {
+            this.stats.fps = Math.round(1000 / (currentTime - this.stats.lastFrameTime));
+            this.stats.lastFrameTime = currentTime;
         }
+        
+        // 렌더링 정보 업데이트
+        if (this.renderer.info) {
+            const info = this.renderer.info;
+            this.stats.triangles = info.render.triangles;
+            this.stats.drawCalls = info.render.calls;
+            this.stats.memoryUsage = Math.round(info.memory.geometries + info.memory.textures);
+        }
+        
+        // 씬 객체 수
+        this.stats.meshes = this.countMeshes(this.scene);
+        
+        // 디버그 UI 업데이트
+        this.updateDebugUI();
     }
     
     /**
-     * 모델 추가
+     * 메시 수 계산
      */
-    addModel(gltf, modelInfo = null) {
+    countMeshes(object) {
+        let count = 0;
+        object.traverse(child => {
+            if (child.isMesh) count++;
+        });
+        return count;
+    }
+    
+    /**
+     * 디버그 UI 업데이트
+     */
+    updateDebugUI() {
+        if (!getConfig('app.debug')) return;
+        
+        const fpsEl = document.getElementById('debug-fps');
+        const objectsEl = document.getElementById('debug-objects');
+        const trianglesEl = document.getElementById('debug-triangles');
+        const memoryEl = document.getElementById('debug-memory');
+        
+        if (fpsEl) fpsEl.textContent = this.stats.fps;
+        if (objectsEl) objectsEl.textContent = this.scene.children.length;
+        if (trianglesEl) trianglesEl.textContent = this.stats.triangles.toLocaleString();
+        if (memoryEl) memoryEl.textContent = this.stats.memoryUsage;
+    }
+    
+    /**
+     * 모델 설정
+     */
+    setModel(model, modelInfo = null) {
         // 기존 모델 제거
-        this.removeCurrentModel();
-        
-        // 새 모델 추가
-        this.currentModel = gltf.scene;
-        this.currentModelInfo = modelInfo;
-        this.scene.add(this.currentModel);
-        
-        // 모델 최적화
-        this.optimizeModel(this.currentModel);
-        
-        // 바운딩 박스 계산 및 카메라 조정
-        this.fitCameraToModel();
-        
-        // 통계 업데이트
-        this.updateModelStats();
-        
-        this.emit('model:added', gltf, modelInfo);
-        
-        console.log('[SceneManager] 모델 추가됨:', modelInfo?.name || 'Unknown');
-    }
-    
-    /**
-     * 현재 모델 제거
-     */
-    removeCurrentModel() {
         if (this.currentModel) {
             this.scene.remove(this.currentModel);
-            
-            // 메모리 정리
-            this.disposeModel(this.currentModel);
-            
-            this.currentModel = null;
-            this.currentModelInfo = null;
-            
-            this.emit('model:removed');
-        }
-    }
-    
-    /**
-     * 모델 최적화
-     */
-    optimizeModel(model) {
-        const maxTriangles = getConfig('performance.maxTriangles');
-        const enableLOD = getConfig('performance.enableLOD');
-        
-        let totalTriangles = 0;
-        
-        model.traverse((child) => {
-            if (child.isMesh) {
-                // 그림자 설정
-                child.castShadow = true;
-                child.receiveShadow = true;
-                
-                // 지오메트리 통계
-                if (child.geometry) {
-                    const triangles = child.geometry.attributes.position ? 
-                        child.geometry.attributes.position.count / 3 : 0;
-                    totalTriangles += triangles;
-                }
-                
-                // 재질 최적화
-                if (child.material) {
-                    this.optimizeMaterial(child.material);
-                }
-                
-                // LOD 적용
-                if (enableLOD && totalTriangles > maxTriangles) {
-                    this.applyLOD(child);
-                }
-            }
-        });
-        
-        console.log(`[SceneManager] 모델 최적화 완료 - 삼각형: ${totalTriangles.toLocaleString()}`);
-    }
-    
-    /**
-     * 재질 최적화
-     */
-    optimizeMaterial(material) {
-        if (material.isMeshStandardMaterial) {
-            // 환경 매핑 강도 조절
-            material.envMapIntensity = getConfig('scene.material.envMapIntensity', 0.5);
-            
-            // 러프니스/메탈릭 최적화
-            if (material.roughness === undefined) material.roughness = 0.7;
-            if (material.metalness === undefined) material.metalness = 0.0;
         }
         
-        // 텍스처 최적화
-        if (material.map) {
-            this.optimizeTexture(material.map);
+        // 새 모델 추가
+        this.currentModel = model;
+        this.currentModelInfo = modelInfo;
+        
+        if (model) {
+            this.scene.add(model);
+            
+            // 모델 경계 계산
+            this.calculateModelBounds(model);
+            
+            // 카메라 조정
+            this.fitCameraToModel();
+            
+            // GLTF 카메라 추출
+            this.extractGLTFCameras(model);
         }
+        
+        this.emit('model:changed', { model, modelInfo });
+        console.log('[SceneManager] 모델 설정됨:', modelInfo?.name || '익명');
     }
     
     /**
-     * 텍스처 최적화
+     * 모델 경계 계산
      */
-    optimizeTexture(texture) {
-        const maxSize = getConfig('performance.maxTextureSize');
-        
-        // 필터링 설정
-        texture.generateMipmaps = true;
-        texture.minFilter = THREE.LinearMipmapLinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-        
-        // 래핑 설정
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-    }
-    
-    /**
-     * LOD 적용
-     */
-    applyLOD(mesh) {
-        // LOD 구현 (필요시 확장)
-        console.log('[SceneManager] LOD 적용:', mesh.name);
-    }
-    
-    /**
-     * 카메라를 모델에 맞게 조정
-     */
-    fitCameraToModel() {
-        if (!this.currentModel) return;
-        
-        const box = new THREE.Box3().setFromObject(this.currentModel);
-        const size = box.getSize(new THREE.Vector3());
+    calculateModelBounds(model) {
+        const box = new THREE.Box3().setFromObject(model);
         const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
         
-        // 카메라 거리 계산
-        const maxDim = Math.max(size.x, size.y, size.z);
-        const fov = this.camera.fov * (Math.PI / 180);
-        const distance = Math.abs(maxDim / Math.sin(fov / 2)) * 1.2;
+        this.modelBounds = { box, center, size };
         
-        // 카메라 위치 업데이트
-        const direction = new THREE.Vector3();
-        this.camera.getWorldDirection(direction);
-        direction.negate();
-        
-        const newPosition = center.clone().add(direction.multiplyScalar(distance));
-        
-        // 부드러운 전환
-        const transitionDuration = getConfig('timing.transitionDuration', 1000);
-        this.animateCameraTo(newPosition, center, transitionDuration);
-        
-        // 컨트롤 타겟 업데이트
+        // 컨트롤 타겟 조정
         if (this.controls) {
             this.controls.target.copy(center);
             this.controls.update();
@@ -586,129 +766,107 @@ export class SceneManager {
     }
     
     /**
-     * 카메라 애니메이션
+     * 카메라를 모델에 맞게 조정
      */
-    animateCameraTo(position, target, duration = 1000) {
-        const startPos = this.camera.position.clone();
-        const startTarget = this.controls ? this.controls.target.clone() : target;
+    fitCameraToModel() {
+        if (!this.modelBounds || !this.camera) return;
         
-        const startTime = performance.now();
+        const { center, size } = this.modelBounds;
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = this.camera.fov * (Math.PI / 180);
+        const distance = Math.abs(maxDim / (2 * Math.tan(fov / 2)));
         
-        const animate = (currentTime) => {
-            const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            
-            // 이징 함수 적용
-            const eased = this.easeInOutCubic(progress);
-            
-            // 위치 보간
-            this.camera.position.lerpVectors(startPos, position, eased);
-            
-            // 타겟 보간
-            if (this.controls) {
-                this.controls.target.lerpVectors(startTarget, target, eased);
-                this.controls.update();
+        // 카메라 위치 조정
+        const direction = this.camera.position.clone().sub(center).normalize();
+        this.camera.position.copy(center).add(direction.multiplyScalar(distance * 1.5));
+        
+        // 컨트롤 거리 제한 조정
+        if (this.controls) {
+            this.controls.minDistance = distance * 0.1;
+            this.controls.maxDistance = distance * 3;
+            this.controls.update();
+        }
+    }
+    
+    /**
+     * GLTF 카메라 추출
+     */
+    extractGLTFCameras(model) {
+        this.gltfCameras = [];
+        
+        model.traverse(child => {
+            if (child.isCamera) {
+                this.gltfCameras.push({
+                    name: child.name || `Camera_${this.gltfCameras.length}`,
+                    camera: child,
+                    position: child.position.clone(),
+                    rotation: child.rotation.clone()
+                });
             }
-            
-            if (progress < 1) {
-                requestAnimationFrame(animate);
-            } else {
-                this.emit('camera:animation:complete');
-            }
-        };
+        });
         
-        requestAnimationFrame(animate);
+        if (this.gltfCameras.length > 0) {
+            console.log(`[SceneManager] ${this.gltfCameras.length}개 GLTF 카메라 발견됨`);
+            this.emit('cameras:found', this.gltfCameras);
+        }
+    }
+    
+    /**
+     * 카메라 전환
+     */
+    switchToCamera(cameraInfo, duration = 1000) {
+        if (!cameraInfo || !this.camera) return;
+        
+        return new Promise((resolve) => {
+            const startPos = this.camera.position.clone();
+            const startRot = this.camera.rotation.clone();
+            const targetPos = cameraInfo.position.clone();
+            const targetRot = cameraInfo.rotation.clone();
+            
+            const startTime = performance.now();
+            
+            const animate = () => {
+                const elapsed = performance.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const eased = this.easeInOutQuad(progress);
+                
+                // 위치 보간
+                this.camera.position.lerpVectors(startPos, targetPos, eased);
+                
+                // 회전 보간 (쿼터니언 사용)
+                const startQuat = new THREE.Quaternion().setFromEuler(startRot);
+                const targetQuat = new THREE.Quaternion().setFromEuler(targetRot);
+                const currentQuat = new THREE.Quaternion().slerpQuaternions(startQuat, targetQuat, eased);
+                this.camera.setRotationFromQuaternion(currentQuat);
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    this.emit('camera:switched', cameraInfo);
+                    resolve();
+                }
+            };
+            
+            animate();
+        });
     }
     
     /**
      * 이징 함수
      */
-    easeInOutCubic(t) {
-        return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
+    easeInOutQuad(t) {
+        return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
     }
     
     /**
-     * 통계 업데이트
+     * 기본 카메라로 복귀
      */
-    updateStats() {
-        if (!this.currentModel) {
-            this.stats = { triangles: 0, vertices: 0, meshes: 0 };
-            return;
-        }
-        
-        let triangles = 0;
-        let vertices = 0;
-        let meshes = 0;
-        
-        this.currentModel.traverse((child) => {
-            if (child.isMesh && child.geometry) {
-                meshes++;
-                
-                const positionAttribute = child.geometry.attributes.position;
-                if (positionAttribute) {
-                    vertices += positionAttribute.count;
-                    
-                    if (child.geometry.index) {
-                        triangles += child.geometry.index.count / 3;
-                    } else {
-                        triangles += positionAttribute.count / 3;
-                    }
-                }
-            }
-        });
-        
-        this.stats = { triangles, vertices, meshes };
-    }
-    
-    /**
-     * 모델 통계 업데이트
-     */
-    updateModelStats() {
-        this.updateStats();
-        this.emit('stats:updated', this.stats);
-    }
-    
-    /**
-     * 성능 모니터링
-     */
-    monitorPerformance(currentTime) {
-        const frameTime = currentTime - this.stats.lastFrameTime;
-        this.stats.lastFrameTime = currentTime;
-        
-        if (frameTime > 0) {
-            const fps = 1000 / frameTime;
-            const targetFPS = getConfig('performance.targetFPS');
-            
-            // FPS가 목표의 80% 미만일 때 품질 조절
-            if (fps < targetFPS * 0.8) {
-                this.adjustQuality('down');
-            } else if (fps > targetFPS * 1.1) {
-                this.adjustQuality('up');
-            }
-        }
-    }
-    
-    /**
-     * 품질 자동 조절
-     */
-    adjustQuality(direction) {
-        const currentPixelRatio = this.renderer.getPixelRatio();
-        
-        if (direction === 'down' && currentPixelRatio > 1) {
-            const newRatio = Math.max(1, currentPixelRatio - 0.1);
-            this.renderer.setPixelRatio(newRatio);
-            setConfig('scene.renderer.pixelRatio', newRatio);
-            
-            console.log(`[SceneManager] 성능 최적화: pixelRatio → ${newRatio}`);
-            
-        } else if (direction === 'up' && currentPixelRatio < window.devicePixelRatio) {
-            const maxRatio = Math.min(window.devicePixelRatio, 2);
-            const newRatio = Math.min(maxRatio, currentPixelRatio + 0.1);
-            this.renderer.setPixelRatio(newRatio);
-            setConfig('scene.renderer.pixelRatio', newRatio);
-            
-            console.log(`[SceneManager] 품질 향상: pixelRatio → ${newRatio}`);
-        }
+    resetCamera(duration = 1000) {
+        const defaultInfo = {
+            position: this.defaultCameraPosition,
+            rotation: new THREE.Euler(0, 0, 0)
+        };
+        return this.switchToCamera(defaultInfo, duration);
     }
     
     /**
@@ -731,6 +889,28 @@ export class SceneManager {
         
         this.emit('screenshot:taken', filename);
         console.log('[SceneManager] 스크린샷 촬영됨:', filename);
+    }
+    
+    /**
+     * 렌더링 일시정지
+     */
+    pauseRendering() {
+        this.renderingState.isRendering = false;
+        if (this.animationId) {
+            cancelAnimationFrame(this.animationId);
+            this.animationId = null;
+        }
+        console.log('[SceneManager] 렌더링 일시정지됨');
+    }
+    
+    /**
+     * 렌더링 재개
+     */
+    resumeRendering() {
+        if (!this.renderingState.isRendering) {
+            this.startRenderLoop();
+            console.log('[SceneManager] 렌더링 재개됨');
+        }
     }
     
     /**
@@ -758,7 +938,6 @@ export class SceneManager {
     updateRendererSize() {
         const width = this.container.clientWidth;
         const height = this.container.clientHeight;
-        
         this.renderer.setSize(width, height);
     }
     
@@ -769,7 +948,7 @@ export class SceneManager {
         // 카메라 설정 변경
         if (key.startsWith('scene.camera.')) {
             const prop = key.split('.').pop();
-            if (prop === 'fov') {
+            if (prop === 'fov' && this.camera) {
                 this.camera.fov = value;
                 this.camera.updateProjectionMatrix();
             }
@@ -778,165 +957,43 @@ export class SceneManager {
         // 렌더러 설정 변경
         if (key.startsWith('scene.renderer.')) {
             const prop = key.split('.').pop();
-            if (prop === 'pixelRatio') {
-                this.renderer.setPixelRatio(value);
+            if (prop === 'pixelRatio' && this.renderer) {
+                this.renderer.setPixelRatio(Math.min(value, window.devicePixelRatio));
             }
         }
         
         // 조명 설정 변경
         if (key.startsWith('scene.lighting.')) {
-            this.updateLighting();
+            this.updateLightFromConfig(key, value);
         }
     }
     
     /**
-     * 조명 업데이트
+     * 조명 설정 업데이트
      */
-    updateLighting() {
-        const lightingConfig = getConfig('scene.lighting');
+    updateLightFromConfig(key, value) {
+        const parts = key.split('.');
+        if (parts.length < 4) return;
         
-        // 주변광 업데이트
-        const ambientLight = this.lights.get('ambient');
-        if (ambientLight && lightingConfig.ambient) {
-            ambientLight.color.setHex(lightingConfig.ambient.color);
-            ambientLight.intensity = lightingConfig.ambient.intensity;
-        }
+        const lightType = parts[2]; // ambient, directional, etc.
+        const property = parts[3]; // intensity, color, etc.
         
-        // 직사광 업데이트
-        const directionalLight = this.lights.get('directional');
-        if (directionalLight && lightingConfig.directional) {
-            directionalLight.color.setHex(lightingConfig.directional.color);
-            directionalLight.intensity = lightingConfig.directional.intensity;
-        }
-    }
-    
-    /**
-     * 키보드 이벤트 처리 (디버그 모드)
-     */
-    handleKeyDown(event) {
-        if (!getConfig('app.debug')) return;
+        const light = this.lights.get(lightType);
+        if (!light) return;
         
-        switch (event.code) {
-            case 'KeyG':
-                if (event.ctrlKey) {
-                    event.preventDefault();
-                    this.toggleGrid();
-                }
+        switch (property) {
+            case 'intensity':
+                light.intensity = value;
                 break;
-                
-            case 'KeyL':
-                if (event.ctrlKey) {
-                    event.preventDefault();
-                    this.toggleLightHelpers();
-                }
+            case 'color':
+                light.color.setHex(value);
                 break;
-                
-            case 'KeyW':
-                if (event.ctrlKey) {
-                    event.preventDefault();
-                    this.toggleWireframe();
+            case 'position':
+                if (light.position && typeof value === 'object') {
+                    light.position.set(value.x, value.y, value.z);
                 }
                 break;
         }
-    }
-    
-    /**
-     * 그리드 토글
-     */
-    toggleGrid() {
-        if (!this.gridHelper) {
-            const size = getConfig('devTools.gridSize', 100);
-            const divisions = getConfig('devTools.gridDivisions', 100);
-            this.gridHelper = new THREE.GridHelper(size, divisions);
-            this.scene.add(this.gridHelper);
-        } else {
-            this.scene.remove(this.gridHelper);
-            this.gridHelper = null;
-        }
-    }
-    
-    /**
-     * 조명 헬퍼 토글
-     */
-    toggleLightHelpers() {
-        this.lights.forEach((light, name) => {
-            if (light.isDirectionalLight && !light.helper) {
-                light.helper = new THREE.DirectionalLightHelper(light, 5);
-                this.scene.add(light.helper);
-            } else if (light.helper) {
-                this.scene.remove(light.helper);
-                light.helper = null;
-            }
-        });
-    }
-    
-    /**
-     * 와이어프레임 토글
-     */
-    toggleWireframe() {
-        if (!this.currentModel) return;
-        
-        this.currentModel.traverse((child) => {
-            if (child.isMesh && child.material) {
-                child.material.wireframe = !child.material.wireframe;
-            }
-        });
-    }
-    
-    /**
-     * 디버그 도구 설정
-     */
-    setupDebugTools() {
-        // 축 헬퍼
-        if (getConfig('devTools.showAxes')) {
-            const axesHelper = new THREE.AxesHelper(5);
-            this.scene.add(axesHelper);
-        }
-        
-        // 그리드 헬퍼
-        if (getConfig('devTools.showGrid')) {
-            this.toggleGrid();
-        }
-        
-        console.log('[SceneManager] ✓ 디버그 도구 활성화');
-        console.log('키보드 단축키:');
-        console.log('  Ctrl+G: 그리드 토글');
-        console.log('  Ctrl+L: 조명 헬퍼 토글');
-        console.log('  Ctrl+W: 와이어프레임 토글');
-    }
-    
-    /**
-     * 메모리 정리
-     */
-    disposeModel(object) {
-        object.traverse((child) => {
-            if (child.isMesh) {
-                if (child.geometry) {
-                    child.geometry.dispose();
-                }
-                
-                if (child.material) {
-                    if (Array.isArray(child.material)) {
-                        child.material.forEach(material => this.disposeMaterial(material));
-                    } else {
-                        this.disposeMaterial(child.material);
-                    }
-                }
-            }
-        });
-    }
-    
-    /**
-     * 재질 정리
-     */
-    disposeMaterial(material) {
-        Object.keys(material).forEach(prop => {
-            const value = material[prop];
-            if (value && typeof value.dispose === 'function') {
-                value.dispose();
-            }
-        });
-        material.dispose();
     }
     
     /**
@@ -944,6 +1001,81 @@ export class SceneManager {
      */
     setApp(app) {
         this.app = app;
+    }
+    
+    /**
+     * 정리
+     */
+    dispose() {
+        // 렌더링 중지
+        this.pauseRendering();
+        
+        // 이벤트 리스너 제거
+        window.removeEventListener('resize', this.handleResize);
+        
+        // 리사이즈 옵저버 해제
+        if (this.resizeObserver) {
+            this.resizeObserver.disconnect();
+        }
+        
+        // 설정 옵저버 해제
+        if (typeof getConfig === 'function' && getConfig.removeChangeListener) {
+            getConfig.removeChangeListener(this.handleConfigChange);
+        }
+        
+        // 모델 제거
+        if (this.currentModel) {
+            this.scene.remove(this.currentModel);
+        }
+        
+        // 조명 제거
+        this.lights.forEach(light => {
+            this.scene.remove(light);
+        });
+        this.lights.clear();
+        
+        // 헬퍼 제거
+        this.lightHelpers.forEach(helper => {
+            this.scene.remove(helper);
+        });
+        this.lightHelpers.clear();
+        
+        // 환경 요소 제거
+        if (this.gridHelper) {
+            this.scene.remove(this.gridHelper);
+        }
+        if (this.axesHelper) {
+            this.scene.remove(this.axesHelper);
+        }
+        if (this.floor) {
+            this.scene.remove(this.floor);
+        }
+        
+        // 렌더러 정리
+        if (this.renderer) {
+            this.renderer.dispose();
+            if (this.container && this.renderer.domElement.parentNode) {
+                this.container.removeChild(this.renderer.domElement);
+            }
+        }
+        
+        // 컨트롤 정리
+        if (this.controls) {
+            this.controls.dispose();
+        }
+        
+        // 디버그 도구 정리
+        if (this.statsMonitor && this.statsMonitor.dom.parentNode) {
+            this.statsMonitor.dom.parentNode.removeChild(this.statsMonitor.dom);
+        }
+        
+        const debugMenu = document.getElementById('scene-debug-menu');
+        if (debugMenu) {
+            debugMenu.remove();
+        }
+        
+        this.emit('disposed');
+        console.log('[SceneManager] 정리 완료');
     }
     
     /**
@@ -975,46 +1107,6 @@ export class SceneManager {
     }
     
     /**
-     * 정리
-     */
-    destroy() {
-        console.log('[SceneManager] 정리 중...');
-        
-        // 현재 모델 제거
-        this.removeCurrentModel();
-        
-        // 조명 정리
-        this.lights.forEach(light => {
-            this.scene.remove(light);
-        });
-        this.lights.clear();
-        
-        // 헬퍼 정리
-        if (this.gridHelper) {
-            this.scene.remove(this.gridHelper);
-        }
-        
-        // 렌더러 정리
-        if (this.renderer) {
-            this.renderer.dispose();
-            if (this.container && this.renderer.domElement.parentNode) {
-                this.container.removeChild(this.renderer.domElement);
-            }
-        }
-        
-        // 컨트롤 정리
-        if (this.controls) {
-            this.controls.dispose();
-        }
-        
-        // 이벤트 리스너 제거
-        window.removeEventListener('resize', this.handleResize);
-        
-        this.emit('destroyed');
-        console.log('[SceneManager] 정리 완료');
-    }
-    
-    /**
      * 디버그 정보
      */
     debug() {
@@ -1027,11 +1119,16 @@ export class SceneManager {
         console.log('카메라 타겟:', this.controls?.target);
         console.log('조명 수:', this.lights.size);
         console.log('현재 모델:', this.currentModelInfo?.name || '없음');
+        console.log('모델 경계:', this.modelBounds);
+        console.log('GLTF 카메라 수:', this.gltfCameras.length);
         console.log('통계:', this.stats);
-        console.log('렌더러 크기:', {
-            width: this.renderer.domElement.width,
-            height: this.renderer.domElement.height,
-            pixelRatio: this.renderer.getPixelRatio()
+        console.log('렌더러 정보:', {
+            size: { 
+                width: this.renderer.domElement.width, 
+                height: this.renderer.domElement.height 
+            },
+            pixelRatio: this.renderer.getPixelRatio(),
+            shadowMap: this.renderer.shadowMap.enabled
         });
         console.groupEnd();
     }
@@ -1048,6 +1145,13 @@ export class SceneManager {
      */
     getCurrentModelInfo() {
         return this.currentModelInfo;
+    }
+    
+    /**
+     * GLTF 카메라 목록 가져오기
+     */
+    getGLTFCameras() {
+        return [...this.gltfCameras];
     }
 }
 
