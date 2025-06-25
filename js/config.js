@@ -1,6 +1,5 @@
 // js/config.js
-// 통합 설정 파일 - ConfigManager와 통합하면서도 하위 호환성 유지
-// 기존 코드는 수정 없이 계속 사용 가능
+// 통합 설정 파일 - CONFIG 구조 통일 버전
 
 import { CONFIG_MANAGER, getConfig, setConfig } from './core/ConfigManager.js';
 
@@ -8,40 +7,67 @@ import { CONFIG_MANAGER, getConfig, setConfig } from './core/ConfigManager.js';
  * 기본 설정 정의
  * - ConfigManager에 등록
  * - 환경별 설정 자동 적용
- * - 기존 CONFIG 객체로도 접근 가능
+ * - CONFIG 구조 통일
  */
 const initializeConfig = () => {
     // === 애플리케이션 기본 설정 ===
     CONFIG_MANAGER.setConfig('app', {
         name: 'Wall 3D Viewer',
         version: '2.0.0',
-        debug: CONFIG_MANAGER.environment === 'development'
+        debug: CONFIG_MANAGER.environment === 'development',
+        enableCache: true
+    });
+    
+    // === 타이밍 설정 ===
+    CONFIG_MANAGER.setConfig('timing', {
+        maxRetryAttempts: 20,
+        retryDelay: 100
     });
     
     // === 모델 설정 ===
-    CONFIG_MANAGER.setConfig('models', [
-        {
-            name: '블록 옹벽',
-            folder: 'Block_Retaining_Wall',
-            fileName: 'Block_Retaining_Wall.gltf',
-            icon: '🧱',
-            description: '콘크리트 블록을 이용한 조립식 옹벽'
-        },
-        {
-            name: '캔틸레버 옹벽',
-            folder: 'Cantilever_Retaining_Wall',
-            fileName: 'Cantilever_Retaining_Wall.gltf',
-            icon: '🏗️',
-            description: '철근 콘크리트 일체형 옹벽'
-        },
-        {
-            name: 'MSE 옹벽',
-            folder: 'mse_Retaining_Wall',
-            fileName: 'mse_Retaining_Wall.gltf',
-            icon: '🔧',
-            description: '보강토 옹벽 (Mechanically Stabilized Earth)'
-        }
-    ]);
+    CONFIG_MANAGER.setConfig('models', {
+        defaultModel: 0,
+        enableCaching: true,
+        maxCacheSize: 5,
+        maxRetries: 3,
+        retryDelay: 1000,
+        fallbackModels: [],
+        enableFallback: true,
+        enableStreaming: false,
+        enablePreloading: true,
+        maxConcurrentLoads: 3,
+        textureOptimization: true,
+        enableDracoLoader: true,
+        dracoDecoderPath: './libs/draco/',
+        enableKTX2Loader: false,
+        ktx2TranscoderPath: './libs/basis/',
+        enableShadows: true,
+        enableLOD: false,
+        maxAnisotropy: 4,
+        defaultModels: [
+            {
+                name: '블록 옹벽',
+                folder: 'Block_Retaining_Wall',
+                fileName: 'Block_Retaining_Wall.gltf',
+                icon: '🧱',
+                description: '콘크리트 블록을 이용한 조립식 옹벽'
+            },
+            {
+                name: '캔틸레버 옹벽',
+                folder: 'Cantilever_Retaining_Wall',
+                fileName: 'Cantilever_Retaining_Wall.gltf',
+                icon: '🏗️',
+                description: '철근 콘크리트 일체형 옹벽'
+            },
+            {
+                name: 'MSE 옹벽',
+                folder: 'mse_Retaining_Wall',
+                fileName: 'mse_Retaining_Wall.gltf',
+                icon: '🔧',
+                description: '보강토 옹벽 (Mechanically Stabilized Earth)'
+            }
+        ]
+    });
     
     // === 경로 설정 ===
     CONFIG_MANAGER.setConfig('paths', {
@@ -51,122 +77,131 @@ const initializeConfig = () => {
     });
     
     // === 씬 설정 ===
-// config.js에 추가할 부분 - scene 설정 내부
-
-// === 환경 설정 추가 (scene 내부로 이동) ===
-CONFIG_MANAGER.merge('scene', {
-    environment: {
-        // 그리드 설정
+    CONFIG_MANAGER.setConfig('scene', {
+        backgroundColor: 0x1a1a1a,
+        fogEnabled: true,
+        fogColor: 0x1a1a1a,
+        fogNear: 10,
+        fogFar: 100
+    });
+    
+    // === 카메라 설정 ===
+    CONFIG_MANAGER.setConfig('camera', {
+        fov: 45,
+        near: 0.1,
+        far: 1000,
+        position: { x: 5, y: 5, z: 10 },
+        lookAt: { x: 0, y: 0, z: 0 }
+    });
+    
+    // === 컨트롤 설정 ===
+    CONFIG_MANAGER.setConfig('controls', {
+        enabled: true,
+        enableDamping: true,
+        dampingFactor: 0.1,
+        
+        // 회전 설정
+        rotateSpeed: 0.5,
+        autoRotate: false,
+        autoRotateSpeed: 2.0,
+        
+        // 줌 설정
+        enableZoom: true,
+        zoomSpeed: 0.5,
+        minDistance: 2,
+        maxDistance: 100,
+        
+        // 팬 설정
+        enablePan: true,
+        panSpeed: 0.5,
+        screenSpacePanning: true,
+        
+        // 제한 설정
+        minPolarAngle: 0,
+        maxPolarAngle: Math.PI * 0.9
+    });
+    
+    // === 렌더러 설정 - CONFIG 구조 통일 ===
+    CONFIG_MANAGER.setConfig('renderer', {
+        antialias: true,
+        alpha: false,
+        preserveDrawingBuffer: false,
+        powerPreference: "high-performance",
+        
+        // shadowMap을 객체로 설정
+        shadowMap: {
+            enabled: true,
+            type: 'PCFSoftShadowMap',
+            autoUpdate: true
+        },
+        
+        // 톤매핑 설정
+        toneMapping: 'ACESFilmicToneMapping',
+        toneMappingExposure: 1.0,
+        
+        // 색상 공간
+        outputEncoding: 'sRGBEncoding',
+        
+        // 픽셀 비율
+        pixelRatio: window.devicePixelRatio || 1,
+        
+        // 물리 기반 렌더링
+        physicallyCorrectLights: true
+    });
+    
+    // === 조명 설정 - CONFIG 구조 통일 ===
+    CONFIG_MANAGER.setConfig('lights', {
+        ambient: {
+            color: 0x404040,
+            intensity: CONFIG_MANAGER.environment === 'development' ? 0.8 : 0.6
+        },
+        directional: {
+            color: 0xffffff,
+            intensity: CONFIG_MANAGER.environment === 'development' ? 1.2 : 1.0,
+            position: { x: 10, y: 10, z: 5 },
+            castShadow: true,
+            shadowMapSize: CONFIG_MANAGER.environment === 'development' ? 2048 : 1024,
+            shadowCamera: {
+                near: 0.5,
+                far: 50,
+                size: 20,
+                left: -20,
+                right: 20,
+                top: 20,
+                bottom: -20
+            }
+        },
+        hemisphere: {
+            skyColor: 0x87CEEB,
+            groundColor: 0x362907,
+            intensity: 0.6
+        }
+    });
+    
+    // === 헬퍼 설정 ===
+    CONFIG_MANAGER.setConfig('helpers', {
         grid: {
             enabled: true,
+            visible: true,
             size: 50,
             divisions: 50,
             colorCenterLine: 0x444444,
             colorGrid: 0x222222
         },
-        
-        // 바닥 설정
-        floor: {
-            enabled: true,
-            size: 100,
-            color: 0x202020,
-            y: -0.01,
-            receiveShadow: true,
-            transparent: false,
-            opacity: 1.0,
-            visible: true
-        },
-        
-        // 축 헬퍼 설정
         axes: {
             enabled: true,
-            size: 10,
-            visible: CONFIG_MANAGER.environment === 'development'
-        }
-    }
-});
-    
-    // === 카메라 설정 (scene 내부로 이동) ===
-    CONFIG_MANAGER.merge('scene', {
-        camera: {
-            fov: 45,
-            near: 0.1,
-            far: 1000,
-            position: { x: 5, y: 5, z: 10 },
-            lookAt: { x: 0, y: 0, z: 0 }
+            visible: CONFIG_MANAGER.environment === 'development',
+            size: 10
         }
     });
     
-    // === 컨트롤 설정 (scene 내부로 이동) ===
-    CONFIG_MANAGER.merge('scene', {
-        controls: {
-            enabled: true,
-            enableDamping: true,
-            dampingFactor: 0.1,
-            
-            // 회전 설정
-            rotateSpeed: 0.5,
-            autoRotate: false,
-            autoRotateSpeed: 2.0,
-            
-            // 줌 설정
-            enableZoom: true,
-            zoomSpeed: 0.5,
-            minDistance: 2,
-            maxDistance: 100,
-            
-            // 팬 설정
-            enablePan: true,
-            panSpeed: 0.5,
-            screenSpacePanning: true,
-            
-            // 제한 설정
-            minPolarAngle: 0,
-            maxPolarAngle: Math.PI * 0.9
-        }
-    });
-    
-    // === 렌더러 설정 (scene 내부로 이동) ===
-    CONFIG_MANAGER.merge('scene', {
-        renderer: {
-            antialias: true,
-            shadowMapEnabled: true,
-            shadowMapType: THREE.PCFSoftShadowMap,
-            toneMappingExposure: 1.0,
-            powerPreference: "high-performance"
-        }
-    });
-    
-    // === 조명 설정 (scene 내부로 이동) ===
-    CONFIG_MANAGER.merge('scene', {
-        lights: {
-            ambient: {
-                color: 0x404040,
-                intensity: CONFIG_MANAGER.environment === 'development' ? 0.8 : 0.6
-            },
-            directional: {
-                color: 0xffffff,
-                intensity: CONFIG_MANAGER.environment === 'development' ? 1.2 : 1.0,
-                position: { x: 10, y: 10, z: 5 },
-                castShadow: true,
-                shadow: {
-                    mapSize: CONFIG_MANAGER.environment === 'development' ? 2048 : 1024,
-                    camera: {
-                        near: 0.5,
-                        far: 50,
-                        left: -20,
-                        right: 20,
-                        top: 20,
-                        bottom: -20
-                    }
-                }
-            },
-            hemisphere: {
-                skyColor: 0x87CEEB,
-                groundColor: 0x362907,
-                intensity: 0.6
-            }
-        }
+    // === 환경 설정 ===
+    CONFIG_MANAGER.setConfig('environment', {
+        showFloor: true,
+        floorSize: 100,
+        floorColor: 0x202020,
+        floorOpacity: 0.3,
+        floorPosition: { x: 0, y: -0.001, z: 0 }
     });
     
     // === 애니메이션 설정 ===
@@ -200,24 +235,38 @@ CONFIG_MANAGER.merge('scene', {
         errorMessageDuration: 5000,
         successMessageDuration: 3000,
         animationSpeed: 300,
-        rememberLastModel: true
+        rememberLastModel: true,
+        updateInterval: 100,
+        enablePerformanceMonitoring: true,
+        elementDefaults: {},
+        accessibility: {},
+        parentMapping: {},
+        components: {}
     });
     
-    // === 성능 설정 (환경별 자동 조정) ===
+    // === 성능 설정 ===
     const performanceSettings = CONFIG_MANAGER.environment === 'production' ? {
         targetFPS: 60,
+        minAcceptableFPS: 20,
         adaptiveQuality: true,
+        enableMonitoring: true,
+        logMetrics: false,
         maxTextureSize: 2048,
         enablePostProcessing: false,
+        powerPreference: 'high-performance',
         LOD: {
             enabled: true,
             levels: [10, 30, 50]
         }
     } : {
         targetFPS: 60,
+        minAcceptableFPS: 20,
         adaptiveQuality: false,
+        enableMonitoring: true,
+        logMetrics: true,
         maxTextureSize: 4096,
         enablePostProcessing: true,
+        powerPreference: 'high-performance',
         LOD: {
             enabled: false,
             levels: []
@@ -240,7 +289,34 @@ CONFIG_MANAGER.merge('scene', {
         showGridHelper: true,
         showLightHelpers: false,
         enableHotReload: true,
-        logLevel: CONFIG_MANAGER.environment === 'development' ? 'debug' : 'error'
+        logLevel: CONFIG_MANAGER.environment === 'development' ? 'debug' : 'error',
+        gridSize: 100,
+        gridDivisions: 100,
+        axesSize: 5,
+        showHelpers: CONFIG_MANAGER.environment === 'development'
+    });
+    
+    // === 객체 가시성 설정 ===
+    CONFIG_MANAGER.setConfig('objectVisibility', {
+        enableAnimations: true,
+        animationDuration: 300,
+        fadeInEasing: 'easeOut',
+        fadeOutEasing: 'easeIn',
+        enableGrouping: true,
+        enableLayers: true,
+        enableMaterialPreservation: true,
+        enableHighlight: true,
+        highlightColor: '#ffff00',
+        highlightEmissive: 0.3
+    });
+    
+    // === 에러 처리 설정 ===
+    CONFIG_MANAGER.setConfig('errors', {
+        autoRecovery: true,
+        maxAutoRecoveryAttempts: 3,
+        showUserErrors: true,
+        logToConsole: CONFIG_MANAGER.environment === 'development',
+        reportToServer: CONFIG_MANAGER.environment === 'production'
     });
 };
 
@@ -254,26 +330,26 @@ initializeConfig();
  */
 export const CONFIG = new Proxy({}, {
     get(target, prop) {
-        // 특별한 경우 처리
-        if (prop === 'modelsPath') {
-            return getConfig('paths.modelsPath', './gltf/');
-        }
-        if (prop === 'debug') {
-            return getConfig('app.debug', false);
-        }
+        // 직접 매핑되는 최상위 속성들
+        const directMappings = {
+            'modelsPath': 'paths.modelsPath',
+            'debug': 'app.debug',
+            'camera': 'camera',
+            'controls': 'controls',
+            'renderer': 'renderer',
+            'lights': 'lights',
+            'helpers': 'helpers',
+            'environment': 'environment',
+            'scene': 'scene',
+            'animation': 'animation',
+            'hotspots': 'hotspots',
+            'ui': 'ui',
+            'performance': 'performance',
+            'models': 'models.defaultModels'
+        };
         
-        // scene 내부 설정들을 최상위로 노출 (하위 호환성)
-        if (prop === 'camera') {
-            return getConfig('scene.camera');
-        }
-        if (prop === 'controls') {
-            return getConfig('scene.controls');
-        }
-        if (prop === 'renderer') {
-            return getConfig('scene.renderer');
-        }
-        if (prop === 'lights') {
-            return getConfig('scene.lights');
+        if (directMappings[prop]) {
+            return getConfig(directMappings[prop]);
         }
         
         // 일반적인 경우
@@ -298,8 +374,6 @@ export const CONFIG = new Proxy({}, {
 
 /**
  * 런타임 설정 변경 헬퍼 함수들
- * - 새로운 코드에서 사용 가능
- * - 기존 코드는 CONFIG 객체 계속 사용
  */
 
 // 디버그 모드 토글
@@ -315,19 +389,19 @@ export function setPerformanceMode(mode) {
         case 'low':
             setConfig('performance.targetFPS', 30);
             setConfig('renderer.antialias', false);
-            setConfig('renderer.shadowMapEnabled', false);
+            setConfig('renderer.shadowMap.enabled', false);
             break;
         case 'medium':
             setConfig('performance.targetFPS', 45);
             setConfig('renderer.antialias', true);
-            setConfig('renderer.shadowMapEnabled', true);
-            setConfig('lights.directional.shadow.mapSize', 1024);
+            setConfig('renderer.shadowMap.enabled', true);
+            setConfig('lights.directional.shadowMapSize', 1024);
             break;
         case 'high':
             setConfig('performance.targetFPS', 60);
             setConfig('renderer.antialias', true);
-            setConfig('renderer.shadowMapEnabled', true);
-            setConfig('lights.directional.shadow.mapSize', 2048);
+            setConfig('renderer.shadowMap.enabled', true);
+            setConfig('lights.directional.shadowMapSize', 2048);
             break;
     }
 }
@@ -371,9 +445,23 @@ export function loadSettings() {
             const settings = JSON.parse(saved);
             
             // 저장된 설정 적용
-            if (settings.ui) CONFIG_MANAGER.merge('ui', settings.ui);
-            if (settings.performance) CONFIG_MANAGER.merge('performance', settings.performance);
-            if (settings.controls) CONFIG_MANAGER.merge('controls', settings.controls);
+            if (settings.ui) {
+                Object.entries(settings.ui).forEach(([key, value]) => {
+                    setConfig(`ui.${key}`, value);
+                });
+            }
+            
+            if (settings.performance) {
+                Object.entries(settings.performance).forEach(([key, value]) => {
+                    setConfig(`performance.${key}`, value);
+                });
+            }
+            
+            if (settings.controls) {
+                Object.entries(settings.controls).forEach(([key, value]) => {
+                    setConfig(`controls.${key}`, value);
+                });
+            }
             
             console.log('설정이 복원되었습니다.');
             return true;
@@ -384,55 +472,18 @@ export function loadSettings() {
     return false;
 }
 
-/**
- * 설정 변경 리스너 (새 기능)
- * 주의: onChange 메서드는 ConfigManager에 구현 필요
- */
-// CONFIG_MANAGER.onChange는 아직 구현되지 않음
-// 필요시 아래 코드 활성화
-/*
-CONFIG_MANAGER.onChange((key, value) => {
-    // 특정 설정 변경 시 자동 처리
-    if (key === 'ui.theme') {
-        document.body.className = `theme-${value}`;
-    }
-    
-    if (key === 'app.debug') {
-        console.log(`디버그 모드 ${value ? '활성화' : '비활성화'}`);
-    }
-});
-*/
-
-// 개발 환경에서 전역 접근 허용
-if (CONFIG_MANAGER.environment === 'development') {
-    window.CONFIG = CONFIG;
-    window.CONFIG_MANAGER = CONFIG_MANAGER;
-    window.getConfig = getConfig;
-    window.setConfig = setConfig;
-    
-    console.log('[Config] 개발 모드 - 전역 접근 가능');
-    console.log('사용 가능한 명령어:');
-    console.log('- CONFIG.models');
-    console.log('- getConfig("app.debug")');
-    console.log('- setConfig("app.debug", true)');
-    console.log('- toggleDebug()');
-    console.log('- saveSettings()');
+// 설정 초기화
+export function resetSettings() {
+    localStorage.removeItem('wall_viewer_settings');
+    CONFIG_MANAGER.resetToDefaults();
+    console.log('설정이 초기화되었습니다.');
 }
 
-// 설정 자동 복원 (옵션)
+// 자동 설정 로드
 if (getConfig('ui.rememberLastModel', true)) {
     loadSettings();
 }
 
-// modelsPath 호환성 추가
-Object.defineProperty(CONFIG, 'modelsPath', {
-    get() {
-        return getConfig('paths.modelsPath', './gltf/');
-    },
-    set(value) {
-        setConfig('paths.modelsPath', value);
-    }
-});
-
-// 기본 내보내기
-export default CONFIG;
+console.log('[Config] 설정 초기화 완료');
+console.log(`[Config] 환경: ${CONFIG_MANAGER.environment}`);
+console.log(`[Config] 디버그 모드: ${getConfig('app.debug') ? '활성' : '비활성'}`);
