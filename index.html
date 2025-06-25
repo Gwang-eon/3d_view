@@ -4,91 +4,282 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>옹벽 3D 모니터링 시스템</title>
-    <link rel="stylesheet" href="css/main.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #ffffff;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        /* 헤더 */
+        header {
+            text-align: center;
+            padding: 60px 0;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #007bff 0%, #00ff88 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            font-size: 1.3rem;
+            color: #888;
+            margin-bottom: 40px;
+        }
+
+        /* 모델 그리드 */
+        .models-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 60px;
+        }
+
+        .model-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .model-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #007bff, #00ff88);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .model-card:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: #007bff;
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 123, 255, 0.2);
+        }
+
+        .model-card:hover::before {
+            transform: scaleX(1);
+        }
+
+        .model-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .model-name {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #ffffff;
+        }
+
+        .model-description {
+            font-size: 1rem;
+            color: #aaa;
+            line-height: 1.5;
+        }
+
+        /* 추가 정보 섹션 */
+        .info-section {
+            margin-top: 100px;
+            text-align: center;
+            padding: 60px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .info-section h2 {
+            font-size: 2rem;
+            margin-bottom: 30px;
+            color: #00ff88;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 40px;
+            margin-top: 40px;
+        }
+
+        .feature {
+            text-align: center;
+        }
+
+        .feature-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .feature-title {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            color: #007bff;
+        }
+
+        .feature-desc {
+            color: #888;
+            font-size: 0.95rem;
+        }
+
+        /* 푸터 */
+        footer {
+            text-align: center;
+            padding: 40px 0;
+            margin-top: 100px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: #666;
+        }
+
+        /* 로딩 애니메이션 */
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+
+        .loading {
+            animation: pulse 2s ease-in-out infinite;
+        }
+    </style>
 </head>
 <body>
-    <div id="container">
-        <div id="canvas-container"></div>
-        
-        <div id="model-selector" class="model-selector">
-            <div class="selector-container">
-                <h1>옹벽 3D 모니터링 시스템</h1>
-                <p>확인하실 옹벽 모델을 선택하세요</p>
-                <div id="model-list" class="model-list">
+    <div class="container">
+        <header>
+            <h1>옹벽 3D 모니터링 시스템</h1>
+            <p class="subtitle">
+                다양한 옹벽 구조물의 3D 모델을 실시간으로 확인하고 분석하세요
+            </p>
+        </header>
+
+        <main>
+            <div class="models-grid">
+                <!-- 블록 옹벽 -->
+                <a href="viewer.html?model=0" class="model-card">
+                    <span class="model-icon">🧱</span>
+                    <h3 class="model-name">블록 옹벽</h3>
+                    <p class="model-description">
+                        프리캐스트 블록을 활용한 옹벽 구조<br>
+                        시공이 간편하고 경제적인 솔루션
+                    </p>
+                </a>
+
+                <!-- 캔틸레버 옹벽 -->
+                <a href="viewer.html?model=1" class="model-card">
+                    <span class="model-icon">🏗️</span>
+                    <h3 class="model-name">캔틸레버 옹벽</h3>
+                    <p class="model-description">
+                        철근 콘크리트 구조의 캔틸레버식 옹벽<br>
+                        높은 토압에 효과적인 구조
+                    </p>
+                </a>
+
+                <!-- MSE 옹벽 -->
+                <a href="viewer.html?model=2" class="model-card">
+                    <span class="model-icon">🏛️</span>
+                    <h3 class="model-name">MSE 옹벽</h3>
+                    <p class="model-description">
+                        기계적 안정 토양(MSE) 옹벽<br>
+                        지오그리드를 활용한 현대적 공법
+                    </p>
+                </a>
+            </div>
+
+            <section class="info-section">
+                <h2>주요 기능</h2>
+                <div class="features-grid">
+                    <div class="feature">
+                        <span class="feature-icon">🎮</span>
+                        <h3 class="feature-title">3D 인터랙션</h3>
+                        <p class="feature-desc">
+                            마우스로 자유롭게 회전, 확대/축소하며
+                            모든 각도에서 구조물 확인
+                        </p>
                     </div>
-            </div>
-        </div>
-
-        <div id="loading" class="loading-screen">
-            <div class="loading-spinner"></div>
-            <div>모델을 로딩중입니다...</div>
-            <div class="loading-progress">
-                <div class="progress-bar">
-                    <div id="progress-fill" class="progress-fill"></div>
+                    <div class="feature">
+                        <span class="feature-icon">📍</span>
+                        <h3 class="feature-title">핫스팟 정보</h3>
+                        <p class="feature-desc">
+                            주요 부위에 설치된 핫스팟을 클릭하여
+                            상세 정보 확인
+                        </p>
+                    </div>
+                    <div class="feature">
+                        <span class="feature-icon">🎬</span>
+                        <h3 class="feature-title">애니메이션</h3>
+                        <p class="feature-desc">
+                            시공 순서, 하중 분포 등
+                            다양한 애니메이션 재생
+                        </p>
+                    </div>
+                    <div class="feature">
+                        <span class="feature-icon">📊</span>
+                        <h3 class="feature-title">실시간 분석</h3>
+                        <p class="feature-desc">
+                            구조물의 상태를 실시간으로
+                            모니터링하고 분석
+                        </p>
+                    </div>
                 </div>
-                <span id="progress-text">0%</span>
-            </div>
-        </div>
+            </section>
+        </main>
 
-        <div id="error" class="error"></div>
-
-        <button class="model-change-btn" id="changeModel">
-            📁 다른 모델 선택
-        </button>
-
-        <div id="control-panel" class="control-panel">
-            <div id="animation-controls" class="control-group">
-                <button id="playBtn">▶️ 재생</button>
-                <button id="pauseBtn">⏸️ 일시정지</button>
-                <button id="resetBtn">⏮️ 리셋</button>
-            </div>
-            <div id="frame-controls" class="control-group">
-                <label>프레임: <span id="frameDisplay">0</span></label>
-                <input type="range" id="frameSlider" min="0" max="100" value="0">
-            </div>
-            <div class="control-group">
-                <button id="toggleHotspots">📍 핫스팟 표시/숨김</button>
-                <button id="toggleGrid">📏 그리드 표시/숨김</button>
-            </div>
-            <div class="control-group">
-                <label>카메라 뷰:</label>
-                <select id="cameraView">
-                    <option value="default">기본 뷰</option>
-                </select>
-            </div>
-        </div>
-
-        <div id="info-panel" class="info-panel">
-            <h3>모델 정보</h3>
-            <table>
-                <tr>
-                    <td>메시 수:</td>
-                    <td id="meshCount">0</td>
-                </tr>
-                <tr>
-                    <td>정점 수:</td>
-                    <td id="vertexCount">0</td>
-                </tr>
-                <tr>
-                    <td>삼각형 수:</td>
-                    <td id="triangleCount">0</td>
-                </tr>
-                <tr>
-                    <td>핫스팟 수:</td>
-                    <td id="hotspotCount">0</td>
-                </tr>
-                <tr>
-                    <td>FPS:</td>
-                    <td id="fps">0</td>
-                </tr>
-            </table>
-        </div>
+        <footer>
+            <p>&copy; 2024 옹벽 3D 모니터링 시스템. All rights reserved.</p>
+        </footer>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    
-    <script type="module" src="js/main.js"></script>
+    <script>
+        // 간단한 인터랙션 추가
+        document.querySelectorAll('.model-card').forEach(card => {
+            card.addEventListener('click', function(e) {
+                // 로딩 애니메이션 추가
+                this.classList.add('loading');
+            });
+        });
+
+        // 페이지 로드 애니메이션
+        window.addEventListener('load', () => {
+            document.querySelectorAll('.model-card').forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(30px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'all 0.6s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 100);
+            });
+        });
+    </script>
 </body>
 </html>

@@ -37,7 +37,7 @@ export class UIControllerImproved {
     init() {
         this.cacheDOMElements();
         this.setupEventListeners();
-        this.showModelSelector();
+        // this.showModelSelector();
         
         // 패널 초기 상태 설정
         this.leftPanelCollapsed = false;

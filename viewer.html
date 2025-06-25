@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>옹벽 3D 모니터링 시스템</title>
+    <link rel="stylesheet" href="css/main-improved.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- 헤더 영역 -->
+        <header id="app-header">
+            <div class="header-left">
+                <h1 class="app-title">
+                    <span class="logo">🏗️</span>
+                    옹벽 3D 모니터링 시스템
+                </h1>
+            </div>
+            
+            <!-- 모델 선택 토글 버튼 -->
+            <div class="model-toggle-group">
+                <button class="model-toggle-btn active" data-model="block">
+                    <span class="icon">🧱</span>
+                    블록 옹벽
+                </button>
+                <button class="model-toggle-btn" data-model="cantilever">
+                    <span class="icon">🏗️</span>
+                    캔틸레버
+                </button>
+                <button class="model-toggle-btn" data-model="mse">
+                    <span class="icon">🏛️</span>
+                    MSE 옹벽
+                </button>
+            </div>
+            
+            <div class="header-right">
+                <button class="header-btn" id="model-info-btn" title="모델 정보">
+                    <span>ℹ️</span>
+                </button>
+                <button class="header-btn" id="settings-btn" title="설정">
+                    <span>⚙️</span>
+                </button>
+                <button class="header-btn" id="fullscreen-btn" title="전체화면">
+                    <span>⛶</span>
+                </button>
+            </div>
+        </header>
+        
+        <!-- 메인 컨텐츠 영역 -->
+        <div id="main-container">
+            <!-- 3D 뷰어 영역 (좌측 패널 제거) -->
+            <div id="viewer-container">
+                <div id="canvas-container"></div>
+                
+                <!-- 뷰 컨트롤 버튼 (floating) -->
+                <div class="view-controls">
+                    <button class="view-btn" id="toggle-grid" title="그리드">
+                        <span>📏</span>
+                    </button>
+                    <button class="view-btn" id="toggle-hotspots" title="핫스팟">
+                        <span>📍</span>
+                    </button>
+                    <select id="camera-view" class="camera-select" title="카메라 뷰">
+                        <option value="default">기본 뷰</option>
+                    </select>
+                </div>
+                
+                <!-- FPS 표시 -->
+                <div class="fps-display">
+                    FPS: <span id="fps">0</span>
+                </div>
+                
+                <!-- 초기 모델 선택 화면 -->
+                <div id="model-selector" class="model-selector">
+                    <div class="selector-container">
+                        <h1>옹벽 모델을 선택하세요</h1>
+                        <p>3D 모니터링을 시작하려면 아래 모델 중 하나를 선택하세요</p>
+                        <div id="model-list" class="model-list">
+                            <!-- 모델 카드가 여기에 동적으로 생성됨 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 로딩 화면 -->
+                <div id="loading" class="loading-screen">
+                    <div class="loading-spinner"></div>
+                    <div>모델을 로딩중입니다...</div>
+                    <div class="loading-progress">
+                        <div class="progress-bar">
+                            <div id="progress-fill" class="progress-fill"></div>
+                        </div>
+                        <span id="progress-text">0%</span>
+                    </div>
+                </div>
+                
+                <!-- 에러 메시지 -->
+                <div id="error" class="error-message"></div>
+            </div>
+            
+            <!-- 우측 핫스팟 상세 패널 -->
+            <aside id="right-panel" class="side-panel">
+                <div class="panel-header">
+                    <h3>핫스팟 상세</h3>
+                    <button class="panel-toggle" id="right-panel-toggle">▶</button>
+                </div>
+                <div class="panel-content">
+                    <div id="hotspot-detail" class="hotspot-detail">
+                        <div class="empty-state">
+                            <span class="empty-icon">📍</span>
+                            <p>핫스팟을 선택하면<br>상세 정보가 표시됩니다</p>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+        
+        <!-- 하단 컨트롤 바 -->
+        <footer id="bottom-controls">
+            <div class="controls-left">
+                <!-- 애니메이션 컨트롤 -->
+                <div class="animation-controls">
+                    <button class="control-btn" id="play-btn" title="재생">
+                        <span>▶️</span>
+                    </button>
+                    <button class="control-btn" id="pause-btn" title="일시정지">
+                        <span>⏸️</span>
+                    </button>
+                    <button class="control-btn" id="stop-btn" title="정지">
+                        <span>⏹️</span>
+                    </button>
+                </div>
+                
+                <!-- 타임라인 -->
+                <div class="timeline-container">
+                    <div class="timeline-track">
+                        <input type="range" id="timeline-slider" min="0" max="100" value="0">
+                        <div class="timeline-progress"></div>
+                    </div>
+                    <span class="timeline-time" id="timeline-display">00:00 / 00:00</span>
+                </div>
+            </div>
+            
+            <div class="controls-center">
+                <!-- 재생 속도 -->
+                <div class="speed-control">
+                    <label>속도:</label>
+                    <select id="playback-speed" class="control-select-sm">
+                        <option value="0.5">0.5x</option>
+                        <option value="1" selected>1x</option>
+                        <option value="1.5">1.5x</option>
+                        <option value="2">2x</option>
+                    </select>
+                </div>
+                
+                <!-- 루프 모드 -->
+                <div class="loop-control">
+                    <button class="control-btn-sm" id="loop-btn" title="반복 재생">
+                        <span>🔁</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="controls-right">
+                <!-- 추가 컨트롤 -->
+                <div class="extra-controls">
+                    <button class="control-btn-sm" id="screenshot-btn" title="스크린샷">
+                        <span>📸</span>
+                    </button>
+                    <button class="control-btn-sm" id="record-btn" title="녹화">
+                        <span>🔴</span>
+                    </button>
+                </div>
+                
+                <!-- 조명/밝기 조절 -->
+                <div class="lighting-control">
+                    <label>밝기:</label>
+                    <input type="range" id="brightness-slider" min="0.5" max="2" step="0.1" value="1.2">
+                </div>
+            </div>
+        </footer>
+    </div>
+    
+    <!-- Three.js 라이브러리 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- 애플리케이션 스크립트 -->
+    <script type="module" src="js/viewer-main.js"></script>
+</body>
+</html>

@@ -567,3 +567,18 @@ body {
     margin-bottom: 5px;
     border: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+
+#home-btn {
+    order: -1; /* 왼쪽 끝에 배치 */
+}
+
+#home-btn span {
+    font-size: 20px;
+}
+
+/* 로딩 중 표시 */
+.model-card.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
