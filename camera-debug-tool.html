@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>카메라 전환 디버그 도구</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .debug-container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            color: #00ff88;
+            border-bottom: 2px solid #00ff88;
+            padding-bottom: 10px;
+        }
+        
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #0056b3;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: white;
+        }
+        
+        .log {
+            background: #000;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .success { color: #00ff88; }
+        .warning { color: #ffc107; }
+        .error { color: #ff6b6b; }
+        
+        #preview-canvas {
+            width: 100%;
+            max-width: 600px;
+            height: 400px;
+            border: 2px solid #007bff;
+            border-radius: 8px;
+            margin: 20px auto;
+            display: block;
+        }
+        
+        .state-display {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .state-item {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .state-label {
+            color: #888;
+            font-size: 12px;
+        }
+        
+        .state-value {
+            color: #00ff88;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="debug-container">
+        <h1>🔧 카메라 전환 디버그 도구</h1>
+        
+        <div class="section">
+            <h2>1. 카메라 전환 테스트</h2>
+            <div class="controls">
+                <div>
+                    <label>전환 유형:</label>
+                    <select id="transition-type">
+                        <option value="position">위치만</option>
+                        <option value="rotation">회전만</option>
+                        <option value="both">위치 + 회전</option>
+                        <option value="fov">FOV 변경</option>
+                        <option value="orbit">궤도 이동</option>
+                        <option value="focus">오브젝트 포커스</option>
+                    </select>
+                </div>
+                <div>
+                    <label>지속 시간 (초):</label>
+                    <input type="number" id="duration" value="1.5" min="0.1" max="5" step="0.1">
+                </div>
+                <div>
+                    <label>이징 함수:</label>
+                    <select id="easing">
+                        <option value="linear">Linear</option>
+                        <option value="easeInQuad">Ease In Quad</option>
+                        <option value="easeOutQuad">Ease Out Quad</option>
+                        <option value="easeInOutQuad">Ease In Out Quad</option>
+                        <option value="easeInCubic">Ease In Cubic</option>
+                        <option value="easeOutCubic">Ease Out Cubic</option>
+                        <option value="easeInOutCubic" selected>Ease In Out Cubic</option>
+                        <option value="easeInOutSine">Ease In Out Sine</option>
+                        <option value="easeOutElastic">Ease Out Elastic</option>
+                    </select>
+                </div>
+                <div>
+                    <label>컨트롤 비활성화:</label>
+                    <select id="disable-controls">
+                        <option value="true">예</option>
+                        <option value="false">아니오</option>
+                    </select>
+                </div>
+            </div>
+            <div style="margin-top: 20px;">
+                <button onclick="testTransition()">전환 테스트</button>
+                <button onclick="cancelTransition()">전환 취소</button>
+                <button onclick="queueMultiple()">다중 전환 큐</button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>2. 이징 함수 프리뷰</h2>
+            <canvas id="preview-canvas"></canvas>
+            <div class="controls">
+                <button onclick="previewAllEasings()">모든 이징 비교</button>
+                <button onclick="animatePreview()">애니메이션 프리뷰</button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>3. 카메라 상태</h2>
+            <div class="state-display" id="camera-state">
+                <div class="state-item">
+                    <div class="state-label">위치 X</div>
+                    <div class="state-value" id="pos-x">0</div>
+                </div>
+                <div class="state-item">
+                    <div class="state-label">위치 Y</div>
+                    <div class="state-value" id="pos-y">0</div>
+                </div>
+                <div class="state-item">
+                    <div class="state-label">위치 Z</div>
+                    <div class="state-value" id="pos-z">0</div>
+                </div>
+                <div class="state-item">
+                    <div class="state-label">회전 X</div>
+                    <div class="state-value" id="rot-x">0</div>
+                </div>
+                <div class="state-item">
+                    <div class="state-label">회전 Y</div>
+                    <div class="state-value" id="rot-y">0</div>
+                </div>
+                <div class="state-item">
+                    <div class="state-label">회전 Z</div>
+                    <div class="state-value" id="rot-z">0</div>
+                </div>
+                <div class="state-item">
+                    <div class="state-label">FOV</div>
+                    <div class="state-value" id="fov">75</div>
+                </div>
+                <div class="state-item">
+                    <div class="state-label">전환 중</div>
+                    <div class="state-value" id="transitioning">아니오</div>
+                </div>
+            </div>
+            <div style="margin-top: 20px;">
+                <button onclick="saveState()">현재 상태 저장</button>
+                <button onclick="restoreState()">저장된 상태 복원</button>
+                <button onclick="resetCamera()">카메라 리셋</button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>4. 성능 모니터</h2>
+            <div class="state-display">
+                <div class="state-item">
+                    <div class="state-label">FPS</div>
+                    <div class="state-value" id="fps">0</div>
+                </div>
+                <div class="state-item">
+                    <div class="state-label">전환 시간</div>
+                    <div class="state-value" id="transition-time">0ms</div>
+                </div>
+                <div class="state-item">
+                    <div class="state-label">큐 길이</div>
+                    <div class="state-value" id="queue-length">0</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>5. 로그</h2>
+            <div class="log" id="debug-log"></div>
+            <div style="margin-top: 10px;">
+                <button onclick="clearLog()">로그 지우기</button>
+                <button onclick="exportLog()">로그 내보내기</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 디버그 로그 함수
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('debug-log');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.textContent = `[${time}] ${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        
+        // 전환 테스트
+        function testTransition() {
+            const type = document.getElementById('transition-type').value;
+            const duration = parseFloat(document.getElementById('duration').value);
+            const easing = document.getElementById('easing').value;
+            const disableControls = document.getElementById('disable-controls').value === 'true';
+            
+            log(`전환 시작: ${type}, ${duration}초, ${easing}`, 'success');
+            
+            // 실제 앱과 연동하는 코드
+            if (window.parent && window.parent.viewerApp) {
+                const app = window.parent.viewerApp;
+                const camera = app.sceneManager.camera;
+                const transition = app.sceneManager.cameraTransition;
+                
+                switch(type) {
+                    case 'position':
+                        const newPos = new THREE.Vector3(
+                            Math.random() * 20 - 10,
+                            Math.random() * 10 + 5,
+                            Math.random() * 20 - 10
+                        );
+                        transition.transitionTo(newPos, null, camera.fov, {
+                            duration,
+                            easing,
+                            disableControls
+                        });
+                        break;
+                        
+                    case 'orbit':
+                        const angle = Math.random() * Math.PI * 2;
+                        app.sceneManager.setCameraView(`orbit-${Math.floor(angle * 180 / Math.PI)}`, {
+                            duration,
+                            easing
+                        });
+                        break;
+                        
+                    // 다른 케이스들...
+                }
+            } else {
+                log('뷰어 앱을 찾을 수 없습니다. iframe 내에서 실행하세요.', 'error');
+            }
+        }
+        
+        // 전환 취소
+        function cancelTransition() {
+            log('전환 취소 요청', 'warning');
+            
+            if (window.parent && window.parent.viewerApp) {
+                window.parent.viewerApp.sceneManager.cancelCameraTransition();
+            }
+        }
+        
+        // 이징 함수 프리뷰
+        function previewAllEasings() {
+            const canvas = document.getElementById('preview-canvas');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // 캔버스 클리어
+            ctx.clearRect(0, 0, width, height);
+            
+            // 이징 함수들
+            const easings = {
+                linear: (t) => t,
+                easeInQuad: (t) => t * t,
+                easeOutQuad: (t) => t * (2 - t),
+                easeInOutQuad: (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+                easeInCubic: (t) => t * t * t,
+                easeOutCubic: (t) => (--t) * t * t + 1,
+                easeInOutCubic: (t) => t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1,
+                easeOutElastic: (t) => {
+                    const p = 0.3;
+                    return Math.pow(2, -10 * t) * Math.sin((t - p / 4) * (2 * Math.PI) / p) + 1;
+                }
+            };
+            
+            // 각 이징 함수 그리기
+            const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#feca57', '#ff9ff3', '#54a0ff', '#48dbfb', '#0abde3'];
+            let colorIndex = 0;
+            
+            Object.entries(easings).forEach(([name, easing]) => {
+                ctx.strokeStyle = colors[colorIndex++ % colors.length];
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                
+                for (let i = 0; i <= 100; i++) {
+                    const t = i / 100;
+                    const x = t * width;
+                    const y = height - (easing(t) * height);
+                    
+                    if (i === 0) {
+                        ctx.moveTo(x, y);
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+                
+                ctx.stroke();
+            });
+            
+            log('이징 함수 프리뷰 생성됨', 'success');
+        }
+        
+        // 상태 업데이트 (주기적으로 실행)
+        function updateCameraState() {
+            if (window.parent && window.parent.viewerApp) {
+                const camera = window.parent.viewerApp.sceneManager.camera;
+                const transition = window.parent.viewerApp.sceneManager.cameraTransition;
+                
+                document.getElementById('pos-x').textContent = camera.position.x.toFixed(2);
+                document.getElementById('pos-y').textContent = camera.position.y.toFixed(2);
+                document.getElementById('pos-z').textContent = camera.position.z.toFixed(2);
+                document.getElementById('rot-x').textContent = (camera.rotation.x * 180 / Math.PI).toFixed(2) + '°';
+                document.getElementById('rot-y').textContent = (camera.rotation.y * 180 / Math.PI).toFixed(2) + '°';
+                document.getElementById('rot-z').textContent = (camera.rotation.z * 180 / Math.PI).toFixed(2) + '°';
+                document.getElementById('fov').textContent = camera.fov.toFixed(1);
+                document.getElementById('transitioning').textContent = transition.isTransitioning ? '예' : '아니오';
+                
+                if (transition.getDebugInfo) {
+                    const debug = transition.getDebugInfo();
+                    document.getElementById('queue-length').textContent = debug.queueLength || 0;
+                }
+            }
+            
+            requestAnimationFrame(updateCameraState);
+        }
+        
+        // 로그 지우기
+        function clearLog() {
+            document.getElementById('debug-log').innerHTML = '';
+            log('로그가 지워졌습니다', 'success');
+        }
+        
+        // 초기화
+        updateCameraState();
+        log('카메라 전환 디버그 도구 준비 완료', 'success');
+    </script>
+</body>
+</html>

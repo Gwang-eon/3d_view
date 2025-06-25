@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Viewer 디버그 테스트</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            padding: 20px;
+        }
+        .test-section {
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+        }
+        .success { color: #00ff88; }
+        .error { color: #ff6b6b; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        #log {
+            background: black;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Viewer.html 디버그 테스트</h1>
+    
+    <div class="test-section">
+        <h2>1. 기본 요소 확인</h2>
+        <button onclick="checkBasics()">기본 요소 체크</button>
+        <button onclick="checkDOMElements()">DOM 요소 체크</button>
+        <button onclick="checkModules()">모듈 체크</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>2. 모델 로드 테스트</h2>
+        <button onclick="testModelLoad(0)">블록 옹벽 로드</button>
+        <button onclick="testModelLoad(1)">캔틸레버 옹벽 로드</button>
+        <button onclick="testModelLoad(2)">MSE 옹벽 로드</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>3. 카메라 전환 테스트</h2>
+        <button onclick="testCameraTransition()">카메라 전환</button>
+        <button onclick="testCameraPresets()">프리셋 뷰</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>4. 로그</h2>
+        <div id="log"></div>
+        <button onclick="clearLog()">로그 지우기</button>
+    </div>
+    
+    <script>
+        const log = (msg, type = 'info') => {
+            const logEl = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = type;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+        };
+        
+        // 기본 요소 체크
+        function checkBasics() {
+            log('=== 기본 요소 확인 ===');
+            
+            // Three.js
+            if (typeof THREE !== 'undefined') {
+                log('✓ Three.js 로드됨', 'success');
+                log(`  버전: ${THREE.REVISION}`);
+            } else {
+                log('✗ Three.js 없음', 'error');
+            }
+            
+            // GLTFLoader
+            if (typeof THREE?.GLTFLoader !== 'undefined') {
+                log('✓ GLTFLoader 로드됨', 'success');
+            } else {
+                log('✗ GLTFLoader 없음', 'error');
+            }
+            
+            // OrbitControls
+            if (typeof THREE?.OrbitControls !== 'undefined') {
+                log('✓ OrbitControls 로드됨', 'success');
+            } else {
+                log('✗ OrbitControls 없음', 'error');
+            }
+            
+            // WebGL
+            const canvas = document.createElement('canvas');
+            const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+            if (gl) {
+                log('✓ WebGL 지원됨', 'success');
+            } else {
+                log('✗ WebGL 지원 안됨', 'error');
+            }
+        }
+        
+        // DOM 요소 체크
+        function checkDOMElements() {
+            log('=== DOM 요소 확인 ===');
+            
+            const elements = [
+                'app-container',
+                'app-header',
+                'viewer-container',
+                'canvas-container',
+                'model-selector',
+                'model-list',
+                'loading',
+                'error',
+                'right-panel',
+                'bottom-controls',
+                'play-btn',
+                'pause-btn',
+                'timeline-slider'
+            ];
+            
+            elements.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    log(`✓ #${id} 존재`, 'success');
+                } else {
+                    log(`✗ #${id} 없음`, 'error');
+                }
+            });
+        }
+        
+        // 모듈 체크
+        async function checkModules() {
+            log('=== 모듈 확인 ===');
+            
+            try {
+                // CONFIG
+                const configModule = await import('./js/config.js');
+                if (configModule.CONFIG) {
+                    log('✓ CONFIG 모듈 로드됨', 'success');
+                    log(`  모델 수: ${configModule.CONFIG.models?.length || 0}`);
+                }
+                
+                // 다른 모듈들
+                const modules = [
+                    './js/SceneManager.js',
+                    './js/ModelLoader.js',
+                    './js/UIController.js',
+                    './js/HotspotManager.js',
+                    './js/AnimationController.js',
+                    './js/viewer-init.js'
+                ];
+                
+                for (const module of modules) {
+                    try {
+                        await import(module);
+                        log(`✓ ${module} 로드 가능`, 'success');
+                    } catch (e) {
+                        log(`✗ ${module} 로드 실패: ${e.message}`, 'error');
+                    }
+                }
+                
+            } catch (error) {
+                log(`모듈 체크 오류: ${error.message}`, 'error');
+            }
+        }
+        
+        // 모델 로드 테스트
+        function testModelLoad(index) {
+            log(`=== 모델 ${index} 로드 테스트 ===`);
+            
+            if (!window.viewerApp) {
+                log('viewerApp이 없습니다. viewer.html을 먼저 로드하세요.', 'error');
+                return;
+            }
+            
+            try {
+                const model = window.CONFIG.models[index];
+                if (model) {
+                    log(`모델 로드 시도: ${model.name}`);
+                    window.viewerApp.uiController.selectModel(model);
+                } else {
+                    log(`모델 ${index}를 찾을 수 없습니다.`, 'error');
+                }
+            } catch (error) {
+                log(`모델 로드 오류: ${error.message}`, 'error');
+            }
+        }
+        
+        // 카메라 전환 테스트
+        function testCameraTransition() {
+            log('=== 카메라 전환 테스트 ===');
+            
+            if (!window.viewerApp?.sceneManager) {
+                log('SceneManager가 없습니다.', 'error');
+                return;
+            }
+            
+            try {
+                window.viewerApp.sceneManager.setCameraView('focus-model');
+                log('카메라 전환 명령 실행됨', 'success');
+            } catch (error) {
+                log(`카메라 전환 오류: ${error.message}`, 'error');
+            }
+        }
+        
+        // 프리셋 뷰 테스트
+        function testCameraPresets() {
+            log('=== 프리셋 뷰 테스트 ===');
+            
+            const presets = ['front', 'right', 'top', 'isometric'];
+            let index = 0;
+            
+            const interval = setInterval(() => {
+                if (index >= presets.length) {
+                    clearInterval(interval);
+                    log('프리셋 뷰 테스트 완료', 'success');
+                    return;
+                }
+                
+                const preset = presets[index];
+                log(`프리셋 뷰: ${preset}`);
+                
+                if (window.viewerApp?.sceneManager) {
+                    window.viewerApp.sceneManager.setCameraView(preset);
+                }
+                
+                index++;
+            }, 2000);
+        }
+        
+        // 로그 지우기
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        // 페이지 로드 시 자동 체크
+        window.addEventListener('load', () => {
+            log('디버그 테스트 페이지 로드됨');
+            
+            // viewer.html이 부모 창인지 확인
+            if (window.parent !== window) {
+                log('iframe 내에서 실행 중', 'info');
+            } else {
+                log('독립 실행 중 - viewer.html과 함께 사용하세요', 'info');
+            }
+        });
+        
+        // 전역 에러 캐치
+        window.addEventListener('error', (e) => {
+            log(`전역 오류: ${e.message} (${e.filename}:${e.lineno})`, 'error');
+        });
+    </script>
+</body>
+</html>

@@ -5,6 +5,171 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>옹벽 3D 모니터링 시스템</title>
     <link rel="stylesheet" href="css/main-improved.css">
+    <style>
+        /* 추가 인라인 스타일 */
+        .camera-transition-indicator {
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 123, 255, 0.9);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            color: white;
+            font-weight: 500;
+            animation: slideInDown 0.3s ease;
+        }
+        
+        .notification-success { background: #28a745; }
+        .notification-error { background: #dc3545; }
+        .notification-info { background: #007bff; }
+        
+        @keyframes slideInDown {
+            from { transform: translate(-50%, -20px); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
+        
+        /* 프리셋 뷰 버튼 스타일 */
+        .preset-view-buttons {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .view-preset-group {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 5px;
+        }
+        
+        .preset-btn {
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+        
+        .preset-btn:hover {
+            transform: scale(1.1);
+            background: rgba(0, 123, 255, 0.3);
+        }
+        
+        /* 줌 컨트롤 스타일 */
+        .zoom-controls {
+            margin-top: 10px;
+            display: flex;
+            gap: 5px;
+        }
+        
+        .zoom-btn {
+            flex: 1;
+            font-size: 14px;
+        }
+        
+        /* 이징 컨트롤 스타일 */
+        .easing-control {
+            margin-top: 10px;
+        }
+        
+        .easing-control label {
+            font-size: 12px;
+            color: #aaa;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        /* 핫스팟 상세 정보 스타일 */
+        .hotspot-info-container {
+            padding: 10px 0;
+        }
+        
+        .hotspot-info-container h4 {
+            margin: 0 0 15px 0;
+            color: #00ff88;
+            font-size: 18px;
+        }
+        
+        .info-list {
+            margin-bottom: 20px;
+        }
+        
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .info-label {
+            color: #aaa;
+            font-size: 14px;
+        }
+        
+        .info-value {
+            color: #00ff88;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .hotspot-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .action-btn {
+            flex: 1;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+        
+        .action-btn:hover {
+            background: rgba(0, 123, 255, 0.2);
+            border-color: #007bff;
+            transform: translateY(-1px);
+        }
+        
+        /* 녹화 버튼 애니메이션 */
+        #record-btn.recording span {
+            animation: pulse-record 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse-record {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+        }
+        
+        /* 로딩 중 표시 */
+        .model-toggle-btn.loading {
+            pointer-events: none;
+            opacity: 0.7;
+        }
+        
+        .model-toggle-btn.loading .icon {
+            animation: spin 1s linear infinite;
+        }
+    </style>
 </head>
 <body>
     <div id="app-container">
@@ -34,6 +199,9 @@
             </div>
             
             <div class="header-right">
+                <button class="header-btn" id="home-btn" title="홈으로">
+                    <span>🏠</span>
+                </button>
                 <button class="header-btn" id="model-info-btn" title="모델 정보">
                     <span>ℹ️</span>
                 </button>
@@ -48,7 +216,7 @@
         
         <!-- 메인 컨텐츠 영역 -->
         <div id="main-container">
-            <!-- 3D 뷰어 영역 (좌측 패널 제거) -->
+            <!-- 3D 뷰어 영역 -->
             <div id="viewer-container">
                 <div id="canvas-container"></div>
                 
@@ -57,12 +225,30 @@
                     <button class="view-btn" id="toggle-grid" title="그리드">
                         <span>📏</span>
                     </button>
-                    <button class="view-btn" id="toggle-hotspots" title="핫스팟">
+                    <button class="view-btn active" id="toggle-hotspots" title="핫스팟">
                         <span>📍</span>
                     </button>
                     <select id="camera-view" class="camera-select" title="카메라 뷰">
                         <option value="default">기본 뷰</option>
                     </select>
+                    
+                    <!-- 카메라 프리셋 버튼 -->
+                    <div class="preset-view-buttons">
+                        <div class="view-preset-group">
+                            <button class="view-btn preset-btn" data-view="front" title="정면">
+                                <span>⬜</span>
+                            </button>
+                            <button class="view-btn preset-btn" data-view="right" title="우측">
+                                <span>➡️</span>
+                            </button>
+                            <button class="view-btn preset-btn" data-view="top" title="상단">
+                                <span>⬆️</span>
+                            </button>
+                            <button class="view-btn preset-btn" data-view="isometric" title="등각">
+                                <span>◻️</span>
+                            </button>
+                        </div>
+                    </div>
                     
                     <!-- 추가 카메라 컨트롤 -->
                     <div class="camera-preset-buttons">
@@ -74,13 +260,37 @@
                         </button>
                     </div>
                     
-                    <!-- 카메라 전환 속도 -->
+                    <!-- 줌 컨트롤 -->
+                    <div class="zoom-controls">
+                        <button class="view-btn zoom-btn" id="zoom-in" title="확대">
+                            <span>🔍+</span>
+                        </button>
+                        <button class="view-btn zoom-btn" id="zoom-out" title="축소">
+                            <span>🔍-</span>
+                        </button>
+                        <button class="view-btn zoom-btn" id="zoom-fit" title="화면 맞춤">
+                            <span>⬜</span>
+                        </button>
+                    </div>
+                    
+                    <!-- 카메라 전환 설정 -->
                     <div class="camera-speed-control">
                         <label>전환 속도:</label>
                         <select id="camera-speed" class="camera-select-sm">
                             <option value="0.5">빠름</option>
                             <option value="1.5" selected>보통</option>
                             <option value="3.0">느림</option>
+                        </select>
+                    </div>
+                    
+                    <!-- 이징 효과 선택 -->
+                    <div class="easing-control">
+                        <label>전환 효과:</label>
+                        <select id="camera-easing" class="camera-select-sm">
+                            <option value="linear">선형</option>
+                            <option value="easeInOutCubic" selected>부드럽게</option>
+                            <option value="easeOutElastic">탄성</option>
+                            <option value="easeInOutSine">사인파</option>
                         </select>
                     </div>
                 </div>
@@ -115,6 +325,9 @@
                 
                 <!-- 에러 메시지 -->
                 <div id="error" class="error-message"></div>
+                
+                <!-- 카메라 전환 인디케이터 -->
+                <div class="camera-transition-indicator"></div>
             </div>
             
             <!-- 우측 핫스팟 상세 패널 -->
@@ -204,6 +417,25 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- Quick Fix 스크립트 (개발 모드용) -->
+    <script>
+        // 기본 오류 처리 및 디버깅 도구
+        window.addEventListener('error', function(e) {
+            console.error('오류 발생:', e.message, '\n파일:', e.filename, '\n라인:', e.lineno);
+        });
+        
+        // 간단한 디버그 유틸리티
+        window.debug = {
+            checkSystem: function() {
+                console.log('=== 시스템 체크 ===');
+                console.log('Three.js:', typeof THREE !== 'undefined' ? '✅' : '❌');
+                console.log('GLTFLoader:', typeof THREE?.GLTFLoader !== 'undefined' ? '✅' : '❌');
+                console.log('OrbitControls:', typeof THREE?.OrbitControls !== 'undefined' ? '✅' : '❌');
+                console.log('WebGL:', !!document.createElement('canvas').getContext('webgl') ? '✅' : '❌');
+            }
+        };
+    </script>
     
     <!-- 애플리케이션 스크립트 -->
     <script type="module" src="js/viewer-main.js"></script>

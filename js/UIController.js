@@ -16,59 +16,320 @@ export class UIController {
         this.init();
     }
     
-    setupCameraControls() {
-        // 모델 포커스 버튼
-        const focusModelBtn = document.getElementById('focus-model');
-        if (focusModelBtn) {
-            focusModelBtn.addEventListener('click', () => {
-                this.sceneManager.setCameraView('focus-model');
+ // UIController.js에 추가할 카메라 컨트롤 개선 코드
+
+setupCameraControls() {
+    // 카메라 전환 상태 표시
+    this.cameraTransitionIndicator = null;
+    
+    // 프리셋 뷰 버튼 추가
+    this.createPresetViewButtons();
+    
+    // 모델 포커스 버튼
+    const focusModelBtn = document.getElementById('focus-model');
+    if (focusModelBtn) {
+        focusModelBtn.addEventListener('click', () => {
+            this.showCameraTransitionIndicator('모델 포커스');
+            this.sceneManager.setCameraView('focus-model', {
+                duration: 1.2,
+                easeType: 'easeOutCubic'
             });
-        }
-        
-        // 회전 뷰 버튼 (클릭할 때마다 90도씩 회전)
-        let currentOrbitAngle = 0;
-        const orbitViewBtn = document.getElementById('orbit-view');
-        if (orbitViewBtn) {
-            orbitViewBtn.addEventListener('click', () => {
-                currentOrbitAngle = (currentOrbitAngle + 90) % 360;
-                this.sceneManager.setCameraView(`orbit-${currentOrbitAngle}`);
-            });
-        }
-        
-        // 카메라 전환 속도 설정
-        const cameraSpeed = document.getElementById('camera-speed');
-        if (cameraSpeed) {
-            cameraSpeed.addEventListener('change', (e) => {
-                const duration = parseFloat(e.target.value);
-                this.sceneManager.setCameraTransitionDuration(duration);
-            });
-        }
-        
-        // 키보드 단축키
-        document.addEventListener('keydown', (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-            
-            switch(e.key) {
-                case '1':
-                    this.sceneManager.setCameraView('default');
-                    break;
-                case '2':
-                    this.sceneManager.setCameraView('focus-model');
-                    break;
-                case '3':
-                    if (this.sceneManager.gltfCameras.length > 0) {
-                        this.sceneManager.setCameraView('gltf_0');
-                    }
-                    break;
-                case 'r':
-                case 'R':
-                    // 회전 뷰
-                    currentOrbitAngle = (currentOrbitAngle + 90) % 360;
-                    this.sceneManager.setCameraView(`orbit-${currentOrbitAngle}`);
-                    break;
-            }
         });
     }
+    
+    // 회전 뷰 버튼 (클릭할 때마다 90도씩 회전)
+    let currentOrbitAngle = 0;
+    const orbitViewBtn = document.getElementById('orbit-view');
+    if (orbitViewBtn) {
+        orbitViewBtn.addEventListener('click', () => {
+            currentOrbitAngle = (currentOrbitAngle + 90) % 360;
+            this.showCameraTransitionIndicator(`${currentOrbitAngle}° 회전`);
+            this.sceneManager.setCameraView(`orbit-${currentOrbitAngle}`, {
+                duration: 1.5,
+                easeType: 'easeInOutSine'
+            });
+        });
+    }
+    
+    // 줌 버튼 추가
+    this.createZoomControls();
+    
+    // 카메라 전환 속도 설정
+    const cameraSpeed = document.getElementById('camera-speed');
+    if (cameraSpeed) {
+        cameraSpeed.addEventListener('change', (e) => {
+            const duration = parseFloat(e.target.value);
+            this.sceneManager.setCameraTransitionDuration(duration);
+        });
+    }
+    
+    // 이징 타입 선택 추가
+    this.createEasingSelector();
+    
+    // 키보드 단축키 개선
+    this.setupKeyboardShortcuts();
+    
+    // 카메라 전환 이벤트 리스너
+    if (this.sceneManager) {
+        this.sceneManager.onCameraTransitionStart = (viewName) => {
+            this.disableInteractionDuringTransition();
+        };
+        
+        this.sceneManager.onCameraTransitionEnd = (viewName) => {
+            this.enableInteractionAfterTransition();
+            this.hideCameraTransitionIndicator();
+        };
+    }
+}
+
+// 프리셋 뷰 버튼 생성
+createPresetViewButtons() {
+    const viewControls = document.querySelector('.view-controls');
+    if (!viewControls) return;
+    
+    const presetContainer = document.createElement('div');
+    presetContainer.className = 'preset-view-buttons';
+    presetContainer.innerHTML = `
+        <div class="view-preset-group">
+            <button class="view-btn preset-btn" data-view="front" title="정면">
+                <span>⬜</span>
+            </button>
+            <button class="view-btn preset-btn" data-view="right" title="우측">
+                <span>➡️</span>
+            </button>
+            <button class="view-btn preset-btn" data-view="top" title="상단">
+                <span>⬆️</span>
+            </button>
+            <button class="view-btn preset-btn" data-view="isometric" title="등각">
+                <span>◻️</span>
+            </button>
+        </div>
+    `;
+    
+    viewControls.appendChild(presetContainer);
+    
+    // 프리셋 버튼 이벤트
+    presetContainer.querySelectorAll('.preset-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const view = btn.dataset.view;
+            this.showCameraTransitionIndicator(`${view} 뷰`);
+            this.sceneManager.setCameraView(view, {
+                duration: 1.0,
+                priority: 'high'
+            });
+        });
+    });
+}
+
+// 줌 컨트롤 생성
+createZoomControls() {
+    const viewControls = document.querySelector('.view-controls');
+    if (!viewControls) return;
+    
+    const zoomContainer = document.createElement('div');
+    zoomContainer.className = 'zoom-controls';
+    zoomContainer.innerHTML = `
+        <button class="view-btn zoom-btn" id="zoom-in" title="확대">
+            <span>🔍+</span>
+        </button>
+        <button class="view-btn zoom-btn" id="zoom-out" title="축소">
+            <span>🔍-</span>
+        </button>
+        <button class="view-btn zoom-btn" id="zoom-fit" title="화면 맞춤">
+            <span>⬜</span>
+        </button>
+    `;
+    
+    viewControls.appendChild(zoomContainer);
+    
+    // 줌 이벤트
+    document.getElementById('zoom-in').addEventListener('click', () => {
+        this.sceneManager.setCameraView('zoom-in', { duration: 0.5 });
+    });
+    
+    document.getElementById('zoom-out').addEventListener('click', () => {
+        this.sceneManager.setCameraView('zoom-out', { duration: 0.5 });
+    });
+    
+    document.getElementById('zoom-fit').addEventListener('click', () => {
+        this.sceneManager.setCameraView('focus-model', { duration: 1.0 });
+    });
+}
+
+// 이징 선택기 생성
+createEasingSelector() {
+    const viewControls = document.querySelector('.view-controls');
+    if (!viewControls) return;
+    
+    const easingContainer = document.createElement('div');
+    easingContainer.className = 'easing-control';
+    easingContainer.innerHTML = `
+        <label>전환 효과:</label>
+        <select id="camera-easing" class="camera-select-sm">
+            <option value="linear">선형</option>
+            <option value="easeInOutCubic" selected>부드럽게</option>
+            <option value="easeOutElastic">탄성</option>
+            <option value="easeInOutSine">사인파</option>
+        </select>
+    `;
+    
+    viewControls.appendChild(easingContainer);
+    
+    document.getElementById('camera-easing').addEventListener('change', (e) => {
+        this.sceneManager.setCameraTransitionEasing(e.target.value);
+    });
+}
+
+// 키보드 단축키 설정
+setupKeyboardShortcuts() {
+    const keyMap = {
+        '1': () => this.sceneManager.setCameraView('default'),
+        '2': () => this.sceneManager.setCameraView('focus-model'),
+        '3': () => this.sceneManager.setCameraView('front'),
+        '4': () => this.sceneManager.setCameraView('right'),
+        '5': () => this.sceneManager.setCameraView('top'),
+        '6': () => this.sceneManager.setCameraView('isometric'),
+        'r': () => this.rotateCamera(),
+        'R': () => this.rotateCamera(true),
+        '+': () => this.sceneManager.setCameraView('zoom-in'),
+        '-': () => this.sceneManager.setCameraView('zoom-out'),
+        'f': () => this.sceneManager.setCameraView('focus-model'),
+        'Escape': () => this.sceneManager.cancelCameraTransition()
+    };
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+        
+        const action = keyMap[e.key];
+        if (action) {
+            e.preventDefault();
+            action();
+        }
+    });
+}
+
+// 카메라 회전
+rotateCamera(reverse = false) {
+    const angle = reverse ? -90 : 90;
+    const currentAngle = parseInt(this.currentOrbitAngle || 0);
+    const newAngle = (currentAngle + angle + 360) % 360;
+    this.currentOrbitAngle = newAngle;
+    
+    this.showCameraTransitionIndicator(`${newAngle}° 회전`);
+    this.sceneManager.setCameraView(`orbit-${newAngle}`);
+}
+
+// 카메라 전환 중 표시
+showCameraTransitionIndicator(message) {
+    if (!this.cameraTransitionIndicator) {
+        this.cameraTransitionIndicator = document.createElement('div');
+        this.cameraTransitionIndicator.className = 'camera-transition-indicator';
+        this.cameraTransitionIndicator.style.cssText = `
+            position: fixed;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 123, 255, 0.9);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        `;
+        document.body.appendChild(this.cameraTransitionIndicator);
+    }
+    
+    this.cameraTransitionIndicator.textContent = message;
+    this.cameraTransitionIndicator.style.opacity = '1';
+}
+
+// 카메라 전환 표시 숨기기
+hideCameraTransitionIndicator() {
+    if (this.cameraTransitionIndicator) {
+        this.cameraTransitionIndicator.style.opacity = '0';
+    }
+}
+
+// 전환 중 상호작용 비활성화
+disableInteractionDuringTransition() {
+    // 버튼들 비활성화
+    document.querySelectorAll('.view-btn, .preset-btn, .zoom-btn').forEach(btn => {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+    });
+}
+
+// 전환 후 상호작용 재활성화
+enableInteractionAfterTransition() {
+    // 버튼들 재활성화
+    document.querySelectorAll('.view-btn, .preset-btn, .zoom-btn').forEach(btn => {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+    });
+}
+
+// 카메라 상태 저장/복원 UI
+createCameraStateControls() {
+    const savedStates = new Map();
+    let stateCounter = 0;
+    
+    const stateContainer = document.createElement('div');
+    stateContainer.className = 'camera-state-controls';
+    stateContainer.innerHTML = `
+        <h5>카메라 상태</h5>
+        <button id="save-camera-state" class="control-btn-sm">
+            💾 현재 뷰 저장
+        </button>
+        <div id="saved-states-list"></div>
+    `;
+    
+    document.querySelector('.view-controls').appendChild(stateContainer);
+    
+    // 상태 저장
+    document.getElementById('save-camera-state').addEventListener('click', () => {
+        const state = this.sceneManager.saveCameraState();
+        if (state) {
+            const stateId = `state_${++stateCounter}`;
+            savedStates.set(stateId, {
+                ...state,
+                name: `뷰 ${stateCounter}`,
+                timestamp: new Date()
+            });
+            this.updateSavedStatesList(savedStates);
+        }
+    });
+}
+
+// 저장된 상태 목록 업데이트
+updateSavedStatesList(savedStates) {
+    const listEl = document.getElementById('saved-states-list');
+    listEl.innerHTML = '';
+    
+    savedStates.forEach((state, id) => {
+        const stateEl = document.createElement('div');
+        stateEl.className = 'saved-state-item';
+        stateEl.innerHTML = `
+            <span>${state.name}</span>
+            <button class="restore-btn" data-state="${id}">복원</button>
+            <button class="delete-btn" data-state="${id}">❌</button>
+        `;
+        
+        stateEl.querySelector('.restore-btn').addEventListener('click', () => {
+            this.showCameraTransitionIndicator(`${state.name} 복원`);
+            this.sceneManager.restoreCameraState(state, { duration: 1.0 });
+        });
+        
+        stateEl.querySelector('.delete-btn').addEventListener('click', () => {
+            savedStates.delete(id);
+            this.updateSavedStatesList(savedStates);
+        });
+        
+        listEl.appendChild(stateEl);
+    });
+}
 
     init() {
         console.log('[UIController] 초기화 시작');
