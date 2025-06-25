@@ -1,3 +1,4 @@
+// HotspotManager.js - 핫스팟 관리 시스템
 import { CONFIG } from './config.js';
 
 export class HotspotManager {
@@ -95,10 +96,14 @@ export class HotspotManager {
             padding: 20px; min-width: 300px; z-index: 1001; color: white;
         `;
         
+        // 컨텐츠 생성
         let content = `<h3>${hotspot.name}</h3>`;
         Object.entries(hotspot.userData).forEach(([key, value]) => {
             content += `<p><strong>${key}:</strong> ${value}</p>`;
         });
+        
+        // innerHTML 설정
+        infoPanel.innerHTML = content;
         
         // 핫스팟으로 카메라 포커스 옵션 추가
         const focusButton = document.createElement('button');
@@ -125,16 +130,26 @@ export class HotspotManager {
             infoPanel.remove();
         };
         
-        infoPanel.appendChild(focusButton);
-    }
-        
+        // 닫기 버튼 추가
         const closeButton = document.createElement('button');
         closeButton.textContent = '닫기';
-        closeButton.style.cssText = `margin-top: 15px; width: 100%; padding: 8px; background: #007bff; border: none; color: white; border-radius: 5px; cursor: pointer;`;
+        closeButton.style.cssText = `
+            margin-top: 15px; 
+            width: 100%; 
+            padding: 8px; 
+            background: #007bff; 
+            border: none; 
+            color: white; 
+            border-radius: 5px; 
+            cursor: pointer;
+        `;
         closeButton.onclick = () => infoPanel.remove();
         
-        infoPanel.innerHTML = content;
+        // 버튼들을 패널에 추가
+        infoPanel.appendChild(focusButton);
         infoPanel.appendChild(closeButton);
+        
+        // 패널을 body에 추가
         document.body.appendChild(infoPanel);
     }
     
