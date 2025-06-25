@@ -4,7 +4,7 @@
 import { CONFIG } from './config.js';
 import { SceneManager } from './SceneManager.js';
 import { ModelLoader } from './ModelLoader.js';
-import { UIController } from './UIController-improved.js';
+import { UIControllerImproved as UIController } from './UIController-improved.js';
 import { HotspotManager } from './HotspotManager.js';
 import { AnimationController } from './AnimationController.js';
 import { ViewerInitializer } from './viewer-init.js';
