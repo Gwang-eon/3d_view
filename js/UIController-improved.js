@@ -37,7 +37,6 @@ export class UIControllerImproved {
     init() {
         this.cacheDOMElements();
         this.setupEventListeners();
-        // this.showModelSelector();
         
         // 패널 초기 상태 설정
         this.leftPanelCollapsed = false;
@@ -88,63 +87,99 @@ export class UIControllerImproved {
     
     setupEventListeners() {
         // Model Toggle Buttons
-        this.modelToggleBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const modelType = btn.dataset.model;
-                this.selectModelByType(modelType);
-                this.updateActiveToggle(btn);
+        if (this.modelToggleBtns) {
+            this.modelToggleBtns.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const modelType = btn.dataset.model;
+                    this.selectModelByType(modelType);
+                    this.updateActiveToggle(btn);
+                });
             });
-        });
+        }
         
-        // Panel Toggles
-        this.leftPanelToggle.addEventListener('click', () => this.toggleLeftPanel());
-        this.rightPanelToggle.addEventListener('click', () => this.toggleRightPanel());
+        // Panel Toggles - NULL 체크 추가
+        if (this.leftPanelToggle) {
+            this.leftPanelToggle.addEventListener('click', () => this.toggleLeftPanel());
+        }
+        if (this.rightPanelToggle) {
+            this.rightPanelToggle.addEventListener('click', () => this.toggleRightPanel());
+        }
         
-        // View Controls
-        this.toggleGridBtn.addEventListener('click', () => this.sceneManager.toggleGrid());
-        this.toggleHotspotsBtn.addEventListener('click', () => {
-            this.hotspotManager.toggleVisibility();
-            this.toggleHotspotsBtn.classList.toggle('active');
-        });
+        // View Controls - NULL 체크 추가
+        if (this.toggleGridBtn) {
+            this.toggleGridBtn.addEventListener('click', () => {
+                this.sceneManager.toggleGrid();
+                this.toggleGridBtn.classList.toggle('active');
+            });
+        }
         
-        this.cameraView.addEventListener('change', (e) => {
-            this.sceneManager.setCameraView(e.target.value);
-        });
+        if (this.toggleHotspotsBtn) {
+            this.toggleHotspotsBtn.addEventListener('click', () => {
+                this.hotspotManager.toggleVisibility();
+                this.toggleHotspotsBtn.classList.toggle('active');
+            });
+        }
         
-        // Animation Controls
-        this.playBtn.addEventListener('click', () => this.animationController.play());
-        this.pauseBtn.addEventListener('click', () => this.animationController.pause());
-        this.stopBtn.addEventListener('click', () => this.animationController.reset());
+        if (this.cameraView) {
+            this.cameraView.addEventListener('change', (e) => {
+                this.sceneManager.setCameraView(e.target.value);
+            });
+        }
         
-        this.timelineSlider.addEventListener('input', (e) => {
-            this.animationController.setFrame(parseInt(e.target.value));
-        });
+        // Animation Controls - NULL 체크 추가
+        if (this.playBtn) {
+            this.playBtn.addEventListener('click', () => this.animationController.play());
+        }
+        if (this.pauseBtn) {
+            this.pauseBtn.addEventListener('click', () => this.animationController.pause());
+        }
+        if (this.stopBtn) {
+            this.stopBtn.addEventListener('click', () => this.animationController.reset());
+        }
         
-        this.playbackSpeed.addEventListener('change', (e) => {
-            this.animationController.setTimeScale(parseFloat(e.target.value));
-        });
+        if (this.timelineSlider) {
+            this.timelineSlider.addEventListener('input', (e) => {
+                this.animationController.setFrame(parseInt(e.target.value));
+            });
+        }
         
-        this.loopBtn.addEventListener('click', () => {
-            this.loopBtn.classList.toggle('active');
-            // Toggle loop mode in animation controller
-        });
+        if (this.playbackSpeed) {
+            this.playbackSpeed.addEventListener('change', (e) => {
+                this.animationController.setTimeScale(parseFloat(e.target.value));
+            });
+        }
         
-        // Brightness Control
-        this.brightnessSlider.addEventListener('input', (e) => {
-            const brightness = parseFloat(e.target.value);
-            this.sceneManager.renderer.toneMappingExposure = brightness;
-        });
+        if (this.loopBtn) {
+            this.loopBtn.addEventListener('click', () => {
+                this.loopBtn.classList.toggle('active');
+                // Toggle loop mode in animation controller
+            });
+        }
         
-        // Fullscreen
-        this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+        // Brightness Control - NULL 체크 추가
+        if (this.brightnessSlider) {
+            this.brightnessSlider.addEventListener('input', (e) => {
+                const brightness = parseFloat(e.target.value);
+                this.sceneManager.renderer.toneMappingExposure = brightness;
+            });
+        }
+        
+        // Fullscreen - NULL 체크 추가
+        if (this.fullscreenBtn) {
+            this.fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
+        }
         
         // Hotspot Click Handler
         this.setupHotspotHandler();
     }
     
     updateActiveToggle(activeBtn) {
-        this.modelToggleBtns.forEach(btn => btn.classList.remove('active'));
-        activeBtn.classList.add('active');
+        if (this.modelToggleBtns) {
+            this.modelToggleBtns.forEach(btn => btn.classList.remove('active'));
+        }
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+        }
     }
     
     selectModelByType(modelType) {
@@ -161,15 +196,30 @@ export class UIControllerImproved {
     }
     
     showModelSelector() {
-        this.modelSelector.style.display = 'flex';
-        this.leftPanel.style.display = 'none';
-        this.rightPanel.style.display = 'none';
-        document.getElementById('bottom-controls').style.display = 'none';
+        if (this.modelSelector) {
+            this.modelSelector.style.display = 'flex';
+        }
+        if (this.leftPanel) {
+            this.leftPanel.style.display = 'none';
+        }
+        if (this.rightPanel) {
+            this.rightPanel.style.display = 'none';
+        }
+        
+        const bottomControls = document.getElementById('bottom-controls');
+        if (bottomControls) {
+            bottomControls.style.display = 'none';
+        }
         
         this.loadModelList();
     }
     
     loadModelList() {
+        if (!this.modelList) {
+            console.error('[UIController] modelList 요소를 찾을 수 없습니다');
+            return;
+        }
+        
         if (!CONFIG.models || CONFIG.models.length === 0) {
             this.modelList.innerHTML = '<p style="color: #ff6b6b;">사용 가능한 모델이 없습니다.</p>';
             return;
@@ -190,7 +240,9 @@ export class UIControllerImproved {
     }
     
     async selectModel(model) {
-        this.modelSelector.style.display = 'none';
+        if (this.modelSelector) {
+            this.modelSelector.style.display = 'none';
+        }
         this.currentModel = model;
         
         const startTime = performance.now();
@@ -209,9 +261,17 @@ export class UIControllerImproved {
             this.updateModelInfo(gltf.userData.modelInfo, model.name, loadDuration);
             
             // UI 표시
-            this.leftPanel.style.display = 'flex';
-            this.rightPanel.style.display = 'flex';
-            document.getElementById('bottom-controls').style.display = 'flex';
+            if (this.leftPanel) {
+                this.leftPanel.style.display = 'flex';
+            }
+            if (this.rightPanel) {
+                this.rightPanel.style.display = 'flex';
+            }
+            
+            const bottomControls = document.getElementById('bottom-controls');
+            if (bottomControls) {
+                bottomControls.style.display = 'flex';
+            }
             
             // 해당 모델의 토글 버튼 활성화
             const modelTypeMap = {
@@ -233,32 +293,42 @@ export class UIControllerImproved {
     }
     
     updateModelInfo(info, modelName, loadDuration) {
-        this.modelName.textContent = modelName;
-        this.meshCount.textContent = info.meshCount;
-        this.vertexCount.textContent = info.vertexCount.toLocaleString();
-        this.triangleCount.textContent = info.triangleCount.toLocaleString();
-        this.hotspotCount.textContent = info.hotspots.length;
-        this.loadTime.textContent = `${loadDuration}s`;
+        // NULL 체크 추가
+        if (this.modelName) this.modelName.textContent = modelName;
+        if (this.meshCount) this.meshCount.textContent = info.meshCount;
+        if (this.vertexCount) this.vertexCount.textContent = info.vertexCount.toLocaleString();
+        if (this.triangleCount) this.triangleCount.textContent = info.triangleCount.toLocaleString();
+        if (this.hotspotCount) this.hotspotCount.textContent = info.hotspots.length;
+        if (this.loadTime) this.loadTime.textContent = `${loadDuration}s`;
         
         // 카메라 뷰 옵션 업데이트
-        this.cameraView.innerHTML = '<option value="default">기본 뷰</option>';
-        
-        const gltfCameras = this.modelLoader.getCameras();
-        if (gltfCameras && gltfCameras.length > 0) {
-            gltfCameras.forEach((camera, index) => {
-                const option = document.createElement('option');
-                option.value = `gltf_${index}`;
-                option.textContent = camera.name || `카메라 ${index + 1}`;
-                this.cameraView.appendChild(option);
-            });
+        if (this.cameraView) {
+            this.cameraView.innerHTML = '<option value="default">기본 뷰</option>';
+            
+            const gltfCameras = this.modelLoader.getCameras();
+            if (gltfCameras && gltfCameras.length > 0) {
+                gltfCameras.forEach((camera, index) => {
+                    const option = document.createElement('option');
+                    option.value = `gltf_${index}`;
+                    option.textContent = camera.name || `카메라 ${index + 1}`;
+                    this.cameraView.appendChild(option);
+                });
+            }
         }
         
         // 애니메이션 컨트롤 표시/숨김
         const hasAnimations = this.animationController.hasAnimations();
-        document.querySelector('.animation-controls').style.display = hasAnimations ? 'flex' : 'none';
-        document.querySelector('.timeline-container').style.display = hasAnimations ? 'flex' : 'none';
+        const animationControls = document.querySelector('.animation-controls');
+        const timelineContainer = document.querySelector('.timeline-container');
         
-        if (hasAnimations) {
+        if (animationControls) {
+            animationControls.style.display = hasAnimations ? 'flex' : 'none';
+        }
+        if (timelineContainer) {
+            timelineContainer.style.display = hasAnimations ? 'flex' : 'none';
+        }
+        
+        if (hasAnimations && this.timelineSlider) {
             this.timelineSlider.max = Math.floor(this.animationController.duration * this.animationController.fps);
         }
         
@@ -270,15 +340,25 @@ export class UIControllerImproved {
     }
     
     toggleLeftPanel() {
+        if (!this.leftPanel) return;
+        
         this.leftPanelCollapsed = !this.leftPanelCollapsed;
         this.leftPanel.classList.toggle('collapsed', this.leftPanelCollapsed);
-        this.leftPanelToggle.textContent = this.leftPanelCollapsed ? '▶' : '◀';
+        
+        if (this.leftPanelToggle) {
+            this.leftPanelToggle.textContent = this.leftPanelCollapsed ? '▶' : '◀';
+        }
     }
     
     toggleRightPanel() {
+        if (!this.rightPanel) return;
+        
         this.rightPanelCollapsed = !this.rightPanelCollapsed;
         this.rightPanel.classList.toggle('collapsed', this.rightPanelCollapsed);
-        this.rightPanelToggle.textContent = this.rightPanelCollapsed ? '◀' : '▶';
+        
+        if (this.rightPanelToggle) {
+            this.rightPanelToggle.textContent = this.rightPanelCollapsed ? '◀' : '▶';
+        }
     }
     
     setupHotspotHandler() {
@@ -291,10 +371,12 @@ export class UIControllerImproved {
     }
     
     showHotspotDetail(hotspot) {
+        if (!this.hotspotDetail) return;
+        
         this.selectedHotspot = hotspot;
         
         // 우측 패널 열기
-        if (this.rightPanelCollapsed) {
+        if (this.rightPanelCollapsed && this.rightPanel) {
             this.toggleRightPanel();
         }
         
@@ -355,24 +437,34 @@ export class UIControllerImproved {
         const currentTime = performance.now();
         if (currentTime >= this.lastTime + 1000) {
             this.fps = this.frameCount;
-            this.fpsDisplay.textContent = this.fps;
+            if (this.fpsDisplay) {
+                this.fpsDisplay.textContent = this.fps;
+            }
             this.frameCount = 0;
             this.lastTime = currentTime;
         }
     }
     
     updateAnimationFrame(frame) {
-        this.timelineSlider.value = frame;
+        if (this.timelineSlider) {
+            this.timelineSlider.value = frame;
+        }
         
-        const totalFrames = parseInt(this.timelineSlider.max);
-        const currentTime = this.formatTime(frame / this.animationController.fps);
-        const totalTime = this.formatTime(totalFrames / this.animationController.fps);
-        
-        this.timelineDisplay.textContent = `${currentTime} / ${totalTime}`;
+        if (this.timelineSlider && this.timelineDisplay) {
+            const totalFrames = parseInt(this.timelineSlider.max);
+            const currentTime = this.formatTime(frame / this.animationController.fps);
+            const totalTime = this.formatTime(totalFrames / this.animationController.fps);
+            
+            this.timelineDisplay.textContent = `${currentTime} / ${totalTime}`;
+        }
         
         // Update timeline progress bar
-        const progress = (frame / totalFrames) * 100;
-        document.querySelector('.timeline-progress').style.width = `${progress}%`;
+        const progressBar = document.querySelector('.timeline-progress');
+        if (progressBar && this.timelineSlider) {
+            const totalFrames = parseInt(this.timelineSlider.max);
+            const progress = (frame / totalFrames) * 100;
+            progressBar.style.width = `${progress}%`;
+        }
     }
     
     formatTime(seconds) {
@@ -384,75 +476,14 @@ export class UIControllerImproved {
     toggleFullscreen() {
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen();
-            this.fullscreenBtn.innerHTML = '<span>⛶</span>';
+            if (this.fullscreenBtn) {
+                this.fullscreenBtn.innerHTML = '<span>⛕</span>';
+            }
         } else {
             document.exitFullscreen();
-            this.fullscreenBtn.innerHTML = '<span>⛶</span>';
+            if (this.fullscreenBtn) {
+                this.fullscreenBtn.innerHTML = '<span>⛶</span>';
+            }
         }
     }
 }
-
-// CSS 추가 스타일 (hotspot-detail 관련)
-const additionalStyles = `
-<style>
-.hotspot-detail-content {
-    padding: 20px;
-}
-
-.hotspot-detail-content h4 {
-    font-size: 18px;
-    margin-bottom: 20px;
-    color: var(--accent-blue);
-}
-
-.hotspot-info {
-    margin-bottom: 30px;
-}
-
-.info-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 10px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.info-label {
-    color: var(--text-secondary);
-    font-size: 14px;
-}
-
-.info-value {
-    color: var(--text-primary);
-    font-weight: 500;
-    font-size: 14px;
-}
-
-.hotspot-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-
-.action-btn {
-    width: 100%;
-    padding: 12px;
-    background: rgba(0, 123, 255, 0.1);
-    border: 1px solid var(--accent-blue);
-    border-radius: 8px;
-    color: var(--accent-blue);
-    cursor: pointer;
-    font-size: 14px;
-    transition: all 0.3s ease;
-}
-
-.action-btn:hover {
-    background: rgba(0, 123, 255, 0.2);
-}
-
-.control-btn.active,
-.control-btn-sm.active {
-    background: var(--accent-blue);
-    border-color: var(--accent-blue);
-}
-</style>
-`;

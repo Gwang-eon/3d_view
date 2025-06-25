@@ -4,7 +4,7 @@
 import { CONFIG } from './config.js';
 import { SceneManager } from './SceneManager.js';
 import { ModelLoader } from './ModelLoader.js';
-import { UIControllerImproved as UIController } from './UIController-improved.js';
+import { UIController } from './UIController.js';  // 기본 UIController 사용
 import { HotspotManager } from './HotspotManager.js';
 import { AnimationController } from './AnimationController.js';
 import { ViewerInitializer } from './viewer-init.js';
