@@ -1,4 +1,6 @@
 import { CONFIG } from './config.js';
+import { CameraTransitionManager } from './CameraTransitionManager.js'; 
+
 
 export class SceneManager {
     constructor() {
@@ -11,7 +13,8 @@ export class SceneManager {
         this.currentModel = null;
         this.lights = {};
         this.gltfCameras = [];
-        
+        this.cameraTransition = null; // 카메라 전환 매니저
+
         this.init();
     }
     
@@ -73,6 +76,7 @@ export class SceneManager {
         Object.assign(this.controls, CONFIG.controls);
         this.controls.target.set(0, 0, 0);
         this.controls.update();
+        this.cameraTransition = new CameraTransitionManager(this.camera, this.controls);
     }
     
     createLights() {
@@ -159,22 +163,50 @@ export class SceneManager {
         this.setEnvironmentVisible(!this.gridHelper.visible);
     }
     
-    setCameraView(viewName) {
+    setCameraView(viewName, options = {}) {
+        // 기본 옵션 설정
+        const defaultOptions = {
+            duration: 1.5,        // 전환 시간 (초)
+            easeType: 'easeInOutCubic'  // 이징 타입
+        };
+        const transitionOptions = { ...defaultOptions, ...options };
+        
         if (viewName === 'default') {
-            // 기본 카메라 뷰로 리셋
-            this.camera.position.copy(this.defaultCameraPosition);
-            this.camera.lookAt(0, 0, 0);
-            this.controls.target.set(0, 0, 0);
-            this.controls.update();
+            // 기본 카메라 뷰로 부드럽게 전환
+            if (this.cameraTransition) {
+                this.cameraTransition.transitionTo(
+                    this.defaultCameraPosition,
+                    null,
+                    CONFIG.camera.fov,
+                    {
+                        ...transitionOptions,
+                        lookAt: new THREE.Vector3(0, 0, 0),
+                        onComplete: () => {
+                            console.log('[SceneManager] 기본 뷰로 전환 완료');
+                        }
+                    }
+                );
+            } else {
+                // 폴백: 즉시 이동
+                this.camera.position.copy(this.defaultCameraPosition);
+                this.camera.lookAt(0, 0, 0);
+                this.controls.target.set(0, 0, 0);
+                this.controls.update();
+            }
         } else if (viewName.startsWith('gltf_')) {
-            // GLTF 카메라 뷰 적용
+            // GLTF 카메라 뷰로 부드럽게 전환
             const cameraIndex = parseInt(viewName.replace('gltf_', ''));
-            const gltfCameras = this.gltfCameras || [];
+            const gltfCamera = this.gltfCameras[cameraIndex];
             
-            if (gltfCameras[cameraIndex]) {
-                const gltfCamera = gltfCameras[cameraIndex];
-                
-                // GLTF 카메라의 속성을 현재 카메라에 복사
+            if (gltfCamera && this.cameraTransition) {
+                this.cameraTransition.transitionToGLTFCamera(gltfCamera, {
+                    ...transitionOptions,
+                    onComplete: () => {
+                        console.log(`[SceneManager] GLTF 카메라 ${cameraIndex}로 전환 완료`);
+                    }
+                });
+            } else if (gltfCamera) {
+                // 폴백: 즉시 이동
                 if (gltfCamera.isPerspectiveCamera) {
                     this.camera.fov = gltfCamera.fov;
                     this.camera.aspect = gltfCamera.aspect;
@@ -183,20 +215,87 @@ export class SceneManager {
                     this.camera.updateProjectionMatrix();
                 }
                 
-                // 카메라 위치와 회전 적용
                 this.camera.position.copy(gltfCamera.position);
                 this.camera.rotation.copy(gltfCamera.rotation);
                 this.camera.quaternion.copy(gltfCamera.quaternion);
                 
-                // 컨트롤 타겟 업데이트 (카메라가 바라보는 방향)
                 const direction = new THREE.Vector3(0, 0, -1);
                 direction.applyQuaternion(gltfCamera.quaternion);
                 const target = gltfCamera.position.clone().add(direction);
                 this.controls.target.copy(target);
                 this.controls.update();
             }
+        } else if (viewName === 'focus-model' && this.currentModel) {
+            // 현재 모델에 포커스
+            if (this.cameraTransition) {
+                this.cameraTransition.focusOnObject(this.currentModel, transitionOptions);
+            }
+        } else if (viewName.startsWith('orbit-')) {
+            // 모델 주위를 도는 뷰 (orbit-0, orbit-90, orbit-180, orbit-270)
+            const angle = parseInt(viewName.replace('orbit-', '')) * (Math.PI / 180);
+            if (this.currentModel && this.cameraTransition) {
+                this.cameraTransition.orbitAroundModel(this.currentModel, {
+                    ...transitionOptions,
+                    angle: angle
+                });
+            }
         }
     }
+
+    // 5. 추가 유틸리티 메서드들:
+
+// 카메라 상태 저장
+saveCameraState() {
+    if (this.cameraTransition) {
+        return this.cameraTransition.saveState();
+    }
+    return null;
+}
+
+// 저장된 카메라 상태로 복원
+restoreCameraState(state, options = {}) {
+    if (this.cameraTransition && state) {
+        return this.cameraTransition.restoreState(state, options);
+    }
+}
+
+// 특정 핫스팟으로 카메라 이동
+focusOnHotspot(hotspot, options = {}) {
+    if (!this.cameraTransition || !hotspot.position) return;
+    
+    const worldPosition = hotspot.position.clone();
+    if (this.currentModel) {
+        worldPosition.applyMatrix4(this.currentModel.matrixWorld);
+    }
+    
+    // 핫스팟에서 약간 떨어진 위치로 카메라 이동
+    const offset = new THREE.Vector3(5, 5, 5);
+    const cameraPosition = worldPosition.clone().add(offset);
+    
+    return this.cameraTransition.transitionTo(
+        cameraPosition,
+        null,
+        this.camera.fov,
+        {
+            duration: 1.0,
+            lookAt: worldPosition,
+            ...options
+        }
+    );
+}
+
+// 카메라 전환 설정 변경
+setCameraTransitionDuration(duration) {
+    if (this.cameraTransition) {
+        this.cameraTransition.setTransitionDuration(duration);
+    }
+}
+
+setCameraTransitionEasing(easeType) {
+    if (this.cameraTransition) {
+        this.cameraTransition.setEaseType(easeType);
+    }
+}
     
     setGLTFCameras(cameras) {
         this.gltfCameras = cameras;

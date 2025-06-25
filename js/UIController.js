@@ -1,4 +1,4 @@
-// UIController.js - 수정 버전
+// UIController.js - viewer.html과 index.html 모두 호환
 import { CONFIG } from './config.js';
 
 export class UIController {
@@ -16,6 +16,60 @@ export class UIController {
         this.init();
     }
     
+    setupCameraControls() {
+        // 모델 포커스 버튼
+        const focusModelBtn = document.getElementById('focus-model');
+        if (focusModelBtn) {
+            focusModelBtn.addEventListener('click', () => {
+                this.sceneManager.setCameraView('focus-model');
+            });
+        }
+        
+        // 회전 뷰 버튼 (클릭할 때마다 90도씩 회전)
+        let currentOrbitAngle = 0;
+        const orbitViewBtn = document.getElementById('orbit-view');
+        if (orbitViewBtn) {
+            orbitViewBtn.addEventListener('click', () => {
+                currentOrbitAngle = (currentOrbitAngle + 90) % 360;
+                this.sceneManager.setCameraView(`orbit-${currentOrbitAngle}`);
+            });
+        }
+        
+        // 카메라 전환 속도 설정
+        const cameraSpeed = document.getElementById('camera-speed');
+        if (cameraSpeed) {
+            cameraSpeed.addEventListener('change', (e) => {
+                const duration = parseFloat(e.target.value);
+                this.sceneManager.setCameraTransitionDuration(duration);
+            });
+        }
+        
+        // 키보드 단축키
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            
+            switch(e.key) {
+                case '1':
+                    this.sceneManager.setCameraView('default');
+                    break;
+                case '2':
+                    this.sceneManager.setCameraView('focus-model');
+                    break;
+                case '3':
+                    if (this.sceneManager.gltfCameras.length > 0) {
+                        this.sceneManager.setCameraView('gltf_0');
+                    }
+                    break;
+                case 'r':
+                case 'R':
+                    // 회전 뷰
+                    currentOrbitAngle = (currentOrbitAngle + 90) % 360;
+                    this.sceneManager.setCameraView(`orbit-${currentOrbitAngle}`);
+                    break;
+            }
+        });
+    }
+
     init() {
         console.log('[UIController] 초기화 시작');
         
@@ -39,24 +93,26 @@ export class UIController {
         this.modelSelector = document.getElementById('model-selector');
         this.modelList = document.getElementById('model-list');
         this.changeModelBtn = document.getElementById('changeModel');
-        this.controlPanel = document.getElementById('control-panel');
-        this.infoPanel = document.getElementById('info-panel');
         
-        // 컨트롤 요소들
-        this.playBtn = document.getElementById('playBtn');
-        this.pauseBtn = document.getElementById('pauseBtn');
-        this.resetBtn = document.getElementById('resetBtn');
-        this.frameSlider = document.getElementById('frameSlider');
-        this.frameDisplay = document.getElementById('frameDisplay');
-        this.toggleHotspotsBtn = document.getElementById('toggleHotspots');
-        this.toggleGridBtn = document.getElementById('toggleGrid');
-        this.cameraView = document.getElementById('cameraView');
+        // viewer.html 호환성을 위한 대체 요소 확인
+        this.controlPanel = document.getElementById('control-panel') || document.getElementById('bottom-controls');
+        this.infoPanel = document.getElementById('info-panel') || document.getElementById('left-panel');
         
-        // 정보 표시 요소들
-        this.meshCount = document.getElementById('meshCount');
-        this.vertexCount = document.getElementById('vertexCount');
-        this.triangleCount = document.getElementById('triangleCount');
-        this.hotspotCount = document.getElementById('hotspotCount');
+        // 컨트롤 요소들 - viewer.html 호환성 추가
+        this.playBtn = document.getElementById('playBtn') || document.getElementById('play-btn');
+        this.pauseBtn = document.getElementById('pauseBtn') || document.getElementById('pause-btn');
+        this.resetBtn = document.getElementById('resetBtn') || document.getElementById('stop-btn');
+        this.frameSlider = document.getElementById('frameSlider') || document.getElementById('timeline-slider');
+        this.frameDisplay = document.getElementById('frameDisplay') || document.getElementById('timeline-display');
+        this.toggleHotspotsBtn = document.getElementById('toggleHotspots') || document.getElementById('toggle-hotspots');
+        this.toggleGridBtn = document.getElementById('toggleGrid') || document.getElementById('toggle-grid');
+        this.cameraView = document.getElementById('cameraView') || document.getElementById('camera-view');
+        
+        // 정보 표시 요소들 - viewer.html 호환성 추가
+        this.meshCount = document.getElementById('meshCount') || document.getElementById('mesh-count');
+        this.vertexCount = document.getElementById('vertexCount') || document.getElementById('vertex-count');
+        this.triangleCount = document.getElementById('triangleCount') || document.getElementById('triangle-count');
+        this.hotspotCount = document.getElementById('hotspotCount') || document.getElementById('hotspot-count');
         this.fpsDisplay = document.getElementById('fps');
         
         // 로딩/에러 요소들
@@ -67,9 +123,13 @@ export class UIController {
     verifyDOMElements() {
         const criticalElements = {
             'modelSelector': this.modelSelector,
-            'modelList': this.modelList,
+            'modelList': this.modelList
+        };
+        
+        const optionalElements = {
             'controlPanel': this.controlPanel,
-            'infoPanel': this.infoPanel
+            'infoPanel': this.infoPanel,
+            'changeModelBtn': this.changeModelBtn
         };
         
         const missing = [];
@@ -81,10 +141,18 @@ export class UIController {
         
         if (missing.length > 0) {
             console.error('[UIController] 필수 DOM 요소 누락:', missing);
-            console.log('[UIController] 현재 DOM 상태:');
-            missing.forEach(name => {
-                console.log(`  - ${name}: ${document.getElementById(name.replace(/([A-Z])/g, '-$1').toLowerCase()) ? '존재(다른 ID)' : '없음'}`);
-            });
+        }
+        
+        // 선택적 요소는 경고만
+        const missingOptional = [];
+        Object.entries(optionalElements).forEach(([name, element]) => {
+            if (!element) {
+                missingOptional.push(name);
+            }
+        });
+        
+        if (missingOptional.length > 0) {
+            console.warn('[UIController] 선택적 DOM 요소 누락:', missingOptional);
         }
     }
 
@@ -114,13 +182,17 @@ export class UIController {
         
         // 토글 버튼들
         if (this.toggleHotspotsBtn) {
+            // 핫스팟은 기본적으로 보이므로 active 클래스 추가
+            this.toggleHotspotsBtn.classList.add('active');
             this.toggleHotspotsBtn.addEventListener('click', () => {
                 this.hotspotManager.toggleVisibility();
+                this.toggleHotspotsBtn.classList.toggle('active');
             });
         }
         if (this.toggleGridBtn) {
             this.toggleGridBtn.addEventListener('click', () => {
                 this.sceneManager.toggleGrid();
+                this.toggleGridBtn.classList.toggle('active');
             });
         }
         
@@ -133,11 +205,38 @@ export class UIController {
         
         // 슬라이더들
         this.setupSliderListeners();
+        
+        // viewer.html 추가 컨트롤들
+        const playbackSpeed = document.getElementById('playback-speed');
+        if (playbackSpeed) {
+            playbackSpeed.addEventListener('change', (e) => {
+                this.animationController.setTimeScale(parseFloat(e.target.value));
+            });
+        }
+        
+        const loopBtn = document.getElementById('loop-btn');
+        if (loopBtn) {
+            loopBtn.addEventListener('click', () => {
+                loopBtn.classList.toggle('active');
+                // TODO: 루프 모드 토글 구현
+            });
+        }
+        
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
+        if (fullscreenBtn) {
+            fullscreenBtn.addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen();
+                } else {
+                    document.exitFullscreen();
+                }
+            });
+        }
     }
     
     setupSliderListeners() {
-        // 밝기 슬라이더
-        const brightnessSlider = document.getElementById('brightnessSlider');
+        // 밝기 슬라이더 - viewer.html과 index.html 모두 지원
+        const brightnessSlider = document.getElementById('brightnessSlider') || document.getElementById('brightness-slider');
         if (brightnessSlider) {
             brightnessSlider.addEventListener('input', (e) => {
                 const value = parseFloat(e.target.value);
@@ -176,6 +275,13 @@ export class UIController {
         if (this.controlPanel) this.controlPanel.style.display = 'none';
         if (this.infoPanel) this.infoPanel.style.display = 'none';
         if (this.changeModelBtn) this.changeModelBtn.style.display = 'none';
+        
+        // viewer.html용 추가 요소들 숨기기
+        const bottomControls = document.getElementById('bottom-controls');
+        if (bottomControls) bottomControls.style.display = 'none';
+        
+        const rightPanel = document.getElementById('right-panel');
+        if (rightPanel) rightPanel.style.display = 'none';
         
         // 모델 목록 로드
         this.loadModelList();
@@ -233,6 +339,8 @@ export class UIController {
             this.modelSelector.style.display = 'none';
         }
         
+        const startTime = performance.now();
+        
         try {
             // 파일명 확인
             if (!model.fileName) {
@@ -246,13 +354,24 @@ export class UIController {
             // 모델 로드
             const gltf = await this.modelLoader.loadGLTF(modelPath);
             
-            // 모델 정보 업데이트
-            this.updateModelInfo(gltf.userData.modelInfo);
+            // 로드 시간 계산
+            const loadEndTime = performance.now();
+            const loadDuration = ((loadEndTime - startTime) / 1000).toFixed(2);
+            
+            // 모델 정보 업데이트 - 모델 이름과 로드 시간도 전달
+            this.updateModelInfo(gltf.userData.modelInfo, model.name, loadDuration);
             
             // UI 패널 표시
             if (this.controlPanel) this.controlPanel.style.display = 'block';
             if (this.infoPanel) this.infoPanel.style.display = 'block';
             if (this.changeModelBtn) this.changeModelBtn.style.display = 'block';
+            
+            // viewer.html용 추가 요소들 표시
+            const bottomControls = document.getElementById('bottom-controls');
+            if (bottomControls) bottomControls.style.display = 'flex';
+            
+            const rightPanel = document.getElementById('right-panel');
+            if (rightPanel) rightPanel.style.display = 'flex';
             
             console.log('[UIController] 모델 로드 완료');
             
@@ -267,10 +386,22 @@ export class UIController {
         }
     }
 
-    updateModelInfo(info) {
+    updateModelInfo(info, modelName = '', loadDuration = '') {
         console.log('[UIController] 모델 정보 업데이트:', info);
         
         // 정보 표시 업데이트
+        // viewer.html에는 model-name도 있을 수 있음
+        const modelNameEl = document.getElementById('model-name');
+        if (modelNameEl && modelName) {
+            modelNameEl.textContent = modelName;
+        }
+        
+        // 로드 시간 표시
+        const loadTimeEl = document.getElementById('load-time');
+        if (loadTimeEl && loadDuration) {
+            loadTimeEl.textContent = `${loadDuration}s`;
+        }
+        
         if (this.meshCount) this.meshCount.textContent = info.meshCount;
         if (this.vertexCount) this.vertexCount.textContent = info.vertexCount.toLocaleString();
         if (this.triangleCount) this.triangleCount.textContent = info.triangleCount.toLocaleString();
@@ -293,16 +424,16 @@ export class UIController {
         }
 
         // 애니메이션 컨트롤 표시/숨김
-        const animControls = document.getElementById('animation-controls');
-        const frameControls = document.getElementById('frame-controls');
+        const animControls = document.getElementById('animation-controls') || document.querySelector('.animation-controls');
+        const frameControls = document.getElementById('frame-controls') || document.querySelector('.timeline-container');
         
         if (this.animationController.hasAnimations()) {
-            if (animControls) animControls.style.display = 'block';
-            if (frameControls) frameControls.style.display = 'block';
+            if (animControls) animControls.style.display = animControls.classList ? 'flex' : 'block';
+            if (frameControls) frameControls.style.display = frameControls.classList ? 'flex' : 'block';
             
             // 프레임 슬라이더 최대값 설정
             if (this.frameSlider) {
-                const maxFrames = Math.floor(this.animationController.duration * this.animationController.fps);
+                const maxFrames = this.animationController.getMaxFrames();
                 this.frameSlider.max = maxFrames;
             }
         } else {
@@ -340,7 +471,20 @@ export class UIController {
             this.frameSlider.value = frame;
         }
         if (this.frameDisplay) {
-            this.frameDisplay.textContent = frame;
+            // viewer.html의 timeline-display 형식 지원
+            if (this.frameDisplay.id === 'timeline-display' && this.animationController) {
+                const currentTime = frame / this.animationController.fps;
+                const totalTime = this.animationController.getDuration();
+                const formatTime = (seconds) => {
+                    const mins = Math.floor(seconds / 60);
+                    const secs = Math.floor(seconds % 60);
+                    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                };
+                this.frameDisplay.textContent = `${formatTime(currentTime)} / ${formatTime(totalTime)}`;
+            } else {
+                // 기본 형식 (index.html)
+                this.frameDisplay.textContent = frame;
+            }
         }
     }
 }

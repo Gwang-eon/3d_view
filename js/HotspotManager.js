@@ -100,6 +100,34 @@ export class HotspotManager {
             content += `<p><strong>${key}:</strong> ${value}</p>`;
         });
         
+        // 핫스팟으로 카메라 포커스 옵션 추가
+        const focusButton = document.createElement('button');
+        focusButton.textContent = '📷 카메라 포커스';
+        focusButton.style.cssText = `
+            margin-top: 10px;
+            width: 100%;
+            padding: 8px;
+            background: #007bff;
+            border: none;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        `;
+        focusButton.onclick = () => {
+            if (window.app && window.app.sceneManager) {
+                window.app.sceneManager.focusOnHotspot(hotspot, {
+                    duration: 1.2,
+                    onComplete: () => {
+                        console.log(`핫스팟 '${hotspot.name}'으로 카메라 이동 완료`);
+                    }
+                });
+            }
+            infoPanel.remove();
+        };
+        
+        infoPanel.appendChild(focusButton);
+    }
+        
         const closeButton = document.createElement('button');
         closeButton.textContent = '닫기';
         closeButton.style.cssText = `margin-top: 15px; width: 100%; padding: 8px; background: #007bff; border: none; color: white; border-radius: 5px; cursor: pointer;`;

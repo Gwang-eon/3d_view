@@ -329,7 +329,7 @@ export class UIControllerImproved {
         }
         
         if (hasAnimations && this.timelineSlider) {
-            this.timelineSlider.max = Math.floor(this.animationController.duration * this.animationController.fps);
+            this.timelineSlider.max = this.animationController.getMaxFrames();
         }
         
         // 핫스팟 생성

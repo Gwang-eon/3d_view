@@ -63,6 +63,26 @@
                     <select id="camera-view" class="camera-select" title="카메라 뷰">
                         <option value="default">기본 뷰</option>
                     </select>
+                    
+                    <!-- 추가 카메라 컨트롤 -->
+                    <div class="camera-preset-buttons">
+                        <button class="view-btn" id="focus-model" title="모델 포커스">
+                            <span>🎯</span>
+                        </button>
+                        <button class="view-btn" id="orbit-view" title="회전 뷰">
+                            <span>🔄</span>
+                        </button>
+                    </div>
+                    
+                    <!-- 카메라 전환 속도 -->
+                    <div class="camera-speed-control">
+                        <label>전환 속도:</label>
+                        <select id="camera-speed" class="camera-select-sm">
+                            <option value="0.5">빠름</option>
+                            <option value="1.5" selected>보통</option>
+                            <option value="3.0">느림</option>
+                        </select>
+                    </div>
                 </div>
                 
                 <!-- FPS 표시 -->
