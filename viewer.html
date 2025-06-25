@@ -438,7 +438,164 @@
             }
         };
     </script>
+    <!-- viewer.html의 </body> 태그 바로 위에 다음 코드를 추가하세요 -->
+
+<!-- DOM 요소 매핑 및 호환성 레이어 -->
+<script>
+    // DOM 요소 호환성 레이어
+    (function() {
+        console.log('🔧 viewer.html DOM 호환성 레이어 활성화');
+        
+        // 1. 필수 DOM 요소 확인 및 생성
+        function ensureElements() {
+            // model-selector 생성 (숨김 상태)
+            if (!document.getElementById('model-selector')) {
+                const modelSelector = document.createElement('div');
+                modelSelector.id = 'model-selector';
+                modelSelector.className = 'model-selector';
+                modelSelector.style.display = 'none'; // 기본적으로 숨김
+                modelSelector.innerHTML = `
+                    <div class="selector-container">
+                        <h1>옹벽 모델 선택</h1>
+                        <p>확인하실 옹벽 모델을 선택하세요</p>
+                        <div id="model-list" class="model-list"></div>
+                    </div>
+                `;
+                document.body.appendChild(modelSelector);
+            }
+            
+            // loading 요소 확인
+            if (!document.getElementById('loading')) {
+                const loading = document.querySelector('.loading-overlay');
+                if (loading) {
+                    loading.id = 'loading';
+                } else {
+                    // 새로 생성
+                    const newLoading = document.createElement('div');
+                    newLoading.id = 'loading';
+                    newLoading.className = 'loading-overlay';
+                    newLoading.style.display = 'none';
+                    newLoading.innerHTML = `
+                        <div class="loading-spinner"></div>
+                        <div>모델 로딩 중...</div>
+                        <div class="progress-text">0%</div>
+                    `;
+                    document.body.appendChild(newLoading);
+                }
+            }
+            
+            // error 요소 확인
+            if (!document.getElementById('error')) {
+                const error = document.createElement('div');
+                error.id = 'error';
+                error.className = 'error-message';
+                error.style.cssText = 'display: none; position: fixed; top: 20px; right: 20px; background: rgba(255,0,0,0.1); color: #ff6b6b; padding: 15px; border-radius: 8px; z-index: 3000;';
+                document.body.appendChild(error);
+            }
+        }
+        
+        // 2. ID 별칭 설정 (improved DOM을 기존 ID로도 접근 가능하게)
+        function setupAliases() {
+            const aliases = {
+                'play-btn': 'play-pause-btn',
+                'pause-btn': 'play-pause-btn',
+                'timeline-slider': 'animation-slider'
+            };
+            
+            Object.entries(aliases).forEach(([oldId, newId]) => {
+                const newElement = document.getElementById(newId);
+                if (newElement && !document.getElementById(oldId)) {
+                    // 참조 생성
+                    Object.defineProperty(window, oldId, {
+                        get: () => document.getElementById(newId)
+                    });
+                }
+            });
+        }
+        
+        // 3. 모델 토글 버튼 클릭 처리
+        function setupModelToggle() {
+            const modelToggleBtns = document.querySelectorAll('.model-toggle-btn');
+            const modelIndexMap = {
+                'block': 0,
+                'cantilever': 1,
+                'mse': 2
+            };
+            
+            modelToggleBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const modelType = this.getAttribute('data-model');
+                    const modelIndex = modelIndexMap[modelType];
+                    
+                    if (modelIndex !== undefined && window.CONFIG && window.CONFIG.models[modelIndex]) {
+                        console.log(`모델 토글: ${modelType} (index: ${modelIndex})`);
+                        
+                        // 모든 버튼 비활성화
+                        modelToggleBtns.forEach(b => b.classList.remove('active'));
+                        // 현재 버튼 활성화
+                        this.classList.add('active');
+                        
+                        // viewerApp이 있으면 모델 로드
+                        if (window.viewerApp && window.viewerApp.uiController) {
+                            window.viewerApp.uiController.selectModel(window.CONFIG.models[modelIndex]);
+                        } else {
+                            console.warn('viewerApp이 아직 초기화되지 않았습니다.');
+                            // URL 파라미터 변경으로 재로드
+                            window.location.href = `viewer.html?model=${modelIndex}`;
+                        }
+                    }
+                });
+            });
+        }
+        
+        // 4. 홈 버튼 처리
+        const homeBtn = document.getElementById('home-btn');
+        if (homeBtn) {
+            homeBtn.addEventListener('click', () => {
+                window.location.href = 'index.html';
+            });
+        }
+        
+        // DOM 준비 시 실행
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                ensureElements();
+                setupAliases();
+                setupModelToggle();
+            });
+        } else {
+            ensureElements();
+            setupAliases();
+            setupModelToggle();
+        }
+        
+        console.log('✅ DOM 호환성 레이어 준비 완료');
+    })();
+</script>
+
+<!-- main.js를 viewer-main.js로 변경 (만약 아직 안했다면) -->
+<script type="module">
+    // URL 파라미터 확인
+    const urlParams = new URLSearchParams(window.location.search);
+    const modelId = urlParams.get('model');
     
+    if (modelId !== null) {
+        console.log(`URL 파라미터 감지: model=${modelId}`);
+        // 해당 모델 버튼 활성화
+        const modelTypes = ['block', 'cantilever', 'mse'];
+        const modelType = modelTypes[parseInt(modelId)];
+        
+        if (modelType) {
+            document.addEventListener('DOMContentLoaded', () => {
+                const btn = document.querySelector(`[data-model="${modelType}"]`);
+                if (btn) {
+                    document.querySelectorAll('.model-toggle-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                }
+            });
+        }
+    }
+</script>
     <!-- 애플리케이션 스크립트 -->
     <script type="module" src="js/viewer-main.js"></script>
 </body>

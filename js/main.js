@@ -30,231 +30,404 @@ async function waitForConfig() {
     return CONFIG;
 }
 
-// 디버깅 헬퍼
-function debugLog(message, data = null) {
-    const timestamp = new Date().toLocaleTimeString();
-    if (data) {
-        console.log(`[${timestamp}] ${message}`, data);
-    } else {
-        console.log(`[${timestamp}] ${message}`);
+// Three.js 로드 확인
+async function waitForThree() {
+    console.log('Three.js 로드 대기 중...');
+    let attempts = 0;
+    
+    while ((!window.THREE || !window.THREE.GLTFLoader || !window.THREE.OrbitControls) && attempts < 20) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
     }
+    
+    if (!window.THREE) {
+        throw new Error('Three.js를 로드할 수 없습니다.');
+    }
+    
+    console.log('Three.js 로드 완료');
+    return true;
+}
+
+// DOM 요소 매핑 수정 - viewer.html의 improved DOM 구조에 맞춤
+// 이 코드를 main.js 파일 상단에 추가하거나, 별도 파일로 만들어 먼저 로드하세요
+
+// DOM 요소 ID 매핑 함수
+function mapDOMElements() {
+    console.log('DOM 요소 매핑 시작...');
+    
+    // viewer.html (improved)의 실제 구조에 맞춰 가상 요소 생성 또는 매핑
+    const mappings = {
+        'model-selector': () => {
+            // 모델 선택 화면 생성
+            const existing = document.getElementById('model-selector');
+            if (existing) return existing;
+            
+            const selector = document.createElement('div');
+            selector.id = 'model-selector';
+            selector.className = 'model-selector';
+            selector.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.95);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+            `;
+            
+            selector.innerHTML = `
+                <div class="selector-container" style="
+                    text-align: center;
+                    padding: 40px;
+                    background: rgba(255, 255, 255, 0.05);
+                    border-radius: 20px;
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    max-width: 800px;
+                    width: 90%;
+                ">
+                    <h1 style="
+                        margin-bottom: 20px;
+                        font-size: 32px;
+                        background: linear-gradient(45deg, #007bff, #00ff88);
+                        -webkit-background-clip: text;
+                        -webkit-text-fill-color: transparent;
+                    ">옹벽 3D 모니터링 시스템</h1>
+                    <p style="margin-bottom: 30px; color: #aaa;">확인하실 옹벽 모델을 선택하세요</p>
+                    <div id="model-list" class="model-list" style="
+                        display: grid;
+                        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                        gap: 20px;
+                        margin-top: 30px;
+                    "></div>
+                </div>
+            `;
+            
+            document.body.appendChild(selector);
+            return selector;
+        },
+        
+        'model-list': () => {
+            const existing = document.getElementById('model-list');
+            if (existing) return existing;
+            
+            // model-selector가 먼저 생성되어야 함
+            const selector = document.getElementById('model-selector') || mappings['model-selector']();
+            const list = selector.querySelector('#model-list');
+            return list;
+        },
+        
+        'canvas-container': () => {
+            // viewer.html에서는 실제로 canvas-container ID가 존재함
+            let container = document.getElementById('canvas-container');
+            if (container) return container;
+            
+            // viewer-container 내부의 canvas-container를 찾음
+            const viewerContainer = document.getElementById('viewer-container');
+            if (viewerContainer) {
+                container = viewerContainer.querySelector('#canvas-container');
+                if (container) return container;
+            }
+            
+            // 없으면 생성
+            container = document.createElement('div');
+            container.id = 'canvas-container';
+            container.style.cssText = 'width: 100%; height: 100%;';
+            
+            if (viewerContainer) {
+                viewerContainer.appendChild(container);
+            } else {
+                document.body.appendChild(container);
+            }
+            
+            return container;
+        },
+        
+        'loading': () => {
+            let loading = document.getElementById('loading');
+            if (loading) return loading;
+            
+            loading = document.createElement('div');
+            loading.id = 'loading';
+            loading.className = 'loading-overlay';
+            loading.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.9);
+                display: none;
+                align-items: center;
+                justify-content: center;
+                z-index: 2000;
+                flex-direction: column;
+            `;
+            loading.innerHTML = `
+                <div class="loading-spinner" style="
+                    width: 50px;
+                    height: 50px;
+                    border: 3px solid rgba(255, 255, 255, 0.1);
+                    border-top: 3px solid #007bff;
+                    border-radius: 50%;
+                    animation: spin 1s linear infinite;
+                    margin-bottom: 20px;
+                "></div>
+                <div style="color: white; font-size: 18px;">모델을 로딩중입니다...</div>
+                <div class="loading-progress" style="margin-top: 20px; text-align: center;">
+                    <div class="progress-bar" style="
+                        width: 200px;
+                        height: 4px;
+                        background: rgba(255, 255, 255, 0.1);
+                        border-radius: 2px;
+                        overflow: hidden;
+                    ">
+                        <div id="progress-fill" class="progress-fill" style="
+                            width: 0%;
+                            height: 100%;
+                            background: #007bff;
+                            transition: width 0.3s ease;
+                        "></div>
+                    </div>
+                    <span id="progress-text" style="color: #aaa; font-size: 14px; margin-top: 10px; display: block;">0%</span>
+                </div>
+            `;
+            
+            // 애니메이션 추가
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `;
+            document.head.appendChild(style);
+            
+            document.body.appendChild(loading);
+            return loading;
+        },
+        
+        'error': () => {
+            let error = document.getElementById('error');
+            if (error) return error;
+            
+            error = document.createElement('div');
+            error.id = 'error';
+            error.className = 'error-message';
+            error.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: rgba(255, 0, 0, 0.1);
+                border: 1px solid rgba(255, 0, 0, 0.3);
+                color: #ff6b6b;
+                padding: 15px 20px;
+                border-radius: 8px;
+                display: none;
+                z-index: 3000;
+                max-width: 400px;
+            `;
+            
+            document.body.appendChild(error);
+            return error;
+        },
+        
+        'bottom-controls': () => {
+            // 기존 bottom-controls가 있으면 반환
+            const existing = document.getElementById('bottom-controls');
+            if (existing) return existing;
+            
+            // 없으면 null 반환 (optional element)
+            return null;
+        },
+        
+        'right-panel': () => {
+            // 기존 right-panel이 있으면 반환
+            const existing = document.getElementById('right-panel');
+            if (existing) return existing;
+            
+            // 없으면 null 반환 (optional element)
+            return null;
+        }
+    };
+    
+    // 모든 매핑 실행
+    Object.keys(mappings).forEach(id => {
+        const element = mappings[id]();
+        if (element) {
+            console.log(`✓ DOM 요소 매핑 완료: #${id}`);
+        } else {
+            console.log(`- DOM 요소 선택적: #${id}`);
+        }
+    });
+    
+    console.log('DOM 요소 매핑 완료!');
+}
+
+// DOMContentLoaded 이벤트에서 실행
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', mapDOMElements);
+} else {
+    // 이미 로드된 경우 즉시 실행
+    mapDOMElements();
+}
+
+// 전역에서 접근 가능하도록 설정
+window.mapDOMElements = mapDOMElements;
+
+// DOM 준비 확인
+function waitForDOM() {
+    return new Promise((resolve) => {
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            resolve();
+        } else {
+            document.addEventListener('DOMContentLoaded', resolve);
+        }
+    });
 }
 
 // 초기화 함수
 async function init() {
-    debugLog('옹벽 3D 뷰어 초기화 시작...');
+    console.log('=== 옹벽 3D 뷰어 초기화 시작 ===');
     
     try {
-        // CONFIG 로드 확인
+        // 1. DOM 준비 대기
+        await waitForDOM();
+        console.log('✓ DOM 준비 완료');
+        
+        // 2. CONFIG 로드 대기
         await waitForConfig();
+        console.log('✓ CONFIG 로드 완료');
         
-        // 브라우저 호환성 체크
-        checkCompatibility();
+        // 3. Three.js 로드 대기
+        await waitForThree();
+        console.log('✓ Three.js 로드 완료');
         
-        // DOM 준비 확인
-        await checkDOMReady();
+        // 4. 필수 DOM 요소 확인
+        const requiredElements = ['model-selector', 'model-list', 'canvas-container'];
+        for (const id of requiredElements) {
+            if (!document.getElementById(id)) {
+                console.warn(`경고: #${id} 요소를 찾을 수 없습니다.`);
+            }
+        }
         
-        // 모듈 초기화
-        debugLog('모듈 초기화 시작');
+        // 5. 모듈 초기화
+        console.log('모듈 초기화 시작...');
         
+        // SceneManager
         sceneManager = new SceneManager();
-        debugLog('SceneManager 생성 완료');
+        console.log('✓ SceneManager 생성 완료');
         
+        // AnimationController
         animationController = new AnimationController();
-        debugLog('AnimationController 생성 완료');
+        console.log('✓ AnimationController 생성 완료');
         
+        // HotspotManager
         hotspotManager = new HotspotManager(sceneManager);
-        debugLog('HotspotManager 생성 완료');
+        console.log('✓ HotspotManager 생성 완료');
         
+        // ModelLoader
         modelLoader = new ModelLoader(sceneManager, animationController);
-        debugLog('ModelLoader 생성 완료');
+        console.log('✓ ModelLoader 생성 완료');
         
-        uiController = new UIController(
-            sceneManager, 
-            modelLoader, 
-            animationController, 
-            hotspotManager
-        );
-        debugLog('UIController 생성 완료');
+        // UIController
+        uiController = new UIController(sceneManager, modelLoader, animationController, hotspotManager);
+        console.log('✓ UIController 생성 완료');
         
-        // 애니메이션 루프 시작
+        // 6. 전역 객체에 할당 (디버깅용)
+        window.viewerApp = {
+            sceneManager,
+            modelLoader,
+            uiController,
+            animationController,
+            hotspotManager,
+            CONFIG
+        };
+        
+        // 7. 애니메이션 루프 시작
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            if (sceneManager && sceneManager.controls) {
+                sceneManager.controls.update();
+            }
+            
+            if (animationController) {
+                animationController.update();
+            }
+            
+            if (hotspotManager) {
+                hotspotManager.updateHotspots();
+            }
+            
+            if (sceneManager) {
+                sceneManager.render();
+            }
+        }
+        
         animate();
+        console.log('✓ 애니메이션 루프 시작됨');
         
         isInitialized = true;
-        debugLog('옹벽 3D 뷰어 초기화 완료');
+        console.log('=== 초기화 완료 ===');
         
-        // 디버그 모드에서 전역 접근 가능하도록
+        // 8. URL 파라미터 확인 (viewer.html인 경우)
+        const urlParams = new URLSearchParams(window.location.search);
+        const modelId = urlParams.get('model');
+        
+        if (modelId !== null) {
+            const index = parseInt(modelId);
+            if (!isNaN(index) && index >= 0 && index < CONFIG.models.length) {
+                console.log(`URL 파라미터로 모델 ${index} 자동 로드`);
+                setTimeout(() => {
+                    uiController.selectModel(CONFIG.models[index]);
+                }, 500);
+            }
+        }
+        
+        // 9. 디버그 정보
         if (CONFIG.debug) {
-            window.wallViewer = {
-                sceneManager,
-                modelLoader,
-                uiController,
-                hotspotManager,
-                animationController,
-                config: CONFIG,
-                // 디버그 함수들
-                debug: {
-                    showModelSelector: () => {
-                        const selector = document.getElementById('model-selector');
-                        if (selector) selector.style.display = 'flex';
-                    },
-                    loadModelList: () => {
-                        uiController.loadModelList();
-                    },
-                    checkElements: () => {
-                        const elements = [
-                            'model-selector',
-                            'model-list',
-                            'control-panel',
-                            'info-panel',
-                            'canvas-container'
-                        ];
-                        elements.forEach(id => {
-                            const el = document.getElementById(id);
-                            console.log(`${id}: ${el ? '✓ 존재' : '✗ 없음'}`);
-                        });
-                    }
-                }
-            };
-            
-            console.log('%c디버그 모드 활성화', 'color: #00ff88; font-size: 16px;');
-            console.log('전역 객체: window.wallViewer');
-            console.log('모델 선택화면 강제 표시: wallViewer.debug.showModelSelector()');
-            console.log('DOM 요소 체크: wallViewer.debug.checkElements()');
+            console.log('디버그 모드 활성화됨');
+            console.log('전역 객체: window.viewerApp');
+            console.log('사용 가능한 명령어:');
+            console.log('- viewerApp.modelLoader.loadModel(0)');
+            console.log('- viewerApp.uiController.selectModel(CONFIG.models[0])');
         }
         
     } catch (error) {
         console.error('초기화 중 오류 발생:', error);
-        showInitError(error.message);
-    }
-}
-
-// DOM 준비 확인
-async function checkDOMReady() {
-    const requiredElements = [
-        'model-selector',
-        'model-list',
-        'canvas-container',
-        'loading',
-        'error'
-    ];
-    
-    for (const id of requiredElements) {
-        const element = document.getElementById(id);
-        if (!element) {
-            console.warn(`필수 요소 '${id}'를 찾을 수 없습니다.`);
+        
+        // 오류 표시
+        const errorDiv = document.getElementById('error');
+        if (errorDiv) {
+            errorDiv.textContent = `초기화 오류: ${error.message}`;
+            errorDiv.style.display = 'block';
         }
+        
+        // 디버그 정보 출력
+        console.log('\n=== 디버그 정보 ===');
+        console.log('CONFIG:', typeof CONFIG);
+        console.log('THREE:', typeof THREE);
+        console.log('DOM Ready:', document.readyState);
+        
+        throw error;
     }
 }
 
-// 브라우저 호환성 체크
-function checkCompatibility() {
-    const issues = [];
-    
-    if (!window.THREE) {
-        issues.push('Three.js가 로드되지 않았습니다.');
-    }
-    if (!window.THREE?.GLTFLoader) {
-        issues.push('GLTFLoader가 로드되지 않았습니다.');
-    }
-    if (!window.THREE?.OrbitControls) {
-        issues.push('OrbitControls가 로드되지 않았습니다.');
-    }
-    
-    // WebGL 지원 체크
-    const canvas = document.createElement('canvas');
-    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-    if (!gl) {
-        issues.push('WebGL을 지원하지 않는 브라우저입니다.');
-    }
-    
-    if (issues.length > 0) {
-        throw new Error('호환성 문제:\n' + issues.join('\n'));
-    }
-    
-    debugLog('브라우저 호환성 체크 통과');
-}
+// 전역 init 함수 노출
+window.init = init;
 
-// 애니메이션 루프
-function animate() {
-    requestAnimationFrame(animate);
-    
-    if (!isInitialized) return;
-    
-    // FPS 업데이트
-    uiController.updateFPS();
-    
-    // 애니메이션 업데이트
-    animationController.update();
-    const frame = animationController.getCurrentFrame();
-    uiController.updateAnimationFrame(frame);
-    
-    // 핫스팟 위치 업데이트
-    hotspotManager.updatePositions();
-    
-    // 렌더링
-    sceneManager.render();
-}
-
-// 초기화 에러 표시
-function showInitError(message) {
-    console.error('초기화 오류:', message);
-    
-    // 에러 요소 찾기 또는 생성
-    let errorDiv = document.getElementById('error');
-    if (!errorDiv) {
-        errorDiv = document.createElement('div');
-        errorDiv.id = 'error';
-        errorDiv.className = 'error';
-        errorDiv.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(220, 53, 69, 0.95);
-            color: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-            z-index: 9999;
-            max-width: 80%;
-            text-align: center;
-        `;
-        document.body.appendChild(errorDiv);
-    }
-    
-    errorDiv.innerHTML = `
-        <h2 style="margin: 0 0 15px 0;">초기화 오류</h2>
-        <p style="margin: 0 0 20px 0;">${message}</p>
-        <button onclick="location.reload()" style="
-            background: white;
-            color: #dc3545;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-        ">새로고침</button>
-    `;
-    errorDiv.style.display = 'block';
-}
-
-// 페이지 로드 완료 시 초기화
+// 자동 초기화
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', async () => {
-        debugLog('DOMContentLoaded 이벤트 발생');
-        await init();
-    });
+    document.addEventListener('DOMContentLoaded', init);
 } else {
-    debugLog('DOM 이미 로드됨, 즉시 초기화');
-    init();
+    // 이미 로드된 경우 약간의 지연 후 실행
+    setTimeout(init, 100);
 }
 
-// 개발자 콘솔 환영 메시지
-console.log('%c옹벽 3D 뷰어', 'font-size: 24px; color: #007bff; font-weight: bold;');
-console.log('%c문제가 발생했나요? F12 콘솔에서 에러를 확인하세요.', 'color: #ff6b6b;');
-
-// 전역 오류 처리
+// 전역 에러 처리
 window.addEventListener('error', function(event) {
     console.error('전역 오류:', event.error);
     console.error('파일:', event.filename);
@@ -264,3 +437,11 @@ window.addEventListener('error', function(event) {
 window.addEventListener('unhandledrejection', function(event) {
     console.error('처리되지 않은 Promise 거부:', event.reason);
 });
+
+// 개발자 콘솔 안내
+console.log('%c옹벽 3D 뷰어', 'font-size: 20px; color: #007bff; font-weight: bold;');
+console.log('버전: 1.0.0');
+console.log('Three.js 버전: r128');
+console.log('문제가 발생하면 F12 콘솔에서 에러를 확인하세요.', 'color: #ff6b6b;');
+
+export { sceneManager, modelLoader, uiController, animationController, hotspotManager };
