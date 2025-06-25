@@ -4,7 +4,7 @@
 
 import { CONFIG } from './config.js';
 import { CONFIG_MANAGER, getConfig, setConfig } from './core/ConfigManager.js';
-import { SceneManager } from './SceneManager copy.js';
+import { SceneManager } from './SceneManager.js';
 import { ModelLoader } from './ModelLoader.js';
 import { UIController } from './UIController.js';
 import { HotspotManager } from './HotspotManager.js';
@@ -322,7 +322,9 @@ class ViewerApplication {
         
         if (modelId !== null) {
             const index = parseInt(modelId, 10);
-            if (!isNaN(index) && index >= 0 && index < CONFIG.models.length) {
+            const models = CONFIG.models || getConfig('models', []);
+            
+            if (!isNaN(index) && index >= 0 && index < models.length) {
                 console.log(`[ViewerApp] URL 파라미터로 모델 ${index} 로드`);
                 
                 // 모델 선택 화면 숨기기

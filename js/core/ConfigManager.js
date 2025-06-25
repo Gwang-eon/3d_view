@@ -53,52 +53,43 @@ export class ConfigManager {
         
         // === 타이밍 관련 설정 (하드코딩 제거) ===
         this.setConfig('timing', {
-            // 기존 하드코딩: 20, 100
             maxRetryAttempts: this.environment === 'development' ? 50 : 10,
             retryDelay: this.environment === 'development' ? 200 : 100,
-            loadingTimeout: 30000, // 30초
-            animationDelay: 16, // 60fps
+            loadingTimeout: 30000,
+            animationDelay: 16,
             transitionDuration: 1000,
             debounceDelay: 300
         });
         
         // === DOM 셀렉터 설정 (하드코딩 제거) ===
         this.setConfig('selectors', {
-            // 필수 요소들
             modelSelector: '#model-selector',
             modelList: '#model-list',
             canvasContainer: '#canvas-container',
             loadingScreen: '#loading',
-            
-            // 뷰어 전용 요소들
             progressBar: '#progress-fill',
             progressText: '#progress-text',
             changeModelBtn: '#changeModel',
-            
-            // 정보 표시 요소들
             meshCount: '#mesh-count',
             vertexCount: '#vertex-count',
             triangleCount: '#triangle-count',
             hotspotCount: '#hotspot-count',
             fpsDisplay: '#fps',
             loadTime: '#load-time',
-            
-            // 컨트롤 요소들
             controlPanel: '#control-panel',
             leftPanel: '#left-panel',
             rightPanel: '#right-panel',
             animationControls: '#animation-controls',
             timelineContainer: '#timeline-container',
-            
-            // 카메라 관련
             cameraView: '#camera-view',
             cameraSpeed: '#camera-speed',
-            cameraEasing: '#camera-easing'
+            cameraEasing: '#camera-easing',
+            error: '#error',
+            loading: '#loading'
         });
         
         // === 3D 씬 설정 ===
         this.setConfig('scene', {
-            // 카메라 설정
             camera: {
                 fov: 75,
                 near: 0.1,
@@ -106,8 +97,6 @@ export class ConfigManager {
                 position: { x: 10, y: 8, z: 15 },
                 target: { x: 0, y: 0, z: 0 }
             },
-            
-            // 조명 설정
             lighting: {
                 ambient: {
                     color: 0x404040,
@@ -118,179 +107,101 @@ export class ConfigManager {
                     intensity: 1.2,
                     position: { x: 10, y: 10, z: 5 },
                     castShadow: true,
-                    shadowMapSize: this.environment === 'development' ? 1024 : 2048
+                    shadowMapSize: this.environment === 'development' ? 2048 : 1024
                 }
             },
-            
-            // 렌더러 설정
             renderer: {
-                antialias: true,
-                shadowMapEnabled: true,
-                shadowMapType: 'PCFSoftShadowMap', // THREE.PCFSoftShadowMap
-                pixelRatio: Math.min(window.devicePixelRatio, 2),
-                backgroundColor: 0x000000,
-                alpha: true
+                antialias: this.environment === 'development',
+                pixelRatio: window.devicePixelRatio || 1,
+                shadowMap: true,
+                toneMapping: true,
+                exposure: 1.0
             },
-            
-            // 컨트롤 설정
-            controls: {
-                enableDamping: true,
-                dampingFactor: 0.05,
-                enableZoom: true,
-                enableRotate: true,
-                enablePan: true,
-                maxDistance: 100,
-                minDistance: 1,
-                maxPolarAngle: Math.PI * 0.8
+            material: {
+                roughness: 0.5,
+                metalness: 0.5,
+                envMapIntensity: 1.0
             }
-        });
-        
-        // === 모델 관련 설정 ===
-        this.setConfig('models', {
-            basePath: 'gltf/',
-            defaultModels: [
-                {
-                    name: '블록 옹벽',
-                    folder: 'Block_Retaining_Wall',
-                    fileName: 'Block_Retaining_Wall.gltf',
-                    icon: '🧱',
-                    description: '프리캐스트 블록을 활용한 옹벽 구조'
-                },
-                {
-                    name: '캔틸레버 옹벽',
-                    folder: 'Cantilever_Retaining_Wall',
-                    fileName: 'Cantilever_Retaining_Wall.gltf',
-                    icon: '🏗️',
-                    description: '캔틸레버식 옹벽 구조'
-                },
-                {
-                    name: 'MSE 옹벽',
-                    folder: 'mse_Retaining_Wall',
-                    fileName: 'mse_Retaining_Wall.gltf',
-                    icon: '🏛️',
-                    description: 'Mechanically Stabilized Earth 옹벽'
-                }
-            ],
-            loadingOptions: {
-                crossOrigin: 'anonymous',
-                withCredentials: false
-            }
-        });
-        
-        // === 핫스팟 설정 ===
-        this.setConfig('hotspots', {
-            prefix: 'HS_', // 핫스팟 오브젝트 이름 접두사
-            defaultIcon: '📍',
-            iconSize: 24,
-            clickRadius: 10,
-            fadeDistance: 50,
-            scaleWithDistance: true,
-            minScale: 0.5,
-            maxScale: 1.5,
-            animationDuration: 300
-        });
-        
-        // === 애니메이션 설정 ===
-        this.setConfig('animation', {
-            defaultSpeed: 1.0,
-            minSpeed: 0.1,
-            maxSpeed: 3.0,
-            speedStep: 0.1,
-            autoPlay: false,
-            loop: true,
-            frameRate: 30
         });
         
         // === UI 설정 ===
         this.setConfig('ui', {
-            panelWidth: 300,
-            panelAnimationDuration: 300,
-            tooltipDelay: 500,
-            notificationDuration: 3000,
-            fpsUpdateInterval: 1000,
-            theme: 'dark', // 'dark' | 'light'
-            language: 'ko' // 'ko' | 'en'
+            theme: 'dark',
+            language: 'ko',
+            showFPS: this.environment === 'development',
+            showStats: this.environment === 'development',
+            errorMessageDuration: 5000,
+            successMessageDuration: 3000,
+            animationSpeed: 300,
+            rememberLastModel: true
         });
         
         // === 성능 설정 ===
         this.setConfig('performance', {
-            maxTriangles: 1000000, // 100만개
-            maxTextureSize: 2048,
-            enableLOD: this.environment === 'production',
-            enableOcclusion: this.environment === 'production',
             targetFPS: 60,
-            adaptiveQuality: true
+            minAcceptableFPS: 20,
+            adaptiveQuality: true,
+            enableMonitoring: true,
+            logMetrics: this.environment === 'development'
         });
         
-        // === 개발 도구 설정 ===
-        if (this.environment === 'development') {
-            this.setConfig('devTools', {
-                showStats: true,
-                showGrid: true,
-                showAxes: true,
-                enableHotReload: true,
-                verbose: true,
-                showBoundingBoxes: false,
-                showWireframe: false
-            });
-        }
-        
-        // === 플러그인 설정 ===
-        this.setConfig('plugins', {
-            autoLoad: [
-                // 기본 플러그인들
-                './plugins/LightingControlPlugin.js',
-                './plugins/MeasurementPlugin.js'
-            ],
-            enabled: {
-                lighting: true,
-                measurement: true,
-                objectVisibility: true
-            }
+        // === 핫스팟 설정 ===
+        this.setConfig('hotspots', {
+            enabled: true,
+            showLabels: true,
+            showTooltips: true,
+            labelMaxDistance: 50,
+            defaultColor: '#007bff',
+            hoverColor: '#0056b3',
+            activeColor: '#28a745'
         });
         
-        // === 에러 처리 설정 ===
-        this.setConfig('errors', {
-            showUserFriendlyMessages: true,
-            autoRecovery: this.environment === 'production',
-            maxAutoRecoveryAttempts: 3,
-            logLevel: this.environment === 'development' ? 'debug' : 'error',
-            reportErrors: this.environment === 'production'
+        // === 모델 설정 ===
+        this.setConfig('models', {
+            basePath: './gltf/',
+            checkFileExists: true,
+            loadingTimeout: 30000,
+            maxFileSize: 50, // MB
+            preloadList: [],
+            defaultModels: [] // config.js에서 설정
+        });
+        
+        // === 개발 도구 ===
+        this.setConfig('devTools', {
+            gridSize: 100,
+            gridDivisions: 100,
+            axesSize: 5,
+            showHelpers: this.environment === 'development'
         });
     }
     
     /**
      * 설정값 가져오기
-     * @param {string} key - 설정 키 ('app.debug' 또는 'app' 형태)
+     * @param {string} key - 설정 키 (점 표기법 지원)
      * @param {any} defaultValue - 기본값
      * @returns {any} 설정값
      */
-    get(key, defaultValue = null) {
+    get(key, defaultValue = undefined) {
         const keys = key.split('.');
         let config = this.configs.get(keys[0]);
         
-        if (!config) {
-            if (defaultValue !== null) {
-                console.warn(`[ConfigManager] 설정 키 '${key}' 를 찾을 수 없습니다. 기본값 사용: ${defaultValue}`);
+        if (!config && defaultValue !== undefined) {
+            return defaultValue;
+        }
+        
+        if (keys.length === 1) {
+            return config !== undefined ? config : defaultValue;
+        }
+        
+        // 중첩된 키 탐색
+        for (let i = 1; i < keys.length; i++) {
+            if (!config || typeof config !== 'object') {
                 return defaultValue;
             }
-            throw new Error(`설정 키 '${key}' 를 찾을 수 없습니다.`);
+            config = config[keys[i]];
         }
         
-        // 중첩된 키 처리
-        for (let i = 1; i < keys.length; i++) {
-            if (config && typeof config === 'object' && keys[i] in config) {
-                config = config[keys[i]];
-            } else {
-                if (defaultValue !== null) {
-                    console.warn(`[ConfigManager] 설정 키 '${key}' 를 찾을 수 없습니다. 기본값 사용: ${defaultValue}`);
-                    return defaultValue;
-                }
-                throw new Error(`설정 키 '${key}' 를 찾을 수 없습니다.`);
-            }
-        }
-        
-        return config;
+        return config !== undefined ? config : defaultValue;
     }
     
     /**
@@ -323,7 +234,7 @@ export class ConfigManager {
         // 변경 알림
         this.notifyChange(key, value);
         
-        if (this.get('app.verbose')) {
+        if (this.get('app.verbose', false)) {
             console.log(`[ConfigManager] 설정 변경: ${key} = ${value}`);
         }
     }
@@ -364,79 +275,116 @@ export class ConfigManager {
     /**
      * 설정 변경 리스너 등록
      * @param {function} callback - 콜백 함수
+     * @returns {function} unsubscribe 함수
      */
-    addChangeListener(callback) {
+    onChange(callback) {
         this.listeners.add(callback);
+        return () => this.listeners.delete(callback);
     }
     
     /**
-     * 설정 변경 리스너 제거
-     * @param {function} callback - 콜백 함수
-     */
-    removeChangeListener(callback) {
-        this.listeners.delete(callback);
-    }
-    
-    /**
-     * 설정 변경 알림
-     * @param {string} key - 변경된 키
-     * @param {any} value - 새 값
+     * 변경 알림
+     * @private
      */
     notifyChange(key, value) {
-        this.listeners.forEach(callback => {
+        this.listeners.forEach(listener => {
             try {
-                callback(key, value);
+                listener(key, value);
             } catch (error) {
-                console.error('[ConfigManager] 리스너 콜백 오류:', error);
+                console.error('[ConfigManager] 리스너 오류:', error);
             }
         });
     }
     
     /**
-     * 설정 검증
-     * @param {string} key - 검증할 키
-     * @param {function} validator - 검증 함수
-     * @returns {boolean} 검증 결과
+     * 전체 설정 가져오기
+     * @returns {object} 전체 설정 객체
      */
-    validate(key, validator) {
+    getAll() {
+        const result = {};
+        this.configs.forEach((value, key) => {
+            result[key] = value;
+        });
+        return result;
+    }
+    
+    /**
+     * 설정 재설정
+     * @param {string} category - 카테고리명
+     */
+    reset(category) {
+        if (category) {
+            this.configs.delete(category);
+        } else {
+            this.configs.clear();
+            this.loadDefaultConfigs();
+        }
+    }
+    
+    /**
+     * 설정 검증
+     * @param {string} key - 설정 키
+     * @param {any} value - 검증할 값
+     * @returns {boolean} 유효성 여부
+     */
+    validate(key, value) {
+        // 간단한 타입 검증 예시
+        const expectedTypes = {
+            'app.debug': 'boolean',
+            'performance.targetFPS': 'number',
+            'ui.theme': 'string'
+        };
+        
+        const expectedType = expectedTypes[key];
+        if (expectedType) {
+            return typeof value === expectedType;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * 설정을 로컬 스토리지에 저장
+     * @param {string} prefix - 저장 키 접두사
+     */
+    saveToLocalStorage(prefix = 'app_config') {
         try {
-            const value = this.get(key);
-            return validator(value);
+            const config = this.getAll();
+            localStorage.setItem(prefix, JSON.stringify(config));
+            return true;
         } catch (error) {
-            console.error(`[ConfigManager] 설정 검증 실패: ${key}`, error);
+            console.error('[ConfigManager] 로컬 스토리지 저장 실패:', error);
             return false;
         }
     }
     
     /**
-     * 설정 백업
-     * @returns {object} 백업된 설정
+     * 로컬 스토리지에서 설정 로드
+     * @param {string} prefix - 저장 키 접두사
      */
-    backup() {
-        const backup = {};
-        this.configs.forEach((value, key) => {
-            backup[key] = JSON.parse(JSON.stringify(value));
-        });
-        return backup;
-    }
-    
-    /**
-     * 설정 복원
-     * @param {object} backup - 백업된 설정
-     */
-    restore(backup) {
-        Object.entries(backup).forEach(([key, value]) => {
-            this.setConfig(key, value);
-        });
+    loadFromLocalStorage(prefix = 'app_config') {
+        try {
+            const saved = localStorage.getItem(prefix);
+            if (saved) {
+                const config = JSON.parse(saved);
+                Object.entries(config).forEach(([key, value]) => {
+                    this.setConfig(key, value);
+                });
+                return true;
+            }
+        } catch (error) {
+            console.error('[ConfigManager] 로컬 스토리지 로드 실패:', error);
+        }
+        return false;
     }
     
     /**
      * 디버그 정보 출력
      */
     debug() {
-        if (!this.get('app.debug')) return;
-        
-        console.group('[ConfigManager] 현재 설정');
+        console.group('[ConfigManager] 설정 정보');
+        console.log('환경:', this.environment);
+        console.log('설정 카테고리:', Array.from(this.configs.keys()));
         this.configs.forEach((value, key) => {
             console.log(`${key}:`, value);
         });
