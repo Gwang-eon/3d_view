@@ -51,27 +51,40 @@ const initializeConfig = () => {
     });
     
     // === 씬 설정 ===
-    CONFIG_MANAGER.setConfig('scene', {
-        backgroundColor: 0x1a1a1a,
-        fogColor: 0x1a1a1a,
-        fogNear: 50,
-        fogFar: 200,
-        
+// config.js에 추가할 부분 - scene 설정 내부
+
+// === 환경 설정 추가 (scene 내부로 이동) ===
+CONFIG_MANAGER.merge('scene', {
+    environment: {
         // 그리드 설정
         grid: {
+            enabled: true,
             size: 50,
             divisions: 50,
-            centerLineColor: 0x444444,
-            gridColor: 0x222222,
+            colorCenterLine: 0x444444,
+            colorGrid: 0x222222
+        },
+        
+        // 바닥 설정
+        floor: {
+            enabled: true,
+            size: 100,
+            color: 0x202020,
+            y: -0.01,
+            receiveShadow: true,
+            transparent: false,
+            opacity: 1.0,
             visible: true
         },
         
         // 축 헬퍼 설정
         axes: {
+            enabled: true,
             size: 10,
-            visible: true
+            visible: CONFIG_MANAGER.environment === 'development'
         }
-    });
+    }
+});
     
     // === 카메라 설정 (scene 내부로 이동) ===
     CONFIG_MANAGER.merge('scene', {
