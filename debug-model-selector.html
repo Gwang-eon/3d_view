@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>모델 선택 디버그</title>
+    <style>
+        .debug-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #ff6b35;
+            border-radius: 8px;
+            padding: 20px;
+            color: white;
+            font-family: monospace;
+            z-index: 9999;
+            max-width: 400px;
+        }
+        .debug-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .debug-btn:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <!-- 기존 index.html 내용 위에 추가 -->
+    <div class="debug-panel">
+        <h3>🔧 디버그 패널</h3>
+        <button class="debug-btn" onclick="forceShowModelSelector()">모델 선택화면 강제 표시</button>
+        <button class="debug-btn" onclick="checkConfig()">CONFIG 확인</button>
+        <button class="debug-btn" onclick="manualLoadModels()">수동 모델 로드</button>
+        <div id="debug-output" style="margin-top: 10px; font-size: 12px;"></div>
+    </div>
+
+    <script>
+        function forceShowModelSelector() {
+            const selector = document.getElementById('model-selector');
+            if (selector) {
+                selector.style.display = 'flex';
+                document.getElementById('debug-output').innerHTML = '✅ 모델 선택화면 표시됨';
+            } else {
+                document.getElementById('debug-output').innerHTML = '❌ model-selector 요소를 찾을 수 없음';
+            }
+        }
+
+        function checkConfig() {
+            const output = document.getElementById('debug-output');
+            if (typeof CONFIG !== 'undefined') {
+                output.innerHTML = `✅ CONFIG 로드됨<br>모델 수: ${CONFIG.models?.length || 0}개`;
+                console.log('CONFIG:', CONFIG);
+            } else {
+                output.innerHTML = '❌ CONFIG가 정의되지 않음';
+            }
+        }
+
+        function manualLoadModels() {
+            const modelList = document.getElementById('model-list');
+            if (!modelList) {
+                document.getElementById('debug-output').innerHTML = '❌ model-list 요소를 찾을 수 없음';
+                return;
+            }
+
+            // 하드코딩된 모델 목록
+            const models = [
+                {
+                    name: '블록 옹벽',
+                    icon: '🧱',
+                    description: '블록식 옹벽 구조'
+                },
+                {
+                    name: '캔틸레버 옹벽',
+                    icon: '🏗️',
+                    description: '캔틸레버식 옹벽 구조'
+                },
+                {
+                    name: 'MSE 옹벽',
+                    icon: '🏛️',
+                    description: 'MSE(기계적 안정 토양) 옹벽'
+                }
+            ];
+
+            modelList.innerHTML = '';
+            models.forEach(model => {
+                const card = document.createElement('div');
+                card.className = 'model-card';
+                card.innerHTML = `
+                    <div class="model-icon">${model.icon}</div>
+                    <div class="model-name">${model.name}</div>
+                    <div class="model-info">${model.description}</div>
+                `;
+                card.onclick = () => alert(`${model.name} 선택됨`);
+                modelList.appendChild(card);
+            });
+
+            document.getElementById('debug-output').innerHTML = '✅ 모델 목록이 수동으로 로드됨';
+            forceShowModelSelector();
+        }
+    </script>
+</body>
+</html>

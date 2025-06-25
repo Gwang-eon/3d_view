@@ -1,59 +1,87 @@
-// main.js 수정 버전
+// main.js - 즉시 수정 버전
 'use strict';
 
 import { CONFIG } from './config.js';
 import { SceneManager } from './SceneManager.js';
 import { ModelLoader } from './ModelLoader.js';
-// 기존 UIController 대신 개선된 버전 import
-import { UIControllerImproved } from './UIController-improved.js';
-// 기존 HotspotManager 대신 개선된 버전 import  
-import { HotspotManager } from './HotspotManager-improved.js';
+import { UIController } from './UIController.js';
+import { HotspotManager } from './HotspotManager.js';
 import { AnimationController } from './AnimationController.js';
-import { PluginManager, LightingControlPlugin } from './PluginSystem.js';
 
 // 모듈 스코프 변수
 let sceneManager, modelLoader, uiController, hotspotManager, animationController;
-let pluginManager;
 let isInitialized = false;
 
-// 디버깅 로그 함수
+// CONFIG 로드 확인
+async function waitForConfig() {
+    console.log('CONFIG 로드 대기 중...');
+    let attempts = 0;
+    
+    while (typeof CONFIG === 'undefined' && attempts < 20) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+    }
+    
+    if (typeof CONFIG === 'undefined') {
+        throw new Error('CONFIG를 로드할 수 없습니다. config.js 파일을 확인하세요.');
+    }
+    
+    console.log('CONFIG 로드 완료:', CONFIG);
+    return CONFIG;
+}
+
+// 디버깅 헬퍼
 function debugLog(message, data = null) {
-    if (CONFIG.debug) {
-        if (data) {
-            console.log(`[DEBUG] ${message}`, data);
-        } else {
-            console.log(`[DEBUG] ${message}`);
-        }
+    const timestamp = new Date().toLocaleTimeString();
+    if (data) {
+        console.log(`[${timestamp}] ${message}`, data);
+    } else {
+        console.log(`[${timestamp}] ${message}`);
     }
 }
 
 // 초기화 함수
 async function init() {
-    console.log('옹벽 3D 뷰어 초기화 시작...');
+    debugLog('옹벽 3D 뷰어 초기화 시작...');
     
     try {
-        // 의존성 주입을 사용한 모듈 인스턴스 생성
-        sceneManager = new SceneManager();
-        animationController = new AnimationController();
-        hotspotManager = new HotspotManager(sceneManager);
-        modelLoader = new ModelLoader(sceneManager, animationController);
+        // CONFIG 로드 확인
+        await waitForConfig();
         
-        // 개선된 UIController 사용
-        uiController = new UIControllerImproved(
+        // 브라우저 호환성 체크
+        checkCompatibility();
+        
+        // DOM 준비 확인
+        await checkDOMReady();
+        
+        // 모듈 초기화
+        debugLog('모듈 초기화 시작');
+        
+        sceneManager = new SceneManager();
+        debugLog('SceneManager 생성 완료');
+        
+        animationController = new AnimationController();
+        debugLog('AnimationController 생성 완료');
+        
+        hotspotManager = new HotspotManager(sceneManager);
+        debugLog('HotspotManager 생성 완료');
+        
+        modelLoader = new ModelLoader(sceneManager, animationController);
+        debugLog('ModelLoader 생성 완료');
+        
+        uiController = new UIController(
             sceneManager, 
             modelLoader, 
             animationController, 
             hotspotManager
         );
-        
-        // 플러그인 시스템 초기화
-        await initPluginSystem();
+        debugLog('UIController 생성 완료');
         
         // 애니메이션 루프 시작
         animate();
         
         isInitialized = true;
-        console.log('옹벽 3D 뷰어 초기화 완료');
+        debugLog('옹벽 3D 뷰어 초기화 완료');
         
         // 디버그 모드에서 전역 접근 가능하도록
         if (CONFIG.debug) {
@@ -63,8 +91,36 @@ async function init() {
                 uiController,
                 hotspotManager,
                 animationController,
-                pluginManager
+                config: CONFIG,
+                // 디버그 함수들
+                debug: {
+                    showModelSelector: () => {
+                        const selector = document.getElementById('model-selector');
+                        if (selector) selector.style.display = 'flex';
+                    },
+                    loadModelList: () => {
+                        uiController.loadModelList();
+                    },
+                    checkElements: () => {
+                        const elements = [
+                            'model-selector',
+                            'model-list',
+                            'control-panel',
+                            'info-panel',
+                            'canvas-container'
+                        ];
+                        elements.forEach(id => {
+                            const el = document.getElementById(id);
+                            console.log(`${id}: ${el ? '✓ 존재' : '✗ 없음'}`);
+                        });
+                    }
+                }
             };
+            
+            console.log('%c디버그 모드 활성화', 'color: #00ff88; font-size: 16px;');
+            console.log('전역 객체: window.wallViewer');
+            console.log('모델 선택화면 강제 표시: wallViewer.debug.showModelSelector()');
+            console.log('DOM 요소 체크: wallViewer.debug.checkElements()');
         }
         
     } catch (error) {
@@ -73,46 +129,50 @@ async function init() {
     }
 }
 
-// 플러그인 시스템 초기화
-async function initPluginSystem() {
-    const app = {
-        sceneManager,
-        modelLoader,
-        animationController,
-        hotspotManager,
-        uiController
-    };
+// DOM 준비 확인
+async function checkDOMReady() {
+    const requiredElements = [
+        'model-selector',
+        'model-list',
+        'canvas-container',
+        'loading',
+        'error'
+    ];
     
-    pluginManager = new PluginManager(app);
-    
-    // 기본 플러그인 등록 (필요한 경우만)
-    // await pluginManager.register(LightingControlPlugin);
-    
-    window.createPluginUI = createPluginUI;
-}
-
-// 플러그인 UI 생성
-function createPluginUI() {
-    // 개선된 UI에서는 플러그인을 별도로 관리
-    const pluginContainer = document.createElement('div');
-    pluginContainer.id = 'plugin-controls';
-    pluginContainer.className = 'plugin-controls';
-    
-    // 플러그인 UI는 설정 패널 등에서 관리
-    console.log('[Plugin] UI 생성 준비 완료');
+    for (const id of requiredElements) {
+        const element = document.getElementById(id);
+        if (!element) {
+            console.warn(`필수 요소 '${id}'를 찾을 수 없습니다.`);
+        }
+    }
 }
 
 // 브라우저 호환성 체크
 function checkCompatibility() {
-    if (!window.THREE) throw new Error('Three.js가 로드되지 않았습니다.');
-    if (!THREE.GLTFLoader) throw new Error('GLTFLoader가 로드되지 않았습니다.');
-    if (!THREE.OrbitControls) throw new Error('OrbitControls가 로드되지 않았습니다.');
+    const issues = [];
     
+    if (!window.THREE) {
+        issues.push('Three.js가 로드되지 않았습니다.');
+    }
+    if (!window.THREE?.GLTFLoader) {
+        issues.push('GLTFLoader가 로드되지 않았습니다.');
+    }
+    if (!window.THREE?.OrbitControls) {
+        issues.push('OrbitControls가 로드되지 않았습니다.');
+    }
+    
+    // WebGL 지원 체크
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
     if (!gl) {
-        throw new Error('WebGL을 초기화할 수 없습니다.');
+        issues.push('WebGL을 지원하지 않는 브라우저입니다.');
     }
+    
+    if (issues.length > 0) {
+        throw new Error('호환성 문제:\n' + issues.join('\n'));
+    }
+    
+    debugLog('브라우저 호환성 체크 통과');
 }
 
 // 애니메이션 루프
@@ -121,64 +181,86 @@ function animate() {
     
     if (!isInitialized) return;
     
+    // FPS 업데이트
     uiController.updateFPS();
-    animationController.update();
     
+    // 애니메이션 업데이트
+    animationController.update();
     const frame = animationController.getCurrentFrame();
     uiController.updateAnimationFrame(frame);
     
+    // 핫스팟 위치 업데이트
     hotspotManager.updatePositions();
     
-    if (pluginManager) {
-        pluginManager.updateAll();
-    }
-    
+    // 렌더링
     sceneManager.render();
 }
 
 // 초기화 에러 표시
 function showInitError(message) {
-    const errorDiv = document.getElementById('error') || document.createElement('div');
-    errorDiv.id = 'error';
-    errorDiv.className = 'error-message';
-    errorDiv.style.display = 'block';
-    errorDiv.style.position = 'fixed';
-    errorDiv.innerHTML = `<h2>초기화 오류</h2><p>${message}</p>`;
-    if (!document.getElementById('error')) {
+    console.error('초기화 오류:', message);
+    
+    // 에러 요소 찾기 또는 생성
+    let errorDiv = document.getElementById('error');
+    if (!errorDiv) {
+        errorDiv = document.createElement('div');
+        errorDiv.id = 'error';
+        errorDiv.className = 'error';
+        errorDiv.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(220, 53, 69, 0.95);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            z-index: 9999;
+            max-width: 80%;
+            text-align: center;
+        `;
         document.body.appendChild(errorDiv);
     }
+    
+    errorDiv.innerHTML = `
+        <h2 style="margin: 0 0 15px 0;">초기화 오류</h2>
+        <p style="margin: 0 0 20px 0;">${message}</p>
+        <button onclick="location.reload()" style="
+            background: white;
+            color: #dc3545;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        ">새로고침</button>
+    `;
+    errorDiv.style.display = 'block';
 }
 
 // 페이지 로드 완료 시 초기화
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', async () => {
-        try {
-            checkCompatibility();
-            await init();
-        } catch (error) {
-            showInitError(error.message);
-        }
+        debugLog('DOMContentLoaded 이벤트 발생');
+        await init();
     });
 } else {
-    (async () => {
-        try {
-            checkCompatibility();
-            await init();
-        } catch (error) {
-            showInitError(error.message);
-        }
-    })();
+    debugLog('DOM 이미 로드됨, 즉시 초기화');
+    init();
 }
 
 // 개발자 콘솔 환영 메시지
-console.log('%c옹벽 3D 뷰어 v2.0', 'font-size: 20px; color: #007bff; font-weight: bold;');
-if (CONFIG.debug) {
-    console.log('%c디버그 모드 활성화됨', 'color: #00ff88;');
-    console.log('전역 객체: window.wallViewer');
-}
+console.log('%c옹벽 3D 뷰어', 'font-size: 24px; color: #007bff; font-weight: bold;');
+console.log('%c문제가 발생했나요? F12 콘솔에서 에러를 확인하세요.', 'color: #ff6b6b;');
 
 // 전역 오류 처리
 window.addEventListener('error', function(event) {
-    console.error('전역 오류 발생:', event.error);
-    showInitError(`예상치 못한 오류: ${event.error?.message || '알 수 없는 오류'}`);
+    console.error('전역 오류:', event.error);
+    console.error('파일:', event.filename);
+    console.error('라인:', event.lineno, '컬럼:', event.colno);
+});
+
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('처리되지 않은 Promise 거부:', event.reason);
 });
