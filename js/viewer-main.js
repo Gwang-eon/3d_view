@@ -1,21 +1,20 @@
-// js/viewer-main.js
-// 3D 뷰어 메인 애플리케이션 - 기존 기능 유지 + 새 아키텍처 통합
+// viewer-main.js - 수정된 3D 뷰어 메인 애플리케이션
 'use strict';
 
 import { CONFIG } from './config.js';
 import { CONFIG_MANAGER, getConfig, setConfig } from './core/ConfigManager.js';
-import { SceneManager } from './SceneManager.js';
-import { ModelLoader } from './ModelLoader.js';
-import { UIController } from './UIController.js';
+import SceneManager from './SceneManager.js';
+import ModelLoader from './ModelLoader.js';
+import UIController from './UIController.js';
 import { HotspotManager } from './HotspotManager.js';
 import { AnimationController } from './AnimationController.js';
 
 /**
  * 3D 뷰어 애플리케이션
- * - 기존 모듈 구조 유지
- * - ConfigManager 통합
+ * - 모듈식 구조
+ * - 이벤트 기반 통신
  * - 향상된 에러 처리
- * - URL 파라미터 자동 처리
+ * - URL 파라미터 지원
  */
 class ViewerApplication {
     constructor() {
@@ -29,6 +28,7 @@ class ViewerApplication {
         // 상태
         this.isInitialized = false;
         this.currentModelIndex = null;
+        this.urlParams = new URLSearchParams(window.location.search);
         
         // 성능 모니터링
         this.stats = {
@@ -62,29 +62,29 @@ class ViewerApplication {
             await this.initializeModules();
             console.log('[ViewerApp] ✓ 모듈 초기화 완료');
             
-            // 5. UI 설정
+            // 5. 모듈 간 연결 설정
+            this.setupModuleConnections();
+            console.log('[ViewerApp] ✓ 모듈 연결 완료');
+            
+            // 6. UI 설정
             this.setupUI();
             console.log('[ViewerApp] ✓ UI 설정 완료');
-            
-            // 6. 애니메이션 루프 시작
-            this.startAnimationLoop();
-            console.log('[ViewerApp] ✓ 애니메이션 루프 시작');
             
             // 7. URL 파라미터 처리
             await this.handleURLParameters();
             
             // 8. 초기화 완료
             this.isInitialized = true;
+            this.emit('initialized');
+            
             console.log('[ViewerApp] === 초기화 완료 ===');
             
-            // 디버그 정보
-            if (getConfig('app.debug')) {
-                this.showDebugInfo();
-            }
+            // 초기 상태 UI 표시
+            this.showInitialUI();
             
         } catch (error) {
             console.error('[ViewerApp] 초기화 실패:', error);
-            this.handleInitError(error);
+            this.showError('애플리케이션을 초기화할 수 없습니다: ' + error.message);
             throw error;
         }
     }
@@ -93,29 +93,45 @@ class ViewerApplication {
      * 환경 설정
      */
     setupEnvironment() {
-        // ConfigManager에 기존 CONFIG 병합
-        if (CONFIG) {
-            CONFIG_MANAGER.merge('viewer', CONFIG);
+        // Three.js 전역 설정
+        if (window.THREE) {
+            THREE.Cache.enabled = getConfig('app.enableCache', true);
         }
         
-        // 개발/운영 환경별 설정
-        if (CONFIG_MANAGER.environment === 'development') {
-            setConfig('app.debug', true);
-            setConfig('app.verbose', true);
+        // 디버그 모드 설정
+        if (getConfig('app.debug')) {
+            window.viewerDebug = {
+                app: this,
+                getModule: (name) => this[name],
+                getConfig: (path) => getConfig(path),
+                setConfig: (path, value) => setConfig(path, value)
+            };
         }
     }
     
     /**
-     * DOM 준비 확인
+     * DOM 준비 대기
      */
     async waitForDOM() {
-        return new Promise((resolve) => {
-            if (document.readyState === 'complete' || document.readyState === 'interactive') {
-                resolve();
-            } else {
-                document.addEventListener('DOMContentLoaded', resolve, { once: true });
+        if (document.readyState === 'loading') {
+            await new Promise(resolve => {
+                document.addEventListener('DOMContentLoaded', resolve);
+            });
+        }
+        
+        // 필수 DOM 요소 확인
+        const requiredElements = [
+            'canvas-container',
+            'ui-container',
+            'loading',
+            'error'
+        ];
+        
+        for (const id of requiredElements) {
+            if (!document.getElementById(id)) {
+                throw new Error(`필수 DOM 요소가 없습니다: #${id}`);
             }
-        });
+        }
     }
     
     /**
@@ -123,7 +139,7 @@ class ViewerApplication {
      */
     async checkDependencies() {
         // CONFIG 확인
-        if (typeof CONFIG === 'undefined') {
+        if (!window.CONFIG) {
             throw new Error('CONFIG가 정의되지 않았습니다. config.js를 확인하세요.');
         }
         
@@ -147,7 +163,8 @@ class ViewerApplication {
     async initializeModules() {
         // SceneManager
         this.sceneManager = new SceneManager();
-        console.log('[ViewerApp] ✓ SceneManager 생성');
+        await this.sceneManager.init();
+        console.log('[ViewerApp] ✓ SceneManager 초기화');
         
         // AnimationController
         this.animationController = new AnimationController();
@@ -157,9 +174,17 @@ class ViewerApplication {
         this.hotspotManager = new HotspotManager(this.sceneManager);
         console.log('[ViewerApp] ✓ HotspotManager 생성');
         
-        // ModelLoader
+        // ModelLoader - 기본 모델 설정 포함
         this.modelLoader = new ModelLoader(this.sceneManager, this.animationController);
-        console.log('[ViewerApp] ✓ ModelLoader 생성');
+        await this.modelLoader.init();
+        
+        // 기본 모델 설정
+        const models = getConfig('models.defaultModels', []);
+        if (models && models.length > 0) {
+            const defaultModelIndex = getConfig('models.defaultModel', 0);
+            this.modelLoader.setDefaultModel(defaultModelIndex);
+        }
+        console.log('[ViewerApp] ✓ ModelLoader 초기화');
         
         // UIController
         this.uiController = new UIController(
@@ -168,7 +193,8 @@ class ViewerApplication {
             this.animationController,
             this.hotspotManager
         );
-        console.log('[ViewerApp] ✓ UIController 생성');
+        await this.uiController.init();
+        console.log('[ViewerApp] ✓ UIController 초기화');
         
         // 전역 참조 (디버깅용)
         if (getConfig('app.debug')) {
@@ -181,6 +207,52 @@ class ViewerApplication {
                 hotspotManager: this.hotspotManager
             };
         }
+    }
+    
+    /**
+     * 모듈 간 연결 설정
+     */
+    setupModuleConnections() {
+        // ModelLoader -> UIController 이벤트 연결
+        this.modelLoader.on('loading:start', (data) => {
+            this.uiController.showLoadingScreen(data.message || '모델 로딩 중...');
+        });
+        
+        this.modelLoader.on('loading:progress', (data) => {
+            this.uiController.updateLoadingProgress(data.progress, data.message);
+        });
+        
+        this.modelLoader.on('loading:complete', (data) => {
+            this.uiController.hideLoadingScreen();
+            this.uiController.switchToViewerUI(data.modelInfo);
+        });
+        
+        this.modelLoader.on('loading:error', (error) => {
+            this.uiController.hideLoadingScreen();
+            this.uiController.showErrorModal(error.message || '모델 로딩 실패');
+        });
+        
+        // SceneManager -> UIController 이벤트 연결
+        this.sceneManager.on('stats:updated', (stats) => {
+            this.uiController.updateStats(stats);
+        });
+        
+        this.sceneManager.on('camera:change', (data) => {
+            this.uiController.updateCameraInfo(data);
+        });
+        
+        // AnimationController -> UIController 이벤트 연결
+        this.animationController.on('animation:start', () => {
+            this.uiController.updateAnimationControls('playing');
+        });
+        
+        this.animationController.on('animation:pause', () => {
+            this.uiController.updateAnimationControls('paused');
+        });
+        
+        this.animationController.on('animation:progress', (progress) => {
+            this.uiController.updateAnimationProgress(progress);
+        });
     }
     
     /**
@@ -207,7 +279,31 @@ class ViewerApplication {
         const settingsBtn = document.getElementById('settings-btn');
         if (settingsBtn) {
             settingsBtn.addEventListener('click', () => {
-                this.showSettings();
+                this.uiController.toggleSettings();
+            });
+        }
+        
+        // 정보 버튼
+        const infoBtn = document.getElementById('info-btn');
+        if (infoBtn) {
+            infoBtn.addEventListener('click', () => {
+                this.uiController.toggleInfo();
+            });
+        }
+        
+        // 카메라 버튼
+        const cameraBtn = document.getElementById('camera-btn');
+        if (cameraBtn) {
+            cameraBtn.addEventListener('click', () => {
+                this.uiController.showCameraMenu();
+            });
+        }
+        
+        // 모델 선택 버튼
+        const modelBtn = document.getElementById('model-btn');
+        if (modelBtn) {
+            modelBtn.addEventListener('click', () => {
+                this.uiController.toggleModelSelector();
             });
         }
         
@@ -220,183 +316,100 @@ class ViewerApplication {
      */
     setupKeyboardShortcuts() {
         document.addEventListener('keydown', (e) => {
-            if (!this.isInitialized) return;
-            
-            switch(e.key) {
-                case 'f':
-                case 'F':
-                    if (!e.ctrlKey && !e.metaKey) {
+            // Ctrl/Cmd 키가 눌려있을 때만
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                    case 'h': // 홈
+                        e.preventDefault();
+                        window.location.href = 'index.html';
+                        break;
+                    case 'f': // 전체화면
+                        e.preventDefault();
                         this.toggleFullscreen();
-                    }
-                    break;
-                    
-                case ' ':
-                    if (this.animationController) {
+                        break;
+                    case 's': // 스크린샷
                         e.preventDefault();
-                        this.animationController.togglePlayPause();
-                    }
-                    break;
-                    
+                        this.sceneManager.takeScreenshot();
+                        break;
+                    case 'g': // 그리드 토글
+                        e.preventDefault();
+                        this.sceneManager.toggleHelpers();
+                        break;
+                }
+            }
+            
+            // 단독 키
+            switch(e.key) {
                 case 'Escape':
-                    if (document.fullscreenElement) {
-                        document.exitFullscreen();
-                    }
+                    this.uiController.closeAllModals();
                     break;
-                    
-                case 'h':
-                case 'H':
-                    this.toggleHotspots();
+                case ' ': // 스페이스바 - 애니메이션 재생/일시정지
+                    e.preventDefault();
+                    this.animationController.togglePlayPause();
                     break;
-                    
-                case 'd':
-                case 'D':
-                    if (e.ctrlKey || e.metaKey) {
-                        e.preventDefault();
-                        this.toggleDebug();
-                    }
+                case 'r': // 카메라 리셋
+                    this.sceneManager.resetCamera();
                     break;
             }
         });
     }
     
     /**
-     * 애니메이션 루프
-     */
-    startAnimationLoop() {
-        const animate = () => {
-            requestAnimationFrame(animate);
-            
-            // FPS 계산
-            this.updateFPS();
-            
-            // 컨트롤 업데이트
-            if (this.sceneManager?.controls) {
-                this.sceneManager.controls.update();
-            }
-            
-            // 애니메이션 업데이트
-            if (this.animationController) {
-                this.animationController.update();
-            }
-            
-            // 핫스팟 업데이트
-            if (this.hotspotManager) {
-                this.hotspotManager.updatePositions();
-            }
-            
-            // 렌더링
-            if (this.sceneManager) {
-                this.sceneManager.render();
-            }
-        };
-        
-        animate();
-    }
-    
-    /**
-     * FPS 업데이트
-     */
-    updateFPS() {
-        this.stats.frameCount++;
-        const currentTime = performance.now();
-        
-        if (currentTime - this.stats.lastTime >= 1000) {
-            this.stats.fps = this.stats.frameCount;
-            this.stats.frameCount = 0;
-            this.stats.lastTime = currentTime;
-            
-            // FPS 표시 업데이트
-            const fpsElement = document.getElementById('fps-counter');
-            if (fpsElement) {
-                fpsElement.textContent = `FPS: ${this.stats.fps}`;
-            }
-        }
-    }
-    
-    /**
      * URL 파라미터 처리
      */
     async handleURLParameters() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const modelId = urlParams.get('model');
-        
-        if (modelId !== null) {
-            const index = parseInt(modelId, 10);
-            const models = CONFIG.models || getConfig('models', []);
+        // 모델 파라미터 확인
+        const modelParam = this.urlParams.get('model');
+        if (modelParam !== null) {
+            const modelIndex = parseInt(modelParam);
+            const models = getConfig('models.defaultModels', []);
             
-            if (!isNaN(index) && index >= 0 && index < models.length) {
-                console.log(`[ViewerApp] URL 파라미터로 모델 ${index} 로드`);
+            if (!isNaN(modelIndex) && modelIndex >= 0 && modelIndex < models.length) {
+                console.log(`[ViewerApp] URL 파라미터로 모델 로드: ${modelIndex}`);
+                this.currentModelIndex = modelIndex;
                 
-                // 모델 선택 화면 숨기기
-                const modelSelector = document.getElementById('model-selector');
-                if (modelSelector) {
-                    modelSelector.style.display = 'none';
+                try {
+                    await this.modelLoader.loadModel(modelIndex);
+                } catch (error) {
+                    console.error('[ViewerApp] URL 모델 로드 실패:', error);
+                    this.showError('요청한 모델을 로드할 수 없습니다.');
                 }
-                
-                // 약간의 지연 후 모델 로드
-                await this.sleep(300);
-                await this.loadModel(index);
-                
-                // 상단 토글 버튼 활성화
-                this.activateModelToggle(index);
-            } else {
-                console.warn(`[ViewerApp] 잘못된 모델 인덱스: ${index}`);
-                this.showModelSelector();
             }
-        } else {
-            // URL 파라미터가 없으면 모델 선택 화면 표시
-            this.showModelSelector();
         }
-    }
-    
-    /**
-     * 모델 로드
-     */
-    async loadModel(index) {
-        try {
-            this.currentModelIndex = index;
-            
-            // UI 컨트롤러를 통해 모델 선택
-            if (this.uiController) {
-                await this.uiController.selectModel(index);
-            }
-            
-            // URL 업데이트 (히스토리에 추가)
-            const newUrl = `${window.location.pathname}?model=${index}`;
-            window.history.pushState({ model: index }, '', newUrl);
-            
-        } catch (error) {
-            console.error('[ViewerApp] 모델 로드 실패:', error);
-            this.showError(`모델을 로드할 수 없습니다: ${error.message}`);
-        }
-    }
-    
-    /**
-     * 모델 토글 버튼 활성화
-     */
-    activateModelToggle(index) {
-        const modelTypes = ['block', 'cantilever', 'mse'];
-        const modelType = modelTypes[index];
         
-        if (modelType) {
-            const buttons = document.querySelectorAll('.model-toggle-btn');
-            buttons.forEach(btn => btn.classList.remove('active'));
-            
-            const activeBtn = document.querySelector(`[data-model="${modelType}"]`);
-            if (activeBtn) {
-                activeBtn.classList.add('active');
+        // 카메라 파라미터
+        const cameraParam = this.urlParams.get('camera');
+        if (cameraParam !== null) {
+            const cameraIndex = parseInt(cameraParam);
+            if (!isNaN(cameraIndex)) {
+                setTimeout(() => {
+                    this.sceneManager.switchToGLTFCamera(cameraIndex);
+                }, 1000);
             }
+        }
+        
+        // 자동 재생 파라미터
+        const autoplayParam = this.urlParams.get('autoplay');
+        if (autoplayParam === 'true') {
+            setTimeout(() => {
+                this.animationController.play();
+            }, 1500);
         }
     }
     
     /**
-     * 모델 선택 화면 표시
+     * 초기 UI 표시
      */
-    showModelSelector() {
-        const modelSelector = document.getElementById('model-selector');
-        if (modelSelector && this.uiController) {
-            modelSelector.style.display = 'flex';
-            this.uiController.loadModelList();
+    showInitialUI() {
+        // 로딩 화면 숨기기
+        const loadingEl = document.getElementById('loading');
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+        }
+        
+        // 모델이 로드되지 않은 경우 모델 선택 UI 표시
+        if (this.currentModelIndex === null) {
+            this.uiController.showModelSelector();
         }
     }
     
@@ -405,48 +418,11 @@ class ViewerApplication {
      */
     toggleFullscreen() {
         if (!document.fullscreenElement) {
-            const container = document.getElementById('viewer-container');
-            if (container.requestFullscreen) {
-                container.requestFullscreen();
-            }
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error('[ViewerApp] 전체화면 진입 실패:', err);
+            });
         } else {
             document.exitFullscreen();
-        }
-    }
-    
-    /**
-     * 핫스팟 토글
-     */
-    toggleHotspots() {
-        const checkbox = document.getElementById('show-hotspots');
-        if (checkbox) {
-            checkbox.checked = !checkbox.checked;
-            checkbox.dispatchEvent(new Event('change'));
-        }
-    }
-    
-    /**
-     * 디버그 모드 토글
-     */
-    toggleDebug() {
-        const currentDebug = getConfig('app.debug');
-        setConfig('app.debug', !currentDebug);
-        
-        if (!currentDebug) {
-            this.showDebugInfo();
-        } else {
-            this.hideDebugInfo();
-        }
-    }
-    
-    /**
-     * 설정 표시
-     */
-    showSettings() {
-        // 설정 패널 토글
-        const rightPanel = document.getElementById('right-panel');
-        if (rightPanel) {
-            rightPanel.classList.toggle('collapsed');
         }
     }
     
@@ -463,119 +439,9 @@ class ViewerApplication {
             setTimeout(() => {
                 errorEl.style.display = 'none';
             }, 5000);
-        } else {
-            alert(`오류: ${message}`);
-        }
-    }
-    
-    /**
-     * 초기화 에러 처리
-     */
-    handleInitError(error) {
-        const errorMessage = `초기화 오류: ${error.message}`;
-        
-        // 에러 표시
-        this.showError(errorMessage);
-        
-        // 로딩 화면 숨기기
-        const loading = document.getElementById('loading');
-        if (loading) {
-            loading.style.display = 'none';
         }
         
-        // 모델 선택 화면 표시
-        this.showModelSelector();
-        
-        // 콘솔에 상세 정보 출력
-        console.group('[ViewerApp] 초기화 에러 상세 정보');
-        console.error('에러:', error);
-        console.log('CONFIG:', typeof CONFIG);
-        console.log('THREE:', typeof THREE);
-        console.log('DOM Ready:', document.readyState);
-        console.groupEnd();
-    }
-    
-    /**
-     * 디버그 정보 표시
-     */
-    showDebugInfo() {
-        console.group('[ViewerApp] 디버그 정보');
-        console.log('버전:', getConfig('app.version'));
-        console.log('환경:', CONFIG_MANAGER.environment);
-        console.log('모듈 상태:', {
-            sceneManager: !!this.sceneManager,
-            modelLoader: !!this.modelLoader,
-            uiController: !!this.uiController,
-            animationController: !!this.animationController,
-            hotspotManager: !!this.hotspotManager
-        });
-        console.log('전역 객체: window.viewerApp');
-        console.log('사용 가능한 명령어:');
-        console.log('- viewerApp.loadModel(0)');
-        console.log('- viewerApp.toggleDebug()');
-        console.log('- viewerApp.showModelSelector()');
-        console.groupEnd();
-        
-        // 화면에 디버그 패널 표시
-        this.createDebugPanel();
-    }
-    
-    /**
-     * 디버그 패널 생성
-     */
-    createDebugPanel() {
-        let debugPanel = document.getElementById('debug-panel');
-        if (!debugPanel) {
-            debugPanel = document.createElement('div');
-            debugPanel.id = 'debug-panel';
-            debugPanel.style.cssText = `
-                position: fixed;
-                top: 10px;
-                left: 10px;
-                background: rgba(0, 0, 0, 0.8);
-                color: #0f0;
-                padding: 10px;
-                font-family: monospace;
-                font-size: 12px;
-                border-radius: 4px;
-                z-index: 10000;
-                min-width: 200px;
-            `;
-            document.body.appendChild(debugPanel);
-        }
-        
-        // 업데이트 함수
-        const updateDebugPanel = () => {
-            if (!document.getElementById('debug-panel')) return;
-            
-            debugPanel.innerHTML = `
-                <div>FPS: ${this.stats.fps}</div>
-                <div>모델: ${this.currentModelIndex !== null ? CONFIG.models[this.currentModelIndex]?.name : 'None'}</div>
-                <div>메모리: ${performance.memory ? (performance.memory.usedJSHeapSize / 1048576).toFixed(2) + 'MB' : 'N/A'}</div>
-                <div>환경: ${CONFIG_MANAGER.environment}</div>
-                <div style="margin-top: 5px; padding-top: 5px; border-top: 1px solid #0f0;">
-                    <small>Ctrl+D: 디버그 토글</small><br>
-                    <small>F: 전체화면</small><br>
-                    <small>H: 핫스팟 토글</small><br>
-                    <small>Space: 재생/일시정지</small>
-                </div>
-            `;
-        };
-        
-        // 주기적 업데이트
-        setInterval(updateDebugPanel, 1000);
-        updateDebugPanel();
-    }
-    
-    /**
-     * 디버그 정보 숨기기
-     */
-    hideDebugInfo() {
-        const debugPanel = document.getElementById('debug-panel');
-        if (debugPanel) {
-            debugPanel.remove();
-        }
-        console.log('[ViewerApp] 디버그 모드 비활성화');
+        console.error('[ViewerApp] 에러:', message);
     }
     
     /**
@@ -586,24 +452,30 @@ class ViewerApplication {
     }
     
     /**
-     * 정리 (cleanup)
+     * 이벤트 에미터 (간단한 구현)
+     */
+    emit(event, data) {
+        window.dispatchEvent(new CustomEvent(`viewer:${event}`, { detail: data }));
+    }
+    
+    /**
+     * 정리
      */
     destroy() {
-        console.log('[ViewerApp] 정리 시작...');
-        
-        // 애니메이션 루프 중지는 별도로 처리 필요
+        console.log('[ViewerApp] 정리 시작');
         
         // 모듈 정리
         if (this.hotspotManager) this.hotspotManager.cleanup?.();
         if (this.animationController) this.animationController.cleanup?.();
-        if (this.modelLoader) this.modelLoader.cleanup?.();
-        if (this.uiController) this.uiController.cleanup?.();
-        if (this.sceneManager) this.sceneManager.cleanup?.();
+        if (this.modelLoader) this.modelLoader.dispose?.();
+        if (this.uiController) this.uiController.dispose?.();
+        if (this.sceneManager) this.sceneManager.dispose?.();
         
         // 전역 참조 제거
         if (window.viewerApp === this) {
             delete window.viewerApp;
             delete window.modules;
+            delete window.viewerDebug;
         }
         
         this.isInitialized = false;
@@ -624,6 +496,18 @@ async function startViewer() {
         return app;
     } catch (error) {
         console.error('[Viewer] 시작 실패:', error);
+        
+        // 에러 메시지 표시
+        const errorEl = document.getElementById('error');
+        if (errorEl) {
+            errorEl.innerHTML = `
+                <h3>애플리케이션 시작 실패</h3>
+                <p>${error.message}</p>
+                <button onclick="location.reload()">다시 시도</button>
+            `;
+            errorEl.style.display = 'block';
+        }
+        
         throw error;
     }
 }
