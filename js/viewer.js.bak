@@ -1,4 +1,4 @@
-// js/viewer.js - 3D 뷰어 코어 모듈 (밝기 및 그림자 개선)
+// js/viewer.js - 3D 뷰어 코어 모듈 (카메라 거리 수정)
 
 export class Viewer3D {
     constructor(config) {
@@ -102,11 +102,16 @@ export class Viewer3D {
      */
     createScene() {
         this.scene = new THREE.Scene();
-        // 밝은 회색 배경 (Three.js 에디터 스타일)
-        this.scene.background = new THREE.Color(0xf0f0f0);
+        this.scene.background = new THREE.Color(this.config.viewer.backgroundColor);
         
-        // 안개 제거 - 선명한 렌더링을 위해
-        this.scene.fog = null;
+        // 안개 설정
+        // if (this.config.viewer.fog.enabled) {
+        //     this.scene.fog = new THREE.Fog(
+        //         this.config.viewer.fog.color,
+        //         this.config.viewer.fog.near,
+        //         this.config.viewer.fog.far
+        //     );
+        // }
     }
     
     /**
@@ -142,8 +147,7 @@ export class Viewer3D {
         this.renderer = new THREE.WebGLRenderer({
             antialias: this.config.performance.antialias,
             alpha: false,
-            powerPreference: "high-performance",
-            preserveDrawingBuffer: true
+            powerPreference: "high-performance"
         });
         
         this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
@@ -151,17 +155,13 @@ export class Viewer3D {
         
         // 그림자 설정
         this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 더 선명한 그림자
+        this.renderer.shadowMap.type = THREE.VSMShadowMap;
         
-        // 렌더러 설정 - 밝은 렌더링을 위한 최적화
-        this.renderer.toneMapping = THREE.NoToneMapping; // 톤 매핑 비활성화
-        this.renderer.toneMappingExposure = 1.0;
+        // 톤 매핑 - 더 밝게
+        this.renderer.toneMapping = THREE.LinearToneMapping;  // ACESFilmic 대신
+        this.renderer.toneMappingExposure = 1.2;
         
-        // 출력 인코딩
-        this.renderer.outputEncoding = THREE.sRGBEncoding;
-        
-        // 물리적으로 정확한 조명
-        this.renderer.physicallyCorrectLights = true;
+
         
         this.container.appendChild(this.renderer.domElement);
     }
@@ -175,14 +175,15 @@ export class Viewer3D {
         // 컨트롤 설정 적용
         Object.assign(this.controls, this.config.controls);
 
-        // 추가 설정
+
+        // 추가 설정 (새로 추가)
         this.controls.mouseButtons = {
             LEFT: THREE.MOUSE.ROTATE,
             MIDDLE: THREE.MOUSE.DOLLY,
             RIGHT: THREE.MOUSE.PAN
         };
         
-        // 터치 설정
+        // 터치 설정 (새로 추가)
         this.controls.touches = {
             ONE: THREE.TOUCH.ROTATE,
             TWO: THREE.TOUCH.DOLLY_PAN
@@ -198,101 +199,107 @@ export class Viewer3D {
     }
     
     /**
-     * 조명 설정 - 밝고 선명한 렌더링을 위한 최적화
+     * 조명 설정
      */
     setupLights() {
-        // 1. 주변광 - 더 밝게
-        const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
-        this.scene.add(ambientLight);
-        this.lights.ambient = ambientLight;
-        
-        // 2. 주 방향광 (태양광) - 강하고 선명한 그림자
-        const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
-        mainLight.position.set(10, 20, 10);
-        mainLight.castShadow = true;
-        
-        // 그림자 설정 - 더 선명하고 부드러운 그림자
-        mainLight.shadow.mapSize.width = 4096;  // 고해상도
-        mainLight.shadow.mapSize.height = 4096;
-        mainLight.shadow.camera.near = 0.1;
-        mainLight.shadow.camera.far = 100;
-        
-        // 그림자 bias 조정 - 그림자 아티팩트 제거
-        mainLight.shadow.bias = -0.0005;
-        mainLight.shadow.normalBias = 0.02;
-        
-        // 초기 그림자 범위 (모델 로드 시 자동 조정됨)
-        mainLight.shadow.camera.left = -20;
-        mainLight.shadow.camera.right = 20;
-        mainLight.shadow.camera.top = 20;
-        mainLight.shadow.camera.bottom = -20;
-        
-        // 그림자 부드러움 감소 - 더 선명한 그림자
-        mainLight.shadow.radius = 2;
-        mainLight.shadow.blurSamples = 8;
-        
-        this.scene.add(mainLight);
-        this.lights.main = mainLight;
-        
-        // 3. 보조 방향광 - 반대편에서 비추는 fill light
-        const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        fillLight.position.set(-5, 10, -5);
-        this.scene.add(fillLight);
-        this.lights.fill = fillLight;
-        
-        // 4. 반구광 - 하늘과 땅의 색상 차이
-        const hemiLight = new THREE.HemisphereLight(
-            0xffffff, // 하늘색
-            0xcccccc, // 땅색
-            0.6
-        );
-        hemiLight.position.set(0, 20, 0);
-        this.scene.add(hemiLight);
-        this.lights.hemisphere = hemiLight;
-        
-        // 5. 환경맵 생성 (선택적) - 더 밝은 환경
-        this.createEnvironment();
-    }
-    
-    /**
-     * 환경맵 생성 - 밝은 스튜디오 조명 환경
-     */
-    createEnvironment() {
+        // 절차적 환경맵 생성 (하늘)
         const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
-        pmremGenerator.compileEquirectangularShader();
         
-        // 밝은 스튜디오 환경 생성
-        const envScene = new THREE.Scene();
-        envScene.background = new THREE.Color(0xffffff);
+        // 간단한 그라데이션 하늘 생성
+        const skyScene = new THREE.Scene();
+        const skyGeo = new THREE.SphereGeometry(500, 32, 32);
+        const skyMat = new THREE.ShaderMaterial({
+            uniforms: {
+                topColor: { value: new THREE.Color(0x87CEEB) }, // 하늘색
+                bottomColor: { value: new THREE.Color(0xF0E68C) }, // 지평선색
+                offset: { value: 33 },
+                exponent: { value: 0.6 }
+            },
+            vertexShader: `
+                varying vec3 vWorldPosition;
+                void main() {
+                    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                    vWorldPosition = worldPosition.xyz;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 topColor;
+                uniform vec3 bottomColor;
+                uniform float offset;
+                uniform float exponent;
+                varying vec3 vWorldPosition;
+                void main() {
+                    float h = normalize(vWorldPosition + offset).y;
+                    gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+                }
+            `,
+            side: THREE.BackSide
+        });
         
-        // 위쪽 조명
-        const topLight = new THREE.Mesh(
-            new THREE.SphereGeometry(50, 32, 16),
-            new THREE.MeshBasicMaterial({
-                color: 0xffffff,
-                emissive: 0xffffff,
-                emissiveIntensity: 2
-            })
-        );
-        topLight.position.y = 50;
-        envScene.add(topLight);
+        const sky = new THREE.Mesh(skyGeo, skyMat);
+        skyScene.add(sky);
         
         // 환경맵 생성
-        const renderTarget = pmremGenerator.fromScene(envScene, 0.04);
+        const renderTarget = pmremGenerator.fromScene(skyScene,0.04);
         this.scene.environment = renderTarget.texture;
+
         
-        // 정리
+        
+        // 배경은 그라데이션 색상으로
+        this.scene.background = new THREE.Color(0x87CEEB);
+        
+        // 안개 추가 (깊이감)
+        this.scene.fog = new THREE.Fog(0x87CEEB, 100, 300);
+        
+        // 태양광 (그림자용)
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        sunLight.position.set(10, 20, 10);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.1;
+        sunLight.shadow.camera.far = 100;
+        sunLight.shadow.bias = -0.001;
+        sunLight.shadow.normalBias = 0.02;
+
+        // 초기 그림자 범위 (setModel에서 자동 조정됨)
+        // sunLight.shadow.camera.left = -30;
+        // sunLight.shadow.camera.right = 30;
+        // sunLight.shadow.camera.top = 30;
+        // sunLight.shadow.camera.bottom = -30;
+
+        // 그림자 부드러움
+        sunLight.shadow.radius = 4;
+        sunLight.shadow.blurSamples = 25;
+
+        this.scene.add(sunLight);
+        
+        this.sunLight = sunLight;
+
+        // 4. 반구광 추가 (하늘/땅 색상)
+        const hemiLight = new THREE.HemisphereLight(
+        0x87CEEB, // 하늘색
+        0x8B7355, // 땅색
+        0.8       // 강도
+        );
+
+        this.scene.add(hemiLight);
+        
+        // 약간의 환경광 추가
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        this.scene.add(ambientLight);
+        
         pmremGenerator.dispose();
-        renderTarget.dispose();
     }
     
     /**
      * 헬퍼 설정
      */
     setupHelpers() {
-        // 그리드 헬퍼 - 더 밝은 색상
+        // 그리드 헬퍼
         if (this.config.viewer.showGrid) {
-            this.gridHelper = new THREE.GridHelper(20, 20, 0x888888, 0xcccccc);
+            this.gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
             this.scene.add(this.gridHelper);
         }
         
@@ -303,7 +310,7 @@ export class Viewer3D {
         }
     }
     
-    /**
+     /**
      * 모델 설정
      */
     setModel(model) {
@@ -315,7 +322,7 @@ export class Viewer3D {
         
         this.currentModel = model;
         
-        // 그림자 설정 및 머티리얼 최적화
+        // 그림자 설정
         model.traverse((child) => {
             if (child.isMesh) {
                 child.castShadow = true;
@@ -330,26 +337,13 @@ export class Viewer3D {
                             color: oldMat.color,
                             map: oldMat.map,
                             transparent: oldMat.transparent,
-                            opacity: oldMat.opacity,
-                            side: oldMat.side
+                            opacity: oldMat.opacity
                         });
                         oldMat.dispose();
                     }
                     
-                    // 머티리얼 속성 최적화
-                    if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
-                        // 환경맵 반사 강도 증가
-                        child.material.envMapIntensity = 1.0;
-                        
-                        // 기본 roughness/metalness 조정 (너무 반사되지 않도록)
-                        if (child.material.roughness !== undefined && child.material.roughness < 0.5) {
-                            child.material.roughness = 0.5;
-                        }
-                        if (child.material.metalness !== undefined && child.material.metalness > 0.5) {
-                            child.material.metalness = 0.5;
-                        }
-                    }
-                    
+                    child.material.envMapIntensity = 0.6;
+
                     child.material.needsUpdate = true;
                 }
             }
@@ -362,34 +356,33 @@ export class Viewer3D {
         this.scene.add(model);
         
         // 모델에 맞게 그림자 카메라 범위 자동 조정
-        this.adjustShadowCamera();
+        if (this.sunLight) {
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.z) * 0.7; // 수평 크기 기준
+            
+            // 그림자 카메라 범위를 모델 크기에 맞게 조정
+            const shadowCam = this.sunLight.shadow.camera;
+            shadowCam.left = -maxDim;
+            shadowCam.right = maxDim;
+            shadowCam.top = maxDim;
+            shadowCam.bottom = -maxDim;
+            shadowCam.updateProjectionMatrix();
+
+            // 태양 위치도 모델 크기에 맞게 조정
+            this.sunLight.position.set(maxDim * 0.5, maxDim, maxDim * 0.5);
+            this.sunLight.target.position.copy(center);
+            this.sunLight.target.updateMatrixWorld();
+        
+            // 그림자 헬퍼 업데이트
+            if (this.shadowHelper) {
+                this.shadowHelper.update();
+            }
+        }
         
         // 카메라 위치 조정
         this.adjustCameraToModel();
-    }
-    
-    /**
-     * 그림자 카메라 자동 조정
-     */
-    adjustShadowCamera() {
-        if (!this.currentModel || !this.lights.main) return;
-        
-        const box = new THREE.Box3().setFromObject(this.currentModel);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-        const maxDim = Math.max(size.x, size.z) * 0.7;
-        
-        const shadowCam = this.lights.main.shadow.camera;
-        shadowCam.left = -maxDim;
-        shadowCam.right = maxDim;
-        shadowCam.top = maxDim;
-        shadowCam.bottom = -maxDim;
-        shadowCam.updateProjectionMatrix();
-        
-        // 조명 위치도 모델 크기에 맞게 조정
-        this.lights.main.position.set(maxDim * 0.5, maxDim * 1.5, maxDim * 0.5);
-        this.lights.main.target.position.copy(center);
-        this.lights.main.target.updateMatrixWorld();
     }
 
     /**
@@ -401,12 +394,12 @@ export class Viewer3D {
         const size = box.getSize(new THREE.Vector3());
         
         // 모델을 원점으로 이동
-        model.position.sub(center);
+        //model.position.sub(center);
         
         // 크기가 너무 크거나 작은 경우 스케일 조정
         const maxDim = Math.max(size.x, size.y, size.z);
         if (maxDim > 10 || maxDim < 1) {
-            const targetSize = 15;
+            const targetSize = 26;
             const scale = targetSize / maxDim;
             model.scale.multiplyScalar(scale);
         }
@@ -420,28 +413,19 @@ export class Viewer3D {
         
         const box = new THREE.Box3().setFromObject(this.currentModel);
         const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         
-        // 카메라 거리 계산
         const distance = maxDim * 2.5;
         
-        // 카메라 위치 설정 (약간 위에서 비스듬히)
-        this.camera.position.set(
-            center.x + distance * 0.7,
-            center.y + distance * 0.7,
-            center.z + distance * 0.7
-        );
+        this.camera.position.set(distance, distance, distance);
+        this.camera.lookAt(0, 0, 0);
         
-        this.camera.lookAt(center);
-        
-        // 컨트롤 타겟 설정
-        this.controls.target.copy(center);
+        this.controls.target.set(0, 0, 0);
         this.controls.update();
     }
     
     /**
-     * 뷰 설정
+     * 뷰 설정 (거리 수정)
      */
     setView(viewName) {
         if (!this.currentModel) return;
@@ -452,7 +436,7 @@ export class Viewer3D {
         const center = box.getCenter(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
         
-        // 적절한 거리 계산
+        // 적절한 거리 계산 (모델 크기의 2배)
         const distance = maxDim * 2;
         let position;
         
@@ -492,29 +476,29 @@ export class Viewer3D {
      * 카메라 리셋
      */
     resetCamera() {
+        this.camera.position.set(
+            this.config.camera.position.x,
+            this.config.camera.position.y,
+            this.config.camera.position.z
+        );
+        
+        this.camera.lookAt(
+            this.config.camera.lookAt.x,
+            this.config.camera.lookAt.y,
+            this.config.camera.lookAt.z
+        );
+        
+        this.controls.target.set(
+            this.config.camera.lookAt.x,
+            this.config.camera.lookAt.y,
+            this.config.camera.lookAt.z
+        );
+        
+        this.controls.update();
+        
         // 현재 모델이 있으면 그에 맞게 조정
         if (this.currentModel) {
             this.adjustCameraToModel();
-        } else {
-            this.camera.position.set(
-                this.config.camera.position.x,
-                this.config.camera.position.y,
-                this.config.camera.position.z
-            );
-            
-            this.camera.lookAt(
-                this.config.camera.lookAt.x,
-                this.config.camera.lookAt.y,
-                this.config.camera.lookAt.z
-            );
-            
-            this.controls.target.set(
-                this.config.camera.lookAt.x,
-                this.config.camera.lookAt.y,
-                this.config.camera.lookAt.z
-            );
-            
-            this.controls.update();
         }
     }
     
@@ -553,19 +537,19 @@ export class Viewer3D {
             this.controls.update();
         }
 
-        // 모델 매트릭스 강제 업데이트
-        if (this.currentModel) {
-            this.currentModel.updateMatrixWorld(true);
-        }
-        
+        // 모델 매트릭스 강제 업데이트 (추가)
+        // if (this.currentModel) {
+        //     this.currentModel.updateMatrixWorld(true);
+        // }
         // 렌더링 전에 매트릭스 업데이트
-        this.scene.updateMatrixWorld();
+        // this.scene.updateMatrixWorld();
 
         // 메인 렌더링
         this.renderer.render(this.scene, this.camera);
         
         // 추가 렌더링 콜백 실행 (CSS2DRenderer 등)
         this.onRenderCallbacks.forEach(callback => callback());
+   
     }
     
     /**
