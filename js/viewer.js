@@ -146,24 +146,23 @@ export class Viewer3D {
     createRenderer() {
         this.renderer = new THREE.WebGLRenderer({
             antialias: this.config.performance.antialias,
-            alpha: false
+            alpha: false,
+            powerPreference: "high-performance"
         });
         
         this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
         this.renderer.setPixelRatio(this.config.performance.pixelRatio);
         
         // 그림자 설정
-        if (this.config.performance.shadowsEnabled) {
-            this.renderer.shadowMap.enabled = true;
-            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        }
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.VSMShadowMap;
         
-        // 톤 매핑
-        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1.5;
+        // 톤 매핑 - 더 밝게
+        this.renderer.toneMapping = THREE.LinearToneMapping;  // ACESFilmic 대신
+        this.renderer.toneMappingExposure = 1.2;
+        
 
         
-        // 컨테이너에 추가
         this.container.appendChild(this.renderer.domElement);
     }
     
@@ -203,49 +202,95 @@ export class Viewer3D {
      * 조명 설정
      */
     setupLights() {
-        // 1. 환경광 (하늘의 산란광)
-        const ambientLight = new THREE.AmbientLight(0x87CEEB, 0.6); // 하늘색 톤
-        this.scene.add(ambientLight);
+        // 절차적 환경맵 생성 (하늘)
+        const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
         
-        // 2. 주 태양광 (Directional Light)
+        // 간단한 그라데이션 하늘 생성
+        const skyScene = new THREE.Scene();
+        const skyGeo = new THREE.SphereGeometry(500, 32, 32);
+        const skyMat = new THREE.ShaderMaterial({
+            uniforms: {
+                topColor: { value: new THREE.Color(0x87CEEB) }, // 하늘색
+                bottomColor: { value: new THREE.Color(0xF0E68C) }, // 지평선색
+                offset: { value: 33 },
+                exponent: { value: 0.6 }
+            },
+            vertexShader: `
+                varying vec3 vWorldPosition;
+                void main() {
+                    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                    vWorldPosition = worldPosition.xyz;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform vec3 topColor;
+                uniform vec3 bottomColor;
+                uniform float offset;
+                uniform float exponent;
+                varying vec3 vWorldPosition;
+                void main() {
+                    float h = normalize(vWorldPosition + offset).y;
+                    gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), exponent), 0.0)), 1.0);
+                }
+            `,
+            side: THREE.BackSide
+        });
+        
+        const sky = new THREE.Mesh(skyGeo, skyMat);
+        skyScene.add(sky);
+        
+        // 환경맵 생성
+        const renderTarget = pmremGenerator.fromScene(skyScene,0.04);
+        this.scene.environment = renderTarget.texture;
+
+        
+        
+        // 배경은 그라데이션 색상으로
+        this.scene.background = new THREE.Color(0x87CEEB);
+        
+        // 안개 추가 (깊이감)
+        this.scene.fog = new THREE.Fog(0x87CEEB, 100, 300);
+        
+        // 태양광 (그림자용)
         const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
-        sunLight.position.set(50, 100, 50); // 높고 멀리 설정
+        sunLight.position.set(10, 20, 10);
         sunLight.castShadow = true;
-        
-        // 그림자 설정 (야외 환경에 맞게)
-        sunLight.shadow.camera.left = -20;
-        sunLight.shadow.camera.right = 20;
-        sunLight.shadow.camera.top = 20;
-        sunLight.shadow.camera.bottom = -20;
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
         sunLight.shadow.camera.near = 0.1;
         sunLight.shadow.camera.far = 100;
-        sunLight.shadow.mapSize.width = 1024;
-        sunLight.shadow.mapSize.height = 1024;
-        sunLight.shadow.bias = -0.0001;  // 그림자 아티팩트 방지
-        sunLight.shadow.normalBias = 0.002;  // 추가 옵션
-        
+        sunLight.shadow.bias = -0.001;
+        sunLight.shadow.normalBias = 0.02;
+
+        // 초기 그림자 범위 (setModel에서 자동 조정됨)
+        // sunLight.shadow.camera.left = -30;
+        // sunLight.shadow.camera.right = 30;
+        // sunLight.shadow.camera.top = 30;
+        // sunLight.shadow.camera.bottom = -30;
+
+        // 그림자 부드러움
+        sunLight.shadow.radius = 4;
+        sunLight.shadow.blurSamples = 25;
+
         this.scene.add(sunLight);
         
-        // 3. 하늘/땅 반사광
-        const hemisphereLight = new THREE.HemisphereLight(
-            0x87CEEB, // 하늘색
-            0x8B7355, // 흙색
-            0.9
-        );
-        this.scene.add(hemisphereLight);
-        
-        // 4. 보조 태양광 (그림자 없음, 반대편 조명)
-        const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        fillLight.position.set(-20, 30, -20);
-        this.scene.add(fillLight);
-        
-        this.lights = {
-            ambient: ambientLight,
-            directional: sunLight,
-            hemisphere: hemisphereLight,
-            fill: fillLight
-        };
+        this.sunLight = sunLight;
 
+        // 4. 반구광 추가 (하늘/땅 색상)
+        const hemiLight = new THREE.HemisphereLight(
+        0x87CEEB, // 하늘색
+        0x8B7355, // 땅색
+        0.8       // 강도
+        );
+
+        this.scene.add(hemiLight);
+        
+        // 약간의 환경광 추가
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        this.scene.add(ambientLight);
+        
+        pmremGenerator.dispose();
     }
     
     /**
@@ -265,7 +310,7 @@ export class Viewer3D {
         }
     }
     
-    /**
+     /**
      * 모델 설정
      */
     setModel(model) {
@@ -282,19 +327,64 @@ export class Viewer3D {
             if (child.isMesh) {
                 child.castShadow = true;
                 child.receiveShadow = true;
+                
+                // 머티리얼 확인 및 수정
+                if (child.material) {
+                    // MeshBasicMaterial은 그림자를 받지 못하므로 변경
+                    if (child.material.type === 'MeshBasicMaterial') {
+                        const oldMat = child.material;
+                        child.material = new THREE.MeshStandardMaterial({
+                            color: oldMat.color,
+                            map: oldMat.map,
+                            transparent: oldMat.transparent,
+                            opacity: oldMat.opacity
+                        });
+                        oldMat.dispose();
+                    }
+                    
+                    child.material.envMapIntensity = 0.6;
+
+                    child.material.needsUpdate = true;
+                }
             }
         });
-        
+
         // 모델 크기 조정 및 중심 맞추기
         this.centerModel(model);
         
         // 씬에 추가
         this.scene.add(model);
         
+        // 모델에 맞게 그림자 카메라 범위 자동 조정
+        if (this.sunLight) {
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.z) * 0.7; // 수평 크기 기준
+            
+            // 그림자 카메라 범위를 모델 크기에 맞게 조정
+            const shadowCam = this.sunLight.shadow.camera;
+            shadowCam.left = -maxDim;
+            shadowCam.right = maxDim;
+            shadowCam.top = maxDim;
+            shadowCam.bottom = -maxDim;
+            shadowCam.updateProjectionMatrix();
+
+            // 태양 위치도 모델 크기에 맞게 조정
+            this.sunLight.position.set(maxDim * 0.5, maxDim, maxDim * 0.5);
+            this.sunLight.target.position.copy(center);
+            this.sunLight.target.updateMatrixWorld();
+        
+            // 그림자 헬퍼 업데이트
+            if (this.shadowHelper) {
+                this.shadowHelper.update();
+            }
+        }
+        
         // 카메라 위치 조정
         this.adjustCameraToModel();
     }
-    
+
     /**
      * 모델 중심 맞추기
      */
