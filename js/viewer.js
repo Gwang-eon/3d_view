@@ -174,7 +174,21 @@ export class Viewer3D {
         
         // 컨트롤 설정 적용
         Object.assign(this.controls, this.config.controls);
+
+
+        // 추가 설정 (새로 추가)
+        this.controls.mouseButtons = {
+            LEFT: THREE.MOUSE.ROTATE,
+            MIDDLE: THREE.MOUSE.DOLLY,
+            RIGHT: THREE.MOUSE.PAN
+        };
         
+        // 터치 설정 (새로 추가)
+        this.controls.touches = {
+            ONE: THREE.TOUCH.ROTATE,
+            TWO: THREE.TOUCH.DOLLY_PAN
+        };
+
         this.controls.target.set(
             this.config.camera.lookAt.x,
             this.config.camera.lookAt.y,
@@ -501,6 +515,42 @@ export class Viewer3D {
         material.dispose();
     }
     
+    /**
+     * 회전 속도 설정
+     */
+    setRotateSpeed(speed) {
+        if (this.controls) {
+            this.controls.rotateSpeed = speed;
+        }
+    }
+
+    /**
+     * 줌 속도 설정
+     */
+    setZoomSpeed(speed) {
+        if (this.controls) {
+            this.controls.zoomSpeed = speed;
+        }
+    }
+
+    /**
+     * 이동 속도 설정
+     */
+    setPanSpeed(speed) {
+        if (this.controls) {
+            this.controls.panSpeed = speed;
+        }
+    }
+
+    /**
+     * 모든 컨트롤 속도 리셋
+     */
+    resetControlSpeeds() {
+        this.setRotateSpeed(this.config.controls.rotateSpeed || 0.5);
+        this.setZoomSpeed(this.config.controls.zoomSpeed || 0.8);
+        this.setPanSpeed(this.config.controls.panSpeed || 0.5);
+    }
+
     /**
      * 뷰어 정리
      */

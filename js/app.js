@@ -55,11 +55,16 @@ const CONFIG = {
     },
     controls: {
         enableDamping: true,
-        dampingFactor: 0.05,
+        dampingFactor: 0.15,      // 0.05 → 0.15로 변경
         minDistance: 2,
-        maxDistance: 100,  // 50에서 증가
+        maxDistance: 100,
         enablePan: true,
-        panSpeed: 0.5
+        panSpeed: 0.5,
+        rotateSpeed: 0.5,         // 새로 추가
+        zoomSpeed: 0.8,           // 새로 추가
+        // 수직 회전 제한
+        minPolarAngle: 0,         // 새로 추가
+        maxPolarAngle: Math.PI * 0.9  // 새로 추가
     },
     lights: {
         ambient: {
@@ -254,6 +259,9 @@ class WallViewerApp {
         
         // 핫스팟 컨트롤
         this.setupHotspotControls();
+
+        // 카메라 속도 컨트롤 설정 (새로 추가)
+        this.setupCameraSpeedControls();
     }
     
     /**
@@ -289,6 +297,42 @@ class WallViewerApp {
         if (filterSelect) {
             filterSelect.addEventListener('change', (e) => {
                 this.hotspotManager.filterByStatus(e.target.value);
+            });
+        }
+    }
+
+
+    /**
+     * 카메라 속도 컨트롤 설정
+     */
+    setupCameraSpeedControls() {
+        // 회전 속도
+        const rotateSpeedSlider = document.getElementById('camera-rotate-speed');
+        if (rotateSpeedSlider) {
+            rotateSpeedSlider.addEventListener('input', (e) => {
+                const speed = parseFloat(e.target.value);
+                this.viewer.setRotateSpeed(speed);
+                document.getElementById('rotate-speed-value').textContent = speed.toFixed(1);
+            });
+        }
+        
+        // 줌 속도
+        const zoomSpeedSlider = document.getElementById('camera-zoom-speed');
+        if (zoomSpeedSlider) {
+            zoomSpeedSlider.addEventListener('input', (e) => {
+                const speed = parseFloat(e.target.value);
+                this.viewer.setZoomSpeed(speed);
+                document.getElementById('zoom-speed-value').textContent = speed.toFixed(1);
+            });
+        }
+        
+        // 이동 속도
+        const panSpeedSlider = document.getElementById('camera-pan-speed');
+        if (panSpeedSlider) {
+            panSpeedSlider.addEventListener('input', (e) => {
+                const speed = parseFloat(e.target.value);
+                this.viewer.setPanSpeed(speed);
+                document.getElementById('pan-speed-value').textContent = speed.toFixed(1);
             });
         }
     }
