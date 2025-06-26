@@ -3,8 +3,8 @@
 /* ===== 핫스팟 마커 기본 스타일 ===== */
 .hotspot-marker {
     position: absolute;
-    width: 44px;
-    height: 44px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
     border: 3px solid rgba(255, 255, 255, 0.9);
