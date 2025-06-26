@@ -538,11 +538,11 @@ export class Viewer3D {
         }
 
         // 모델 매트릭스 강제 업데이트 (추가)
-        if (this.currentModel) {
-            this.currentModel.updateMatrixWorld(true);
-        }
+        // if (this.currentModel) {
+        //     this.currentModel.updateMatrixWorld(true);
+        // }
         // 렌더링 전에 매트릭스 업데이트
-        this.scene.updateMatrixWorld();
+        // this.scene.updateMatrixWorld();
 
         // 메인 렌더링
         this.renderer.render(this.scene, this.camera);

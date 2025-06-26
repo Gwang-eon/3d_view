@@ -11,8 +11,6 @@ export class HotspotManagerV3 {
         this.cssRenderer = null;
         this.hotspots = [];
         this.activeHotspot = null;
-        this.lastModelMatrix = new THREE.Matrix4();
-        this.modelTransformChanged = false;
         
         // 핫스팟 설정
         this.config = {
@@ -45,22 +43,6 @@ export class HotspotManagerV3 {
         
         this.init();
     }
-    
-    // 모델 변환 감지 메서드 추가
-    checkModelTransform() {
-        if (!this.viewer.currentModel) return false;
-        
-        const currentMatrix = this.viewer.currentModel.matrixWorld;
-        
-        if (!currentMatrix.equals(this.lastModelMatrix)) {
-            this.lastModelMatrix.copy(currentMatrix);
-            return true;
-        }
-        
-        return false;
-    }
-
-
 
     /**
      * 초기화
@@ -209,21 +191,14 @@ export class HotspotManagerV3 {
             element: hotspotElement,
             empty: empty,  // Empty 참조 저장 (중요!)
             data: data,
-            isActive: false,
-            worldPosition: worldPosition  // 월드 위치 캐시
+            isActive: false
         };
         
         // 이벤트 핸들러 바인딩
         this.bindHotspotEvents(hotspotElement, hotspot);
         
-
         // 리스트에 추가
-         this.hotspots.push(hotspot);
-
-        // 씬에 추가
-        // this.viewer.scene.add(cssObject);
-        // this.hotspots.push(hotspot);
-        empty.add(cssObject);
+        this.hotspots.push(hotspot);
         
         console.log(`📍 핫스팟 생성: ${data.title} (${data.id})`);
     }
@@ -295,24 +270,13 @@ export class HotspotManagerV3 {
     }
     
     /**
-     * 핫스팟 위치 업데이트 (매 프레임 호출)
+     * 핫스팟 위치 업데이트 - 더 이상 필요 없음
+     * CSS2DObject가 Empty의 자식이므로 자동으로 따라감
      */
     updateHotspotPositions() {
-
-        // if (!this.viewer.currentModel) return;
-
-        // this.hotspots.forEach(hotspot => {
-        //     if (hotspot.empty && hotspot.cssObject && hotspot.empty.parent) {
-        //         // 직접 매트릭스에서 위치 추출
-        //         const mat = hotspot.empty.matrixWorld;
-        //         hotspot.cssObject.position.set(
-        //             mat.elements[12],
-        //             mat.elements[13],
-        //             mat.elements[14]
-        //         );
-        //     }
-        // });
+        // 이제 필요 없음
     }
+    
     /**
      * 핫스팟 정보 표시
      */
@@ -544,12 +508,6 @@ export class HotspotManagerV3 {
      */
     render() {
         if (this.cssRenderer && this.viewer.camera) {
-            // 핫스팟 위치 업데이트 (중요!)
-            // if (this.checkModelTransform()) {
-            //     this.updateHotspotPositions();
-            // }
-            this.updateHotspotPositions();
-
             // CSS2D 렌더링
             this.cssRenderer.render(this.viewer.scene, this.viewer.camera);
         }
