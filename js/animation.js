@@ -11,7 +11,7 @@ export class AnimationController {
         this.mixer = null;
         this.clips = [];
         this.actions = new Map();
-        this.clock = new THREE.Clock();
+        this.clock = new THREE.Clock(); // Clock이 자동으로 시작됨
         
         // 상태
         this.isPlaying = false;
@@ -51,11 +51,16 @@ export class AnimationController {
         this.showControls();
         this.createAnimationList();
         
+        // Clock 재시작 (중요!)
+        this.clock.start();
+        
         // 첫 번째 애니메이션 자동 재생
         if (animations.length > 0) {
-            this.playAnimation(animations[0].name);
+            // 약간의 지연을 주어 안정적으로 시작
+            setTimeout(() => {
+                this.playAnimation(animations[0].name);
+            }, 100);
         }
-        
     }
     
     /**
@@ -63,7 +68,12 @@ export class AnimationController {
      */
     playAnimation(clipName) {
         const action = this.actions.get(clipName);
-        if (!action) return;
+        if (!action) {
+            console.error(`애니메이션을 찾을 수 없습니다: ${clipName}`);
+            return;
+        }
+        
+        console.log(`🎬 애니메이션 재생 시작: ${clipName}`);
         
         // 이전 애니메이션 정지
         if (this.currentAction && this.currentAction !== action) {
@@ -78,7 +88,10 @@ export class AnimationController {
         this.currentAction = action;
         this.isPlaying = true;
         
-        console.log(`▶️ 애니메이션 재생: ${clipName}`);
+        // 재생 상태 확인
+        console.log(`▶️ 애니메이션 재생 중: ${clipName}, 상태: ${action.isRunning()}`);
+        
+        this.updatePlayButton();
     }
     
     /**
@@ -90,9 +103,11 @@ export class AnimationController {
         if (this.isPlaying) {
             this.currentAction.paused = true;
             this.isPlaying = false;
+            console.log('⏸️ 애니메이션 일시정지');
         } else {
             this.currentAction.paused = false;
             this.isPlaying = true;
+            console.log('▶️ 애니메이션 재개');
         }
         
         this.updatePlayButton();
@@ -106,6 +121,7 @@ export class AnimationController {
             this.currentAction.stop();
             this.isPlaying = false;
             this.currentAction = null;
+            console.log('⏹️ 애니메이션 정지');
         }
         
         this.updatePlayButton();
@@ -162,7 +178,7 @@ export class AnimationController {
         const playButton = document.createElement('button');
         playButton.id = 'play-pause-btn';
         playButton.className = 'anim-btn';
-        playButton.innerHTML = '▶️';
+        playButton.innerHTML = '⏸️';  // 자동 재생되므로 초기값은 일시정지
         playButton.style.cssText = `
             background: transparent;
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -232,20 +248,20 @@ export class AnimationController {
     }
     
     /**
-     * 업데이트 루프 시작
+     * 업데이트 루프 시작 - app.js에서 처리하므로 주석 처리
      */
-//    startUpdateLoop() {
-//        const animate = () => {
-//            if (this.mixer) {
-//                const delta = this.clock.getDelta();
-//                this.mixer.update(delta);
-//            }
-            
-//            requestAnimationFrame(animate);
-//        };
-        
-//        animate();
-//    }
+    // startUpdateLoop() {
+    //     const animate = () => {
+    //         if (this.mixer) {
+    //             const delta = this.clock.getDelta();
+    //             this.mixer.update(delta);
+    //         }
+    //         
+    //         requestAnimationFrame(animate);
+    //     };
+    //     
+    //     animate();
+    // }
     
     /**
      * 정리
@@ -260,6 +276,9 @@ export class AnimationController {
         this.actions.clear();
         this.currentAction = null;
         this.isPlaying = false;
+        
+        // Clock 정지
+        this.clock.stop();
     }
     
     /**

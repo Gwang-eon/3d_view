@@ -108,6 +108,9 @@ class WallViewerApp {
         
         // GLTF 카메라들
         this.gltfCameras = [];
+        
+        // 애니메이션용 시간 추적
+        this.lastTime = 0;
     }
     
     /**
@@ -180,11 +183,18 @@ class WallViewerApp {
             }
         });
         
-        // 애니메이션 업데이트를 렌더링 루프에 추가
+        // 애니메이션 업데이트를 렌더링 루프에 추가 - 수정된 버전
         this.viewer.addRenderCallback(() => {
             if (this.animationController && this.animationController.mixer) {
-                const delta = this.animationController.clock.getDelta();
-                this.animationController.mixer.update(delta);
+                // 수동으로 delta 계산
+                const currentTime = performance.now() / 1000; // 밀리초를 초로 변환
+                const delta = currentTime - this.lastTime;
+                this.lastTime = currentTime;
+                
+                // 첫 프레임이거나 너무 큰 delta는 무시
+                if (delta > 0 && delta < 0.1) {
+                    this.animationController.mixer.update(delta);
+                }
             }
         });
         
