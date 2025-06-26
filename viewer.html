@@ -4,532 +4,95 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>옹벽 3D 뷰어</title>
-    
-    <!-- 기본 스타일 -->
-    <link rel="stylesheet" href="css/main.css">
-    <link rel="stylesheet" href="css/main-improved.css">
-    
-    <!-- Three.js CDN (안정적인 r128 버전) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r16/Stats.min.js"></script>
-    
-    <!-- Three.js 로드 확인 -->
-    <script>
-        // Three.js 및 모듈 로드 확인
-        function checkThreeModules() {
-            const modules = {
-                'THREE': typeof THREE !== 'undefined',
-                'GLTFLoader': typeof THREE !== 'undefined' && typeof THREE.GLTFLoader !== 'undefined',
-                'OrbitControls': typeof THREE !== 'undefined' && typeof THREE.OrbitControls !== 'undefined',
-                'Stats': typeof Stats !== 'undefined'
-            };
-            
-            console.log('[Three.js] 모듈 로드 상태:');
-            Object.entries(modules).forEach(([name, loaded]) => {
-                console.log(`  - ${name}: ${loaded ? '✓ 로드됨' : '✗ 로드 안됨'}`);
-            });
-            
-            if (modules.THREE) {
-                console.log(`[Three.js] 버전: ${THREE.REVISION}`);
-            }
-            
-            return Object.values(modules).every(loaded => loaded);
-        }
-        
-        // 로드 확인 (500ms 후)
-        setTimeout(() => {
-            const allLoaded = checkThreeModules();
-            if (allLoaded) {
-                console.log('[Three.js] 모든 모듈 로드 완료!');
-            } else {
-                console.error('[Three.js] 일부 모듈 로드 실패!');
-            }
-        }, 500);
-    </script>
-
-    <!-- 설정 파일 (모듈로 로드) -->
-    <script type="module">
-        // Three.js 및 추가 모듈 로드 대기
-        async function waitForDependencies() {
-            const maxAttempts = 30;  // 3초 대기
-            let attempts = 0;
-            
-            while (attempts < maxAttempts) {
-                if (typeof THREE !== 'undefined' && 
-                    typeof THREE.GLTFLoader !== 'undefined' && 
-                    typeof THREE.OrbitControls !== 'undefined') {
-                    console.log('[Dependencies] 모든 의존성 로드 완료');
-                    return true;
-                }
-                await new Promise(resolve => setTimeout(resolve, 100));
-                attempts++;
-                
-                // 진행 상황 로그 (1초마다)
-                if (attempts % 10 === 0) {
-                    console.log(`[Dependencies] 의존성 로드 대기 중... (${attempts/10}초)`);
-                }
-            }
-            
-            console.error('[Dependencies] 의존성 로드 타임아웃');
-            // 로드된 모듈 상태 출력
-            console.log('로드 상태:', {
-                'THREE': typeof THREE !== 'undefined',
-                'GLTFLoader': typeof THREE !== 'undefined' && typeof THREE.GLTFLoader !== 'undefined',
-                'OrbitControls': typeof THREE !== 'undefined' && typeof THREE.OrbitControls !== 'undefined',
-                'Stats': typeof Stats !== 'undefined'
-            });
-            return false;
-        }
-        
-        // 의존성 로드 후 CONFIG 로드
-        async function loadConfig() {
-            // 약간의 초기 대기 시간 (스크립트 실행 순서 보장)
-            await new Promise(resolve => setTimeout(resolve, 300));
-            
-            const depsLoaded = await waitForDependencies();
-            if (!depsLoaded) {
-                console.error('[Config] 의존성 로드 실패로 CONFIG 로드 중단');
-                return;
-            }
-            
-            try {
-                const { CONFIG } = await import('./js/config.js');
-                window.CONFIG = CONFIG;
-                console.log('[Config] CONFIG 전역 노출 완료');
-                
-                // CONFIG 로드 완료 이벤트 발생
-                window.dispatchEvent(new Event('configLoaded'));
-            } catch (error) {
-                console.error('[Config] CONFIG 로드 실패:', error);
-            }
-        }
-        
-        // 로드 시작
-        loadConfig();
-    </script>
-    
-    <!-- 추가 스타일 -->
-    <style>
-        /* ui-container 스타일 추가 */
-        #ui-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 100;
-        }
-        
-        #ui-container > * {
-            pointer-events: auto;
-        }
-        
-        /* 모델 토글 버튼 활성화 스타일 */
-        .model-toggle-btn.active {
-            background: var(--accent-blue);
-            color: white;
-            transform: scale(1.05);
-        }
-        
-        /* 줌 컨트롤 스타일 */
-        .zoom-controls {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            display: flex;
-            gap: 5px;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 5px;
-            border-radius: 8px;
-        }
-        
-        .zoom-btn {
-            flex: 1;
-            padding: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            color: white;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .zoom-btn:hover {
-            background: rgba(0, 123, 255, 0.3);
-        }
-        
-        /* 홈 버튼 추가 스타일 */
-        #home-btn {
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
-        #home-btn:hover {
-            background: rgba(0, 123, 255, 0.5);
-            transform: scale(1.1);
-        }
-        
-        #home-btn span {
-            font-size: 20px;
-        }
-    </style>
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
     <!-- 헤더 -->
-    <header class="app-header">
-        <div class="header-left">
-            <h1>옹벽 3D 모니터링 시스템</h1>
-        </div>
-        <div class="header-center">
-            <div class="model-toggle">
-                <button class="model-toggle-btn" data-model="block">블록 옹벽</button>
-                <button class="model-toggle-btn" data-model="cantilever">캔틸레버 옹벽</button>
-                <button class="model-toggle-btn" data-model="mse">MSE 옹벽</button>
-            </div>
-        </div>
-        <div class="header-right">
-            <!-- 홈 버튼 추가 -->
+    <header class="header">
+        <h1>옹벽 3D 뷰어</h1>
+        <div class="header-controls">
             <button id="home-btn" class="header-btn" title="홈으로">
                 <span>🏠</span>
             </button>
             <button id="fullscreen-btn" class="header-btn" title="전체화면">
                 <span>⛶</span>
             </button>
-            <button id="settings-btn" class="header-btn" title="설정">
-                <span>⚙️</span>
-            </button>
         </div>
     </header>
-
-    <!-- 메인 뷰어 컨테이너 -->
-    <div id="viewer-container" class="viewer-container">
-        <!-- 3D 캔버스 -->
-        <div id="canvas-container"></div>
+    
+    <!-- 메인 컨테이너 -->
+    <main class="viewer-container">
+        <!-- 3D 뷰어 -->
+        <div id="viewer" class="viewer-canvas"></div>
         
-        <!-- UI 컨테이너 - 모든 UI 요소를 포함 -->
-        <div id="ui-container">
-            <!-- 로딩 화면 -->
-            <div id="loading" class="loading-screen">
-                <div class="loading-spinner"></div>
-                <div>모델 로딩 중...</div>
-            </div>
-            
-            <!-- 에러 메시지 -->
-            <div id="error" class="error-message" style="display: none;"></div>
-            
-            <!-- 모델 선택기 (초기에는 숨김) -->
-            <div id="model-selector" class="model-selector" style="display: none;">
-                <div id="model-list" class="model-list"></div>
-            </div>
-            
-            <!-- 모델 정보 패널 -->
-            <div id="info-panel" class="info-panel">
-                <h3>모델 정보</h3>
-                <div class="info-content">
-                    <p>모델을 선택하면 상세 정보가 표시됩니다.</p>
+        <!-- 사이드바 -->
+        <aside class="sidebar">
+            <!-- 모델 선택 -->
+            <section class="model-selector">
+                <h2>모델 선택</h2>
+                <div class="model-buttons">
+                    <button class="model-btn active" data-model="0">
+                        <span class="model-icon">🧱</span>
+                        <span class="model-name">블록 옹벽</span>
+                    </button>
+                    <button class="model-btn" data-model="1">
+                        <span class="model-icon">🏗️</span>
+                        <span class="model-name">캔틸레버 옹벽</span>
+                    </button>
+                    <button class="model-btn" data-model="2">
+                        <span class="model-icon">🔧</span>
+                        <span class="model-name">MSE 옹벽</span>
+                    </button>
                 </div>
-            </div>
+            </section>
             
-            <!-- 핫스팟 정보 패널 -->
-            <div id="hotspot-info" class="hotspot-info" style="display: none;">
-                <button class="close-btn" onclick="this.parentElement.style.display='none'">×</button>
-                <h3>핫스팟 정보</h3>
-                <div class="hotspot-content"></div>
-            </div>
+            <!-- 모델 정보 -->
+            <section class="model-info">
+                <h2>모델 정보</h2>
+                <div id="info-content" class="info-content">
+                    <p>모델을 선택하면 정보가 표시됩니다.</p>
+                </div>
+            </section>
             
-            <!-- 애니메이션 컨트롤 -->
-            <div id="animation-controls" class="animation-controls" style="display: none;">
-                <button id="play-pause-btn" class="control-btn">
-                    <span>▶</span>
+            <!-- 컨트롤 -->
+            <section class="view-controls">
+                <h2>뷰 컨트롤</h2>
+                <div class="control-buttons">
+                    <button class="control-btn" data-view="front" title="정면">앞</button>
+                    <button class="control-btn" data-view="back" title="후면">뒤</button>
+                    <button class="control-btn" data-view="left" title="좌측">좌</button>
+                    <button class="control-btn" data-view="right" title="우측">우</button>
+                    <button class="control-btn" data-view="top" title="상단">위</button>
+                    <button class="control-btn" data-view="bottom" title="하단">아래</button>
+                </div>
+                <button class="control-btn reset-btn" data-view="reset">
+                    초기 위치로
                 </button>
-                <input type="range" id="animation-slider" class="animation-slider" min="0" max="100" value="0">
-                <span id="animation-time" class="animation-time">0:00</span>
-            </div>
-            
-            <!-- 카메라 뷰 컨트롤 -->
-            <div id="camera-controls" class="camera-controls">
-                <div class="view-buttons">
-                    <button class="view-btn" data-view="front" title="정면">F</button>
-                    <button class="view-btn" data-view="back" title="후면">B</button>
-                    <button class="view-btn" data-view="left" title="좌측">L</button>
-                    <button class="view-btn" data-view="right" title="우측">R</button>
-                    <button class="view-btn" data-view="top" title="상단">T</button>
-                    <button class="view-btn" data-view="bottom" title="하단">B</button>
-                </div>
-            </div>
-            
-            <!-- 줌 컨트롤 -->
-            <div class="zoom-controls">
-                <button class="zoom-btn" id="zoom-in">+</button>
-                <button class="zoom-btn" id="zoom-out">−</button>
-                <button class="zoom-btn" id="zoom-fit">⊡</button>
-            </div>
-            
-            <!-- 설정 패널 -->
-            <div id="settings-panel" class="settings-panel" style="display: none;">
-                <div class="settings-header">
-                    <h3>설정</h3>
-                    <button class="close-btn" onclick="document.getElementById('settings-panel').style.display='none'">×</button>
-                </div>
-                <div class="settings-content">
-                    <div class="setting-item">
-                        <label>그리드 표시</label>
-                        <input type="checkbox" id="grid-toggle" checked>
-                    </div>
-                    <div class="setting-item">
-                        <label>축 표시</label>
-                        <input type="checkbox" id="axes-toggle" checked>
-                    </div>
-                    <div class="setting-item">
-                        <label>그림자</label>
-                        <input type="checkbox" id="shadows-toggle" checked>
-                    </div>
-                    <div class="setting-item">
-                        <label>성능 통계</label>
-                        <input type="checkbox" id="stats-toggle">
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 통계 패널 (숨김) -->
-            <div id="stats-panel" style="display: none;"></div>
+            </section>
+        </aside>
+    </main>
+    
+    <!-- 로딩 화면 -->
+    <div id="loading" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">모델 로딩 중...</p>
+    </div>
+    
+    <!-- 에러 화면 -->
+    <div id="error" class="error-screen" style="display: none;">
+        <div class="error-content">
+            <h2>오류 발생</h2>
+            <p id="error-message">모델을 로드할 수 없습니다.</p>
+            <button onclick="location.reload()">다시 시도</button>
         </div>
     </div>
-
-    <!-- 하단 컨트롤 바 -->
-    <div id="bottom-controls" class="bottom-controls">
-        <div class="controls-left">
-            <div class="animation-controls-extended">
-                <button id="prev-frame" class="control-btn" title="이전 프레임">⏮</button>
-                <button id="play-btn" class="control-btn" title="재생/일시정지">▶</button>
-                <button id="next-frame" class="control-btn" title="다음 프레임">⏭</button>
-                <button id="stop-btn" class="control-btn" title="정지">⏹</button>
-            </div>
-            
-            <div class="timeline-container">
-                <div class="timeline-track">
-                    <input type="range" id="timeline-slider" min="0" max="100" value="0">
-                    <div class="timeline-progress"></div>
-                </div>
-                <span class="timeline-time">0:00 / 0:00</span>
-            </div>
-        </div>
-        
-        <div class="controls-center">
-            <div class="speed-control">
-                <label>속도:</label>
-                <select id="speed-select" class="control-select-sm">
-                    <option value="0.25">0.25x</option>
-                    <option value="0.5">0.5x</option>
-                    <option value="1" selected>1x</option>
-                    <option value="1.5">1.5x</option>
-                    <option value="2">2x</option>
-                </select>
-            </div>
-            
-            <div class="loop-control">
-                <label>
-                    <input type="checkbox" id="loop-toggle">
-                    반복
-                </label>
-            </div>
-        </div>
-        
-        <div class="controls-right">
-            <button id="screenshot-btn" class="control-btn" title="스크린샷">📷</button>
-            <button id="record-btn" class="control-btn" title="녹화">⏺</button>
-        </div>
-    </div>
-
-    <!-- DOM 호환성 및 초기화 스크립트 -->
-    <script>
-        // CONFIG 로드 대기
-        function waitForConfig() {
-            return new Promise((resolve) => {
-                if (window.CONFIG) {
-                    resolve();
-                } else {
-                    window.addEventListener('configLoaded', resolve);
-                }
-            });
-        }
-        
-        // DOM 준비 및 호환성 레이어
-        (async function() {
-            console.log('DOM 호환성 레이어 시작');
-            
-            // CONFIG 로드 대기
-            await waitForConfig();
-            console.log('✅ CONFIG 로드 완료');
-            
-            // 1. 필수 DOM 요소 확인 및 생성
-            function ensureElements() {
-                // ui-container는 이미 HTML에 있으므로 추가 생성 불필요
-                
-                // 다른 동적 요소들이 필요한 경우 여기에 추가
-                const requiredElements = [
-                    { id: 'loading', parent: 'ui-container' },
-                    { id: 'error', parent: 'ui-container' },
-                    { id: 'model-selector', parent: 'ui-container' },
-                    { id: 'model-list', parent: 'model-selector' }
-                ];
-                
-                requiredElements.forEach(({ id, parent }) => {
-                    if (!document.getElementById(id)) {
-                        console.warn(`누락된 요소 감지: #${id}, 자동 생성 시도...`);
-                        const element = document.createElement('div');
-                        element.id = id;
-                        element.className = id.replace('-', '_');
-                        
-                        const parentEl = document.getElementById(parent);
-                        if (parentEl) {
-                            parentEl.appendChild(element);
-                            console.log(`✓ #${id} 요소 생성됨`);
-                        }
-                    }
-                });
-            }
-            
-            // 2. ID 별칭 설정 (improved DOM을 기존 ID로도 접근 가능하게)
-            function setupAliases() {
-                const aliases = {
-                    'play-btn': 'play-pause-btn',
-                    'pause-btn': 'play-pause-btn',
-                    'timeline-slider': 'animation-slider'
-                };
-                
-                Object.entries(aliases).forEach(([oldId, newId]) => {
-                    const newElement = document.getElementById(newId);
-                    if (newElement && !document.getElementById(oldId)) {
-                        // 참조 생성
-                        Object.defineProperty(window, oldId, {
-                            get: () => document.getElementById(newId)
-                        });
-                    }
-                });
-            }
-            
-            // 3. 모델 토글 버튼 클릭 처리
-            function setupModelToggle() {
-                const modelToggleBtns = document.querySelectorAll('.model-toggle-btn');
-                const modelIndexMap = {
-                    'block': 0,
-                    'cantilever': 1,
-                    'mse': 2
-                };
-                
-                modelToggleBtns.forEach(btn => {
-                    btn.addEventListener('click', function() {
-                        const modelType = this.getAttribute('data-model');
-                        const modelIndex = modelIndexMap[modelType];
-                        
-                        if (modelIndex !== undefined && window.CONFIG && window.CONFIG.models[modelIndex]) {
-                            console.log(`모델 토글: ${modelType} (index: ${modelIndex})`);
-                            
-                            // 모든 버튼 비활성화
-                            modelToggleBtns.forEach(b => b.classList.remove('active'));
-                            // 현재 버튼 활성화
-                            this.classList.add('active');
-                            
-                            // viewerApp이 있으면 모델 로드
-                            if (window.viewerApp && window.viewerApp.uiController) {
-                                window.viewerApp.uiController.selectModel(window.CONFIG.models[modelIndex]);
-                            } else {
-                                console.warn('viewerApp이 아직 초기화되지 않았습니다.');
-                                // URL 파라미터 변경으로 재로드
-                                window.location.href = `viewer.html?model=${modelIndex}`;
-                            }
-                        }
-                    });
-                });
-            }
-            
-            // 4. 홈 버튼 처리
-            const homeBtn = document.getElementById('home-btn');
-            if (homeBtn) {
-                homeBtn.addEventListener('click', () => {
-                    window.location.href = 'index.html';
-                });
-            }
-            
-            // DOM 준비 시 실행
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', async function() {
-                    await waitForConfig();
-                    ensureElements();
-                    setupAliases();
-                    setupModelToggle();
-                });
-            } else {
-                await waitForConfig();
-                ensureElements();
-                setupAliases();
-                setupModelToggle();
-            }
-            
-            console.log('✅ DOM 호환성 레이어 준비 완료');
-        })();
-    </script>
-
-    <!-- URL 파라미터 처리 -->
-    <script type="module">
-        // CONFIG 로드 대기
-        function waitForConfig() {
-            return new Promise((resolve) => {
-                if (window.CONFIG) {
-                    resolve();
-                } else {
-                    window.addEventListener('configLoaded', resolve);
-                }
-            });
-        }
-        
-        // URL 파라미터 확인
-        async function handleURLParams() {
-            await waitForConfig();
-            
-            const urlParams = new URLSearchParams(window.location.search);
-            const modelId = urlParams.get('model');
-            
-            if (modelId !== null) {
-                console.log(`URL 파라미터 감지: model=${modelId}`);
-                // 해당 모델 버튼 활성화
-                const modelTypes = ['block', 'cantilever', 'mse'];
-                const modelType = modelTypes[parseInt(modelId)];
-                
-                if (modelType) {
-                    const btn = document.querySelector(`[data-model="${modelType}"]`);
-                    if (btn) {
-                        document.querySelectorAll('.model-toggle-btn').forEach(b => b.classList.remove('active'));
-                        btn.classList.add('active');
-                    }
-                }
-            }
-        }
-        
-        // DOMContentLoaded 이벤트 처리
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', handleURLParams);
-        } else {
-            handleURLParams();
-        }
-    </script>
-
-    <!-- 애플리케이션 스크립트 (CONFIG 로드 후 동적 로드) -->
-    <script>
-        // viewer-main.js 동적 로드
-        window.addEventListener('configLoaded', () => {
-            console.log('[Main] CONFIG 로드 완료, viewer-main.js 로드 시작');
-            
-            const script = document.createElement('script');
-            script.type = 'module';
-            script.src = 'js/viewer-main.js';
-            script.onload = () => console.log('[Main] viewer-main.js 로드 완료');
-            script.onerror = (error) => console.error('[Main] viewer-main.js 로드 실패:', error);
-            document.body.appendChild(script);
-        });
-    </script>
+    
+    <!-- Three.js 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- 애플리케이션 스크립트 -->
+    <script type="module" src="js/app.js"></script>
 </body>
 </html>
