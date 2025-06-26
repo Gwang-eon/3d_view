@@ -198,10 +198,9 @@ export class HotspotManagerV3 {
         // CSS2DObject 생성
         const cssObject = new THREE.CSS2DObject(hotspotElement);
         
-        // 초기 위치 설정 (월드 위치)
-        const worldPosition = new THREE.Vector3();
-        empty.getWorldPosition(worldPosition);
-        cssObject.position.copy(worldPosition);
+        // 중요: CSS2DObject를 Empty의 자식으로 추가!
+        cssObject.position.set(0, 0, 0);  // Empty 기준 상대 위치
+        empty.add(cssObject);  // Scene이 아닌 Empty에 추가
         
         // 핫스팟 데이터
         const hotspot = {
@@ -217,9 +216,14 @@ export class HotspotManagerV3 {
         // 이벤트 핸들러 바인딩
         this.bindHotspotEvents(hotspotElement, hotspot);
         
+
+        // 리스트에 추가
+         this.hotspots.push(hotspot);
+
         // 씬에 추가
-        this.viewer.scene.add(cssObject);
-        this.hotspots.push(hotspot);
+        // this.viewer.scene.add(cssObject);
+        // this.hotspots.push(hotspot);
+        empty.add(cssObject);
         
         console.log(`📍 핫스팟 생성: ${data.title} (${data.id})`);
     }
@@ -295,19 +299,19 @@ export class HotspotManagerV3 {
      */
     updateHotspotPositions() {
 
-        if (!this.viewer.currentModel) return;
+        // if (!this.viewer.currentModel) return;
 
-        this.hotspots.forEach(hotspot => {
-            if (hotspot.empty && hotspot.cssObject && hotspot.empty.parent) {
-                // 직접 매트릭스에서 위치 추출
-                const mat = hotspot.empty.matrixWorld;
-                hotspot.cssObject.position.set(
-                    mat.elements[12],
-                    mat.elements[13],
-                    mat.elements[14]
-                );
-            }
-        });
+        // this.hotspots.forEach(hotspot => {
+        //     if (hotspot.empty && hotspot.cssObject && hotspot.empty.parent) {
+        //         // 직접 매트릭스에서 위치 추출
+        //         const mat = hotspot.empty.matrixWorld;
+        //         hotspot.cssObject.position.set(
+        //             mat.elements[12],
+        //             mat.elements[13],
+        //             mat.elements[14]
+        //         );
+        //     }
+        // });
     }
     /**
      * 핫스팟 정보 표시
@@ -596,8 +600,10 @@ export class HotspotManagerV3 {
      */
     clearHotspots() {
         this.hotspots.forEach(hotspot => {
-            // 씬에서 제거
-            this.viewer.scene.remove(hotspot.cssObject);
+            // Empty에서 제거
+            if (hotspot.empty && hotspot.cssObject) {
+                hotspot.empty.remove(hotspot.cssObject);
+            }
             
             // DOM 요소 제거
             if (hotspot.element && hotspot.element.parentNode) {
@@ -607,8 +613,6 @@ export class HotspotManagerV3 {
         
         this.hotspots = [];
         this.activeHotspot = null;
-        
-        // 정보 패널 숨기기
         this.hideInfoPanel();
     }
     
