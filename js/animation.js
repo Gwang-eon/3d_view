@@ -234,18 +234,18 @@ export class AnimationController {
     /**
      * 업데이트 루프 시작
      */
-    startUpdateLoop() {
-        const animate = () => {
-            if (this.mixer) {
-                const delta = this.clock.getDelta();
-                this.mixer.update(delta);
-            }
+//    startUpdateLoop() {
+//        const animate = () => {
+//            if (this.mixer) {
+//                const delta = this.clock.getDelta();
+//                this.mixer.update(delta);
+//            }
             
-            requestAnimationFrame(animate);
-        };
+//            requestAnimationFrame(animate);
+//        };
         
-        animate();
-    }
+//        animate();
+//    }
     
     /**
      * 정리
