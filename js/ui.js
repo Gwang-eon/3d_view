@@ -66,7 +66,7 @@ export class UIController {
                 
                 if (view === 'reset') {
                     this.onReset();
-                } else {
+                } else if (view) {
                     this.onViewChange(view);
                 }
             });

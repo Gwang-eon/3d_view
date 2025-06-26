@@ -1,0 +1,398 @@
+/* hotspot.css - CSS2DRenderer 기반 핫스팟 스타일 */
+
+/* ===== 핫스팟 마커 기본 스타일 ===== */
+.hotspot-marker {
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    border: 3px solid rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform-origin: center bottom;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* 핫스팟 내부 콘텐츠 (번호/아이콘) */
+.hotspot-marker .hotspot-content {
+    color: white;
+    font-size: 18px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+/* 아이콘 스타일 */
+.hotspot-marker .hotspot-icon {
+    font-size: 20px;
+}
+
+/* 펄스 애니메이션 */
+.hotspot-marker::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: rgba(0, 123, 255, 0.4);
+    transform: translate(-50%, -50%);
+    animation: pulse-ring 2s ease-out infinite;
+}
+
+@keyframes pulse-ring {
+    0% {
+        transform: translate(-50%, -50%) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1.8);
+        opacity: 0;
+    }
+}
+
+/* 호버 효과 */
+.hotspot-marker:hover {
+    transform: scale(1.15);
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.6);
+    background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+}
+
+.hotspot-marker:hover::before {
+    animation-duration: 1s;
+}
+
+/* 활성 상태 */
+.hotspot-marker.active {
+    background: linear-gradient(135deg, #ff6b35 0%, #f45520 100%);
+    box-shadow: 0 6px 20px rgba(255, 107, 53, 0.6);
+    transform: scale(1.2);
+}
+
+.hotspot-marker.active::before {
+    background: rgba(255, 107, 53, 0.4);
+}
+
+/* 툴팁 스타일 */
+.hotspot-tooltip {
+    position: absolute;
+    bottom: 60px;
+    left: 50%;
+    transform: translateX(-50%) translateY(10px);
+    background: rgba(0, 0, 0, 0.95);
+    color: white;
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* 툴팁 화살표 */
+.hotspot-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 8px solid transparent;
+    border-top-color: rgba(0, 0, 0, 0.95);
+}
+
+/* 호버 시 툴팁 표시 */
+.hotspot-marker:hover .hotspot-tooltip {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* ===== 핫스팟 타입별 스타일 ===== */
+
+/* 정보 타입 (파란색) */
+.hotspot-marker.type-info {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+}
+
+/* 경고 타입 (주황색) */
+.hotspot-marker.type-warning {
+    background: linear-gradient(135deg, #ff6b35 0%, #f45520 100%);
+}
+.hotspot-marker.type-warning::before {
+    background: rgba(255, 107, 53, 0.4);
+}
+
+/* 성공 타입 (초록색) */
+.hotspot-marker.type-success {
+    background: linear-gradient(135deg, #00c853 0%, #00a040 100%);
+}
+.hotspot-marker.type-success::before {
+    background: rgba(0, 200, 83, 0.4);
+}
+
+/* 중요 타입 (빨간색) */
+.hotspot-marker.type-danger {
+    background: linear-gradient(135deg, #ff1744 0%, #d50000 100%);
+}
+.hotspot-marker.type-danger::before {
+    background: rgba(255, 23, 68, 0.4);
+}
+
+/* ===== 핫스팟 크기 변형 ===== */
+
+/* 작은 크기 */
+.hotspot-marker.size-small {
+    width: 32px;
+    height: 32px;
+}
+.hotspot-marker.size-small .hotspot-content {
+    font-size: 14px;
+}
+.hotspot-marker.size-small .hotspot-icon {
+    font-size: 16px;
+}
+
+/* 큰 크기 */
+.hotspot-marker.size-large {
+    width: 56px;
+    height: 56px;
+}
+.hotspot-marker.size-large .hotspot-content {
+    font-size: 24px;
+}
+.hotspot-marker.size-large .hotspot-icon {
+    font-size: 28px;
+}
+
+/* ===== 핫스팟 스타일 변형 ===== */
+
+/* 사각형 스타일 */
+.hotspot-marker.style-square {
+    border-radius: 12px;
+}
+.hotspot-marker.style-square::before {
+    border-radius: 12px;
+}
+
+/* 태그 스타일 */
+.hotspot-marker.style-tag {
+    width: auto;
+    height: auto;
+    padding: 8px 16px;
+    border-radius: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(10px);
+}
+.hotspot-marker.style-tag::before {
+    display: none;
+}
+.hotspot-marker.style-tag .hotspot-content {
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* 미니멀 스타일 */
+.hotspot-marker.style-minimal {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+}
+.hotspot-marker.style-minimal::before {
+    display: none;
+}
+.hotspot-marker.style-minimal .hotspot-content {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* ===== 애니메이션 효과 ===== */
+
+/* 바운스 애니메이션 */
+.hotspot-marker.animate-bounce {
+    animation: bounce 2s ease-in-out infinite;
+}
+
+@keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+/* 회전 애니메이션 */
+.hotspot-marker.animate-rotate {
+    animation: rotate 3s linear infinite;
+}
+
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* 페이드 인 애니메이션 */
+.hotspot-marker {
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ===== 핫스팟 정보 패널 개선 ===== */
+.hotspot-info-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    background: rgba(20, 20, 20, 0.98);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 0;
+    width: 90%;
+    max-width: 480px;
+    max-height: 90vh;
+    overflow: hidden;
+    z-index: 2000;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hotspot-info-panel.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    pointer-events: all;
+}
+
+/* 패널 헤더 */
+.hotspot-info-header {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    padding: 20px;
+    position: relative;
+}
+
+.hotspot-info-header h3 {
+    margin: 0;
+    color: white;
+    font-size: 20px;
+    font-weight: 600;
+    padding-right: 40px;
+}
+
+.hotspot-info-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.hotspot-info-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: rotate(90deg);
+}
+
+/* 패널 바디 */
+.hotspot-info-body {
+    padding: 24px;
+    overflow-y: auto;
+    max-height: calc(90vh - 100px);
+}
+
+.hotspot-info-body p {
+    margin: 0 0 16px 0;
+    color: rgba(255, 255, 255, 0.8);
+    line-height: 1.6;
+}
+
+/* 정보 테이블 */
+.hotspot-info-table {
+    width: 100%;
+    margin-top: 20px;
+}
+
+.hotspot-info-table tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.hotspot-info-table td {
+    padding: 12px 0;
+    font-size: 14px;
+}
+
+.hotspot-info-table td:first-child {
+    color: rgba(255, 255, 255, 0.5);
+    padding-right: 20px;
+}
+
+.hotspot-info-table td:last-child {
+    color: #00ff88;
+    font-weight: 500;
+}
+
+/* ===== 반응형 디자인 ===== */
+@media (max-width: 768px) {
+    .hotspot-marker {
+        width: 36px;
+        height: 36px;
+    }
+    
+    .hotspot-marker .hotspot-content {
+        font-size: 16px;
+    }
+    
+    .hotspot-tooltip {
+        font-size: 12px;
+        padding: 8px 12px;
+    }
+    
+    .hotspot-info-panel {
+        width: 95%;
+        border-radius: 12px;
+    }
+}
+
+/* ===== 접근성 ===== */
+@media (prefers-reduced-motion: reduce) {
+    .hotspot-marker::before,
+    .hotspot-marker.animate-bounce,
+    .hotspot-marker.animate-rotate {
+        animation: none;
+    }
+    
+    .hotspot-marker,
+    .hotspot-tooltip,
+    .hotspot-info-panel {
+        transition: none;
+    }
+}

@@ -1,5 +1,10 @@
 // js/animation.js - 애니메이션 컨트롤러
 
+// 전역 THREE 객체 확인
+if (typeof THREE === 'undefined') {
+    console.error('Three.js가 로드되지 않았습니다.');
+}
+
 export class AnimationController {
     constructor(viewer) {
         this.viewer = viewer;

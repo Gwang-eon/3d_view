@@ -16,12 +16,30 @@ export class HotspotManager {
             defaultColor: 0x007bff,
             hoverColor: 0x00b4d8,
             activeColor: 0xffd60a,
-            size: 0.2,
-            opacity: 0.8
+            size: 0.1,
+            opacity: 0.6
         };
         
         // 핫스팟 정보 (블렌더 Empty 이름과 매핑)
         this.hotspotData = {
+            // 센서 타입 핫스팟
+            'HS_Crack_Sensor_001': {
+                title: '균열 센서 001',
+                description: '구조물의 균열을 실시간으로 모니터링합니다.'
+            },
+            'HS_Crack_Sensor_002': {
+                title: '균열 센서 002',
+                description: '구조물의 균열을 실시간으로 모니터링합니다.'
+            },
+            'HS_Tilt_Sensor_001': {
+                title: '기울기 센서 001',
+                description: '구조물의 기울기 변화를 감지합니다.'
+            },
+            'HS_Tilt_Sensor_002': {
+                title: '기울기 센서 002',
+                description: '구조물의 기울기 변화를 감지합니다.'
+            },
+            
             // 블록 옹벽
             'HS_Block_Unit': {
                 title: '블록 유닛',
@@ -121,12 +139,41 @@ export class HotspotManager {
      */
     createHotspotFromEmpty(empty) {
         const name = empty.name;
+        
+        // 디버깅용 로그 추가
+        console.log(`🔍 핫스팟 후보 발견: ${name}, 타입: ${empty.type}`);
+        
         const data = this.hotspotData[name];
         
         if (!data) {
-            console.warn(`⚠️ ${name}에 대한 정보가 없습니다.`);
-            return;
+            console.warn(`⚠️ ${name}에 대한 정보가 없습니다. hotspotData에 추가하세요.`);
+            // 기본값으로 생성
+            const defaultData = {
+                title: name.replace('HS_', '').replace(/_/g, ' '),
+                description: '정보가 없습니다.'
+            };
+            this.hotspotData[name] = defaultData;
         }
+        
+        // Custom Properties가 있는 경우 사용
+        if (empty.userData) {
+            const userData = empty.userData;
+            if (userData.SensorType) {
+                this.hotspotData[name] = {
+                    title: userData.SensorType || name,
+                    description: userData.Description || '센서 정보',
+                    sensorId: userData.SensorId,
+                    currentValue: userData.CurrentValue,
+                    warningThreshold: userData.WarningThreshold,
+                    dangerThreshold: userData.DangerThreshold,
+                    location: userData.Location,
+                    status: userData.Status,
+                    isActive: userData.isActive
+                };
+            }
+        }
+        
+        const finalData = this.hotspotData[name];
         
         // 핫스팟 메시 생성
         const geometry = new THREE.SphereGeometry(this.config.size, 16, 16);
@@ -150,10 +197,11 @@ export class HotspotManager {
             id: name,
             mesh: mesh,
             empty: empty,
-            title: data.title,
-            description: data.description,
+            title: finalData.title,
+            description: finalData.description,
             originalMaterial: material.clone(),
-            isHovered: false
+            isHovered: false,
+            customData: finalData
         };
         
         mesh.userData.hotspot = hotspot;
@@ -162,7 +210,7 @@ export class HotspotManager {
         this.viewer.scene.add(mesh);
         this.hotspots.push(hotspot);
         
-        console.log(`📍 핫스팟 생성: ${data.title} (${name})`);
+        console.log(`📍 핫스팟 생성: ${finalData.title} (${name})`);
     }
     
     /**

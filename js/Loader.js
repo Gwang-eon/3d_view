@@ -1,5 +1,10 @@
 // js/loader.js - GLTF 모델 로더 모듈
 
+// 전역 THREE 객체 확인
+if (typeof THREE === 'undefined') {
+    console.error('Three.js가 로드되지 않았습니다.');
+}
+
 export class ModelLoader {
     constructor(config = {}) {
         this.basePath = config.basePath || './gltf/';

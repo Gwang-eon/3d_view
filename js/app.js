@@ -1,9 +1,9 @@
-// js/app.js - 메인 애플리케이션 컨트롤러
+// js/app.js - 메인 애플리케이션 컨트롤러 (CSS2DRenderer 핫스팟 통합)
 import { Viewer3D } from './viewer.js';
 import { ModelLoader } from './loader.js';
 import { UIController } from './ui.js';
 import { AnimationController } from './animation.js';
-import { HotspotManager } from './hotspot.js';
+import { HotspotManagerV3 } from './hotspot-v3.js';
 
 // 모델 설정 (실제 GitHub 경로)
 const MODELS = [
@@ -167,8 +167,13 @@ class WallViewerApp {
         // 애니메이션 컨트롤러
         this.animationController = new AnimationController(this.viewer);
         
-        // 핫스팟 매니저
-        this.hotspotManager = new HotspotManager(this.viewer);
+        // 핫스팟 매니저 (CSS2DRenderer 버전)
+        this.hotspotManager = new HotspotManagerV3(this.viewer);
+        
+        // 핫스팟 렌더링을 뷰어의 렌더링 루프에 추가
+        this.viewer.addRenderCallback(() => {
+            this.hotspotManager.render();
+        });
         
         // UI 컨트롤러
         this.ui = new UIController({
@@ -209,6 +214,46 @@ class WallViewerApp {
         document.addEventListener('keydown', (e) => {
             this.handleKeyPress(e);
         });
+        
+        // 핫스팟 컨트롤
+        this.setupHotspotControls();
+    }
+    
+    /**
+     * 핫스팟 컨트롤 설정
+     */
+    setupHotspotControls() {
+        // 핫스팟 토글 버튼
+        const toggleBtn = document.getElementById('toggle-hotspots');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                this.hotspotManager.toggleHotspots();
+            });
+        }
+        
+        // 스타일 선택
+        const styleSelect = document.getElementById('hotspot-style');
+        if (styleSelect) {
+            styleSelect.addEventListener('change', (e) => {
+                this.hotspotManager.setHotspotStyle(e.target.value);
+            });
+        }
+        
+        // 크기 선택
+        const sizeSelect = document.getElementById('hotspot-size');
+        if (sizeSelect) {
+            sizeSelect.addEventListener('change', (e) => {
+                this.hotspotManager.setHotspotSize(e.target.value);
+            });
+        }
+        
+        // 타입 필터
+        const filterSelect = document.getElementById('hotspot-filter');
+        if (filterSelect) {
+            filterSelect.addEventListener('change', (e) => {
+                this.hotspotManager.filterByType(e.target.value);
+            });
+        }
     }
     
     /**

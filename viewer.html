@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>옹벽 3D 뷰어</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/hotspot.css">
 </head>
 <body>
     <!-- 헤더 -->
@@ -54,7 +55,7 @@
                 </div>
             </section>
             
-            <!-- 컨트롤 -->
+            <!-- 뷰 컨트롤 -->
             <section class="view-controls">
                 <h2>뷰 컨트롤</h2>
                 <div class="control-buttons">
@@ -68,6 +69,37 @@
                 <button class="control-btn reset-btn" data-view="reset">
                     초기 위치로
                 </button>
+            </section>
+            
+            <!-- 핫스팟 컨트롤 -->
+            <section class="hotspot-controls" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid var(--border-color);">
+                <h2>핫스팟 설정</h2>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <button id="toggle-hotspots" class="control-btn" style="width: 100%;">
+                        핫스팟 표시/숨기기
+                    </button>
+                    
+                    <select id="hotspot-style" class="control-btn" style="width: 100%; text-align: left;">
+                        <option value="default">기본 스타일</option>
+                        <option value="square">사각형 스타일</option>
+                        <option value="tag">태그 스타일</option>
+                        <option value="minimal">미니멀 스타일</option>
+                    </select>
+                    
+                    <select id="hotspot-size" class="control-btn" style="width: 100%; text-align: left;">
+                        <option value="small">작게</option>
+                        <option value="medium" selected>보통</option>
+                        <option value="large">크게</option>
+                    </select>
+                    
+                    <select id="hotspot-filter" class="control-btn" style="width: 100%; text-align: left;">
+                        <option value="all">모든 타입</option>
+                        <option value="info">정보</option>
+                        <option value="warning">경고</option>
+                        <option value="success">성공</option>
+                        <option value="danger">위험</option>
+                    </select>
+                </div>
             </section>
         </aside>
     </main>
@@ -91,6 +123,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
     
     <!-- 애플리케이션 스크립트 -->
     <script type="module" src="js/app.js"></script>

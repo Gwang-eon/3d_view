@@ -1,4 +1,4 @@
-// js/viewer.js - 3D 뷰어 코어 모듈
+// js/viewer.js - 3D 뷰어 코어 모듈 (CSS2DRenderer 지원 버전)
 
 export class Viewer3D {
     constructor(config) {
@@ -24,6 +24,9 @@ export class Viewer3D {
         
         // 상태
         this.isInitialized = false;
+        
+        // 렌더링 콜백 (CSS2DRenderer 등을 위한)
+        this.onRenderCallbacks = [];
     }
     
     /**
@@ -426,8 +429,30 @@ export class Viewer3D {
             this.controls.update();
         }
         
-        // 렌더링
+        // 메인 렌더링
         this.renderer.render(this.scene, this.camera);
+        
+        // 추가 렌더링 콜백 실행 (CSS2DRenderer 등)
+        this.onRenderCallbacks.forEach(callback => callback());
+    }
+    
+    /**
+     * 렌더링 콜백 추가
+     */
+    addRenderCallback(callback) {
+        if (typeof callback === 'function') {
+            this.onRenderCallbacks.push(callback);
+        }
+    }
+    
+    /**
+     * 렌더링 콜백 제거
+     */
+    removeRenderCallback(callback) {
+        const index = this.onRenderCallbacks.indexOf(callback);
+        if (index > -1) {
+            this.onRenderCallbacks.splice(index, 1);
+        }
     }
     
     /**
