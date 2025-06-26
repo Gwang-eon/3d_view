@@ -541,13 +541,15 @@ export class Viewer3D {
         if (this.currentModel) {
             this.currentModel.updateMatrixWorld(true);
         }
-    
-        
-        // 추가 렌더링 콜백 실행 (CSS2DRenderer 등)
-        this.onRenderCallbacks.forEach(callback => callback());
+        // 렌더링 전에 매트릭스 업데이트
+        this.scene.updateMatrixWorld();
 
         // 메인 렌더링
         this.renderer.render(this.scene, this.camera);
+        
+        // 추가 렌더링 콜백 실행 (CSS2DRenderer 등)
+        this.onRenderCallbacks.forEach(callback => callback());
+   
     }
     
     /**
