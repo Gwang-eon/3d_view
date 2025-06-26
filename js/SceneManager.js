@@ -415,7 +415,7 @@ export class SceneManager {
             // 렌더링
             if (this.renderingEnabled && (this.needsUpdate || CONFIG.rendering.continuous)) {
                 this.render();
-                this.needsUpdate = false;
+               // this.needsUpdate = false;
             }
             
             // 컨트롤 업데이트
