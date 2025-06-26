@@ -1,5 +1,5 @@
 // js/viewer-init.js
-// 뷰어 초기화 헬퍼 - viewer-main.js를 보조하는 역할
+// Viewer 초기화 헬퍼 - viewer-main.js를 보조하는 역할
 
 import { CONFIG } from './config.js';
 
@@ -21,6 +21,57 @@ export class ViewerInitializer {
         return CONFIG.models[id];
     }
     
+    async initialize() {
+        console.log('[ViewerInit] 초기화 시작');
+        const modelId = this.getModelIdFromURL();
+        
+        if (modelId !== null) {
+            const model = this.getModelById(modelId);
+            
+            if (model) {
+                console.log(`[ViewerInit] URL 파라미터로 모델 자동 로드: ${model.name}`);
+                this.showLoadingMessage(`${model.name} 로드 중...`);
+                
+                try {
+                    const modelSelector = document.getElementById('model-selector');
+                    if (modelSelector) {
+                        modelSelector.style.display = 'none';
+                    }
+                    
+                    await this.uiController.selectModel(model);
+                    this.activateToggleButton(modelId);
+                } catch (error) {
+                    console.error('[ViewerInit] 모델 로드 실패:', error);
+                    this.showError('모델을 로드할 수 없습니다.');
+                }
+            } else {
+                console.warn(`[ViewerInit] 잘못된 모델 ID: ${modelId}`);
+                this.showError('잘못된 모델 ID입니다.');
+            }
+        } else {
+            console.log('[ViewerInit] URL 파라미터 없음 - 모델 선택 화면 표시');
+            this.uiController.showModelSelector();
+        }
+    }
+    
+    addHomeButton() {
+        const homeButton = document.createElement('button');
+        homeButton.id = 'home-btn';
+        homeButton.className = 'header-btn';
+        homeButton.title = '홈으로';
+        homeButton.innerHTML = '<span>🏠</span>';
+        homeButton.onclick = () => {
+            window.location.href = 'index.html';
+        };
+        
+        const headerRight = document.querySelector('.header-right');
+        if (headerRight) {
+            headerRight.insertBefore(homeButton, headerRight.firstChild);
+        } else {
+            console.error('[ViewerInit] 헤더를 찾을 수 없습니다.');
+        }
+    }
+    
     showLoadingMessage(message) {
         const loadingEl = document.getElementById('loading');
         if (loadingEl) {
@@ -31,28 +82,4 @@ export class ViewerInitializer {
             loadingEl.style.display = 'flex';
         }
     }
-    
-    hideLoading() {
-        const loadingEl = document.getElementById('loading');
-        if (loadingEl) {
-            loadingEl.style.display = 'none';
-        }
-    }
-    
-    showError(message) {
-        const errorEl = document.getElementById('error');
-        if (errorEl) {
-            errorEl.textContent = message;
-            errorEl.style.display = 'block';
-        }
-    }
 }
-
-// 전역 헬퍼 함수
-export function initializeViewer() {
-    console.log('[ViewerInit] 뷰어 초기화 지원');
-    return new ViewerInitializer();
-}
-
-// 자동 실행 방지 (viewer-main.js에서 처리)
-export default ViewerInitializer;

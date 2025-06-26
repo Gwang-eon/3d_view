@@ -8,6 +8,7 @@ import ModelLoader from './ModelLoader.js';
 import UIController from './UIController.js';
 import { HotspotManager } from './HotspotManager.js';
 import { AnimationController } from './AnimationController.js';
+import { ViewerInitializer } from './viewer-init.js';
 
 /**
  * 3D 뷰어 애플리케이션

@@ -37,7 +37,7 @@ const initializeConfig = () => {
         enablePreloading: true,
         maxConcurrentLoads: 3,
         textureOptimization: true,
-        enableDracoLoader: true,
+        enableDracoLoader: false,
         dracoDecoderPath: './libs/draco/',
         enableKTX2Loader: false,
         ktx2TranscoderPath: './libs/basis/',

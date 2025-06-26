@@ -1,5 +1,7 @@
-import { CONFIG } from './config.js';   
-// import { CameraTransitionManager } from './CameraTransitionManager.js';
+// js/SceneManager.js
+// 씬 관리 모듈 - 기존 구조 유지 + getter 메서드 추가
+
+import { CONFIG } from './config.js';
 
 export class SceneManager {
     constructor() {
@@ -93,48 +95,36 @@ export class SceneManager {
     createRenderer() {
         this.renderer = new THREE.WebGLRenderer({
             antialias: CONFIG.renderer.antialias,
-            alpha: CONFIG.renderer.alpha,
-            preserveDrawingBuffer: CONFIG.renderer.preserveDrawingBuffer
+            alpha: CONFIG.renderer.alpha
         });
         
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(window.devicePixelRatio);
-        this.renderer.shadowMap.enabled = CONFIG.renderer.shadowMap.enabled;
-        this.renderer.shadowMap.type = THREE[CONFIG.renderer.shadowMap.type];
-        this.renderer.outputEncoding = THREE.sRGBEncoding;
+        this.renderer.shadowMap.enabled = CONFIG.renderer.shadowMap;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = CONFIG.renderer.toneMappingExposure;
+        this.renderer.toneMappingExposure = CONFIG.renderer.exposure;
         
-        document.getElementById('canvas-container').appendChild(this.renderer.domElement);
+        const container = document.getElementById('canvas-container');
+        if (container) {
+            container.appendChild(this.renderer.domElement);
+        } else {
+            document.body.appendChild(this.renderer.domElement);
+        }
     }
     
     createControls() {
         this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
-        
-        // 기본 설정
         this.controls.enableDamping = CONFIG.controls.enableDamping;
         this.controls.dampingFactor = CONFIG.controls.dampingFactor;
         this.controls.rotateSpeed = CONFIG.controls.rotateSpeed;
         this.controls.zoomSpeed = CONFIG.controls.zoomSpeed;
         this.controls.panSpeed = CONFIG.controls.panSpeed;
-        
-        // 제한 설정
         this.controls.minDistance = CONFIG.controls.minDistance;
         this.controls.maxDistance = CONFIG.controls.maxDistance;
         this.controls.maxPolarAngle = CONFIG.controls.maxPolarAngle;
-        this.controls.minPolarAngle = CONFIG.controls.minPolarAngle;
-        
-        // 타겟 설정
         this.controls.target.set(0, 0, 0);
-        
-        // 이벤트 리스너
-        this.controls.addEventListener('change', () => {
-            this.needsUpdate = true;
-            this.emit('camera:change', {
-                position: this.camera.position.clone(),
-                target: this.controls.target.clone()
-            });
-        });
+        this.controls.update();
     }
     
     createLights() {
@@ -161,14 +151,13 @@ export class SceneManager {
         if (directionalLight.castShadow) {
             directionalLight.shadow.mapSize.width = CONFIG.lights.directional.shadowMapSize;
             directionalLight.shadow.mapSize.height = CONFIG.lights.directional.shadowMapSize;
-            directionalLight.shadow.camera.near = CONFIG.lights.directional.shadowCamera.near;
-            directionalLight.shadow.camera.far = CONFIG.lights.directional.shadowCamera.far;
-            
-            const shadowCameraSize = CONFIG.lights.directional.shadowCamera.size;
-            directionalLight.shadow.camera.left = -shadowCameraSize;
-            directionalLight.shadow.camera.right = shadowCameraSize;
-            directionalLight.shadow.camera.top = shadowCameraSize;
-            directionalLight.shadow.camera.bottom = -shadowCameraSize;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            const shadowSize = 20;
+            directionalLight.shadow.camera.left = -shadowSize;
+            directionalLight.shadow.camera.right = shadowSize;
+            directionalLight.shadow.camera.top = shadowSize;
+            directionalLight.shadow.camera.bottom = -shadowSize;
         }
         
         this.scene.add(directionalLight);
@@ -177,35 +166,26 @@ export class SceneManager {
     
     createEnvironment() {
         // 그리드 헬퍼
-        if (CONFIG.helpers.grid.enabled) {
-            this.gridHelper = new THREE.GridHelper(
-                CONFIG.helpers.grid.size,
-                CONFIG.helpers.grid.divisions,
-                CONFIG.helpers.grid.colorCenterLine,
-                CONFIG.helpers.grid.colorGrid
-            );
-            this.gridHelper.visible = CONFIG.helpers.grid.visible;
-            this.scene.add(this.gridHelper);
-        }
+        this.gridHelper = new THREE.GridHelper(
+            50,  // size
+            50,  // divisions
+            0x444444,  // colorCenterLine
+            0x222222   // colorGrid
+        );
+        this.gridHelper.visible = true;
+        this.scene.add(this.gridHelper);
         
-        // 축 헬퍼
-        if (CONFIG.helpers.axes.enabled) {
-            const axesHelper = new THREE.AxesHelper(CONFIG.helpers.axes.size);
-            axesHelper.visible = CONFIG.helpers.axes.visible;
-            this.scene.add(axesHelper);
-        }
-        
-        // 바닥면
+        // 바닥
         const floorGeometry = new THREE.PlaneGeometry(100, 100);
         const floorMaterial = new THREE.ShadowMaterial({
             opacity: 0.3,
-            transparent: true
+            side: THREE.DoubleSide
         });
         this.floor = new THREE.Mesh(floorGeometry, floorMaterial);
         this.floor.rotation.x = -Math.PI / 2;
-        this.floor.position.y = -0.001;
+        this.floor.position.y = -0.01;
         this.floor.receiveShadow = true;
-        this.floor.visible = CONFIG.environment.showFloor;
+        this.floor.visible = true;
         this.scene.add(this.floor);
     }
     
@@ -280,7 +260,7 @@ export class SceneManager {
         // GLTF 카메라 처리
         if (modelInfo.cameras && modelInfo.cameras.length > 0) {
             this.gltfCameras = modelInfo.cameras;
-            console.log(`[SceneManager] GLTF 카메라 ${this.gltfCameras.length}개 발견`);
+            console.log(`[SceneManager] ${this.gltfCameras.length}개의 GLTF 카메라 감지됨`);
         } else {
             this.gltfCameras = [];
         }
@@ -289,12 +269,7 @@ export class SceneManager {
         this.updateStats(model);
         
         // 이벤트 발생
-        this.emit('model:changed', {
-            model: model,
-            modelInfo: modelInfo,
-            bounds: this.modelBounds
-        });
-        
+        this.emit('model:changed', { model, modelInfo });
         this.needsUpdate = true;
     }
     
@@ -303,33 +278,30 @@ export class SceneManager {
         
         const { center, radius } = this.modelBounds;
         
-        // 컨트롤 타겟을 모델 중심으로
-        this.controls.target.copy(center);
-        
-        // 카메라 위치 조정
+        // 카메라 위치 계산
         const distance = radius * 2.5;
-        const direction = new THREE.Vector3(1, 0.5, 1).normalize();
-        const newPosition = center.clone().add(direction.multiplyScalar(distance));
+        const cameraPosition = new THREE.Vector3(
+            center.x + distance * 0.7,
+            center.y + distance * 0.5,
+            center.z + distance * 0.7
+        );
         
-        // 카메라 전환
-        if (this.cameraTransition) {
-            this.cameraTransition.transitionTo(newPosition, center, 1000);
-        } else {
-            this.camera.position.copy(newPosition);
-            this.camera.lookAt(center);
-        }
+        // 카메라 설정
+        this.camera.position.copy(cameraPosition);
+        this.camera.lookAt(center);
         
-        // 클리핑 평면 조정
-        this.camera.near = radius * 0.01;
-        this.camera.far = radius * 100;
-        this.camera.updateProjectionMatrix();
-        
+        // 컨트롤 타겟 설정
+        this.controls.target.copy(center);
+        this.controls.minDistance = radius * 0.5;
+        this.controls.maxDistance = radius * 5;
         this.controls.update();
+        
+        console.log('[SceneManager] 모델에 포커스 맞춤');
     }
     
     switchToGLTFCamera(index) {
-        if (index < 0 || index >= this.gltfCameras.length) {
-            console.warn(`[SceneManager] 잘못된 카메라 인덱스: ${index}`);
+        if (!this.gltfCameras || index < 0 || index >= this.gltfCameras.length) {
+            console.warn('[SceneManager] 잘못된 카메라 인덱스:', index);
             return;
         }
         
@@ -337,21 +309,17 @@ export class SceneManager {
         console.log(`[SceneManager] GLTF 카메라 ${index}로 전환`);
         
         // 카메라 속성 복사
-        if (gltfCamera.type === 'PerspectiveCamera') {
-            this.camera.fov = gltfCamera.fov || 60;
+        if (gltfCamera.isPerspectiveCamera) {
+            this.camera.fov = gltfCamera.fov;
+            this.camera.near = gltfCamera.near;
+            this.camera.far = gltfCamera.far;
             this.camera.aspect = gltfCamera.aspect || (window.innerWidth / window.innerHeight);
-            this.camera.near = gltfCamera.near || 0.1;
-            this.camera.far = gltfCamera.far || 1000;
             this.camera.updateProjectionMatrix();
         }
         
-        // 카메라 위치와 방향 설정
-        if (gltfCamera.position) {
-            this.camera.position.copy(gltfCamera.position);
-        }
-        if (gltfCamera.rotation) {
-            this.camera.rotation.copy(gltfCamera.rotation);
-        }
+        // 카메라 위치와 회전 복사
+        this.camera.position.copy(gltfCamera.position);
+        this.camera.quaternion.copy(gltfCamera.quaternion);
         
         // 컨트롤 업데이트
         if (this.modelBounds) {
@@ -441,89 +409,65 @@ export class SceneManager {
                 this.stats.fps = Math.round(frameCount * 1000 / fpsTime);
                 frameCount = 0;
                 fpsTime = 0;
-                this.emit('stats:fps', this.stats.fps);
-            }
-            
-            // 컨트롤 업데이트
-            if (this.controls.enabled) {
-                this.controls.update();
-            }
-            
-            // 카메라 전환 업데이트
-            if (this.cameraTransition) {
-                this.cameraTransition.update(deltaTime);
+                this.emit('fps:updated', this.stats.fps);
             }
             
             // 렌더링
-            if (this.renderingEnabled && this.needsUpdate) {
-                this.renderer.render(this.scene, this.camera);
+            if (this.renderingEnabled && (this.needsUpdate || CONFIG.rendering.continuous)) {
+                this.render();
                 this.needsUpdate = false;
-                
-                // 렌더 정보 업데이트
-                if (this.renderer.info) {
-                    this.stats.drawCalls = this.renderer.info.render.calls;
-                }
             }
             
-            this.emit('render', { deltaTime, time: currentTime });
+            // 컨트롤 업데이트
+            if (this.controls && this.controls.enabled) {
+                this.controls.update();
+            }
         };
         
         animate();
     }
     
-    // 이벤트 시스템 메서드들
+    render() {
+        if (this.renderer && this.scene && this.camera) {
+            this.renderer.render(this.scene, this.camera);
+        }
+    }
+    
+    update() {
+        this.needsUpdate = true;
+    }
+    
+    // 이벤트 시스템
     on(event, callback) {
         if (!this.events.has(event)) {
-            this.events.set(event, new Set());
+            this.events.set(event, []);
         }
-        this.events.get(event).add(callback);
-        return this;
+        this.events.get(event).push(callback);
     }
     
     off(event, callback) {
         if (this.events.has(event)) {
-            this.events.get(event).delete(callback);
+            const callbacks = this.events.get(event);
+            const index = callbacks.indexOf(callback);
+            if (index > -1) {
+                callbacks.splice(index, 1);
+            }
         }
-        return this;
     }
     
-    once(event, callback) {
-        const onceWrapper = (...args) => {
-            callback(...args);
-            this.off(event, onceWrapper);
-        };
-        this.on(event, onceWrapper);
-        return this;
-    }
-    
-    emit(event, ...args) {
+    emit(event, data = {}) {
         if (this.events.has(event)) {
             this.events.get(event).forEach(callback => {
                 try {
-                    callback(...args);
+                    callback(data);
                 } catch (error) {
-                    console.error(`[SceneManager] 이벤트 콜백 오류 (${event}):`, error);
+                    console.error(`[SceneManager] 이벤트 핸들러 오류:`, error);
                 }
             });
         }
-        return this;
     }
     
-    // 유틸리티 메서드들
-    takeScreenshot(filename = 'screenshot.png') {
-        this.renderer.render(this.scene, this.camera);
-        this.renderer.domElement.toBlob((blob) => {
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            link.click();
-            URL.revokeObjectURL(url);
-            
-            this.emit('screenshot:taken', { filename });
-        });
-    }
-    
+    // 렌더링 제어
     setRenderingEnabled(enabled) {
         this.renderingEnabled = enabled;
         this.emit('rendering:changed', { enabled });
@@ -558,7 +502,7 @@ export class SceneManager {
     }
     
     // 정리
-    dispose() {
+    cleanup() {
         console.log('[SceneManager] 정리 시작');
         
         // 이벤트 정리
@@ -602,15 +546,64 @@ export class SceneManager {
         console.log('[SceneManager] 정리 완료');
     }
     
-    // Getters
-    getCamera() { return this.camera; }
-    getScene() { return this.scene; }
-    getRenderer() { return this.renderer; }
-    getControls() { return this.controls; }
-    getCurrentModel() { return this.currentModel; }
-    getCurrentModelInfo() { return this.currentModelInfo; }
-    getStats() { return { ...this.stats }; }
-    getGLTFCameras() { return [...this.gltfCameras]; }
+    // Getter 메서드들
+    getCamera() { 
+        return this.camera; 
+    }
+    
+    getScene() { 
+        return this.scene; 
+    }
+    
+    getRenderer() { 
+        return this.renderer; 
+    }
+    
+    getControls() { 
+        return this.controls; 
+    }
+    
+    /**
+     * 현재 모델 가져오기
+     */
+    getCurrentModel() { 
+        return this.currentModel; 
+    }
+    
+    /**
+     * 현재 모델 정보 가져오기
+     */
+    getCurrentModelInfo() { 
+        return this.currentModelInfo; 
+    }
+    
+    /**
+     * 통계 정보 가져오기
+     */
+    getStats() { 
+        return { ...this.stats }; 
+    }
+    
+    /**
+     * GLTF 카메라 목록 가져오기
+     */
+    getGLTFCameras() { 
+        return [...this.gltfCameras]; 
+    }
+    
+    /**
+     * 모델 경계 정보 가져오기
+     */
+    getModelBounds() {
+        return this.modelBounds ? { ...this.modelBounds } : null;
+    }
+    
+    /**
+     * 렌더링 상태 확인
+     */
+    isRenderingEnabled() {
+        return this.renderingEnabled;
+    }
 }
 
 export default SceneManager;
