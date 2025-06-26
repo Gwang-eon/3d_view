@@ -1,4 +1,4 @@
-// js/viewer.js - 3D 뷰어 코어 모듈 (밝기 및 그림자 개선)
+// js/viewer.js - 3D 뷰어 코어 모듈 (밝기 및 그림자 개선 + 카메라 애니메이션)
 
 export class Viewer3D {
     constructor(config) {
@@ -27,6 +27,18 @@ export class Viewer3D {
         
         // 렌더링 콜백 (CSS2DRenderer 등을 위한)
         this.onRenderCallbacks = [];
+        
+        // 카메라 애니메이션
+        this.cameraAnimation = {
+            active: false,
+            startPosition: new THREE.Vector3(),
+            startTarget: new THREE.Vector3(),
+            endPosition: new THREE.Vector3(),
+            endTarget: new THREE.Vector3(),
+            startTime: 0,
+            duration: 1000, // 밀리초
+            easing: 'easeInOutCubic'
+        };
     }
     
     /**
@@ -406,7 +418,7 @@ export class Viewer3D {
         // 크기가 너무 크거나 작은 경우 스케일 조정
         const maxDim = Math.max(size.x, size.y, size.z);
         if (maxDim > 10 || maxDim < 1) {
-            const targetSize = 15;
+            const targetSize = 5;
             const scale = targetSize / maxDim;
             model.scale.multiplyScalar(scale);
         }
@@ -415,7 +427,7 @@ export class Viewer3D {
     /**
      * 카메라 위치 조정
      */
-    adjustCameraToModel() {
+    adjustCameraToModel(animate = false) {
         if (!this.currentModel) return;
         
         const box = new THREE.Box3().setFromObject(this.currentModel);
@@ -427,21 +439,24 @@ export class Viewer3D {
         const distance = maxDim * 2.5;
         
         // 카메라 위치 설정 (약간 위에서 비스듬히)
-        this.camera.position.set(
+        const targetPosition = new THREE.Vector3(
             center.x + distance * 0.7,
             center.y + distance * 0.7,
             center.z + distance * 0.7
         );
         
-        this.camera.lookAt(center);
-        
-        // 컨트롤 타겟 설정
-        this.controls.target.copy(center);
-        this.controls.update();
+        if (animate) {
+            this.animateCamera(targetPosition, center);
+        } else {
+            this.camera.position.copy(targetPosition);
+            this.camera.lookAt(center);
+            this.controls.target.copy(center);
+            this.controls.update();
+        }
     }
     
     /**
-     * 뷰 설정
+     * 뷰 설정 - 부드러운 카메라 전환
      */
     setView(viewName) {
         if (!this.currentModel) return;
@@ -454,68 +469,233 @@ export class Viewer3D {
         
         // 적절한 거리 계산
         const distance = maxDim * 2;
-        let position;
+        let targetPosition;
         
         switch(viewName) {
             case 'front':
-                position = new THREE.Vector3(center.x, center.y, center.z + distance);
+                targetPosition = new THREE.Vector3(center.x, center.y, center.z + distance);
                 break;
             case 'back':
-                position = new THREE.Vector3(center.x, center.y, center.z - distance);
+                targetPosition = new THREE.Vector3(center.x, center.y, center.z - distance);
                 break;
             case 'left':
-                position = new THREE.Vector3(center.x - distance, center.y, center.z);
+                targetPosition = new THREE.Vector3(center.x - distance, center.y, center.z);
                 break;
             case 'right':
-                position = new THREE.Vector3(center.x + distance, center.y, center.z);
+                targetPosition = new THREE.Vector3(center.x + distance, center.y, center.z);
                 break;
             case 'top':
-                position = new THREE.Vector3(center.x, center.y + distance, center.z);
+                targetPosition = new THREE.Vector3(center.x, center.y + distance, center.z);
                 break;
             case 'bottom':
-                position = new THREE.Vector3(center.x, center.y - distance, center.z);
+                targetPosition = new THREE.Vector3(center.x, center.y - distance, center.z);
                 break;
             case 'reset':
-                this.resetCamera();
+                this.resetCamera(true); // 애니메이션 플래그 추가
                 return;
         }
         
-        if (position) {
-            this.camera.position.copy(position);
-            this.camera.lookAt(center);
-            this.controls.target.copy(center);
-            this.controls.update();
+        if (targetPosition) {
+            this.animateCamera(targetPosition, center);
         }
     }
     
     /**
      * 카메라 리셋
      */
-    resetCamera() {
+    resetCamera(animate = false) {
         // 현재 모델이 있으면 그에 맞게 조정
         if (this.currentModel) {
-            this.adjustCameraToModel();
+            const box = new THREE.Box3().setFromObject(this.currentModel);
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            
+            const distance = maxDim * 2.5;
+            const targetPosition = new THREE.Vector3(
+                center.x + distance * 0.7,
+                center.y + distance * 0.7,
+                center.z + distance * 0.7
+            );
+            
+            if (animate) {
+                this.animateCamera(targetPosition, center);
+            } else {
+                this.camera.position.copy(targetPosition);
+                this.camera.lookAt(center);
+                this.controls.target.copy(center);
+                this.controls.update();
+            }
         } else {
-            this.camera.position.set(
+            const targetPosition = new THREE.Vector3(
                 this.config.camera.position.x,
                 this.config.camera.position.y,
                 this.config.camera.position.z
             );
-            
-            this.camera.lookAt(
+            const targetLookAt = new THREE.Vector3(
                 this.config.camera.lookAt.x,
                 this.config.camera.lookAt.y,
                 this.config.camera.lookAt.z
             );
             
-            this.controls.target.set(
-                this.config.camera.lookAt.x,
-                this.config.camera.lookAt.y,
-                this.config.camera.lookAt.z
-            );
-            
+            if (animate) {
+                this.animateCamera(targetPosition, targetLookAt);
+            } else {
+                this.camera.position.copy(targetPosition);
+                this.camera.lookAt(targetLookAt);
+                this.controls.target.copy(targetLookAt);
+                this.controls.update();
+            }
+        }
+    }
+    
+    /**
+     * 카메라 애니메이션
+     */
+    animateCamera(targetPosition, targetLookAt, duration = 800, easing = 'easeInOutCubic') {
+        // 이미 애니메이션 중이면 중단
+        if (this.cameraAnimation.active) {
+            this.cameraAnimation.active = false;
+        }
+        
+        // 애니메이션 설정
+        this.cameraAnimation.active = true;
+        this.cameraAnimation.startPosition.copy(this.camera.position);
+        this.cameraAnimation.startTarget.copy(this.controls.target);
+        this.cameraAnimation.endPosition.copy(targetPosition);
+        this.cameraAnimation.endTarget.copy(targetLookAt);
+        this.cameraAnimation.startTime = performance.now();
+        this.cameraAnimation.duration = duration;
+        this.cameraAnimation.easing = easing;
+        
+        // 애니메이션 중 컨트롤 비활성화
+        this.controls.enabled = false;
+    }
+    
+    /**
+     * 카메라 애니메이션 업데이트
+     */
+    updateCameraAnimation() {
+        if (!this.cameraAnimation.active) return;
+        
+        const now = performance.now();
+        const elapsed = now - this.cameraAnimation.startTime;
+        const progress = Math.min(elapsed / this.cameraAnimation.duration, 1);
+        
+        // 이징 함수 적용
+        const easedProgress = this.getEasingValue(progress, this.cameraAnimation.easing);
+        
+        // 위치 보간
+        this.camera.position.lerpVectors(
+            this.cameraAnimation.startPosition,
+            this.cameraAnimation.endPosition,
+            easedProgress
+        );
+        
+        // 타겟 보간
+        this.controls.target.lerpVectors(
+            this.cameraAnimation.startTarget,
+            this.cameraAnimation.endTarget,
+            easedProgress
+        );
+        
+        // 카메라가 타겟을 바라보도록
+        this.camera.lookAt(this.controls.target);
+        
+        // 애니메이션 완료 체크
+        if (progress >= 1) {
+            this.cameraAnimation.active = false;
+            this.controls.enabled = true;
             this.controls.update();
         }
+    }
+    
+    /**
+     * 이징 함수
+     */
+    getEasingValue(t, easing) {
+        switch (easing) {
+            case 'linear':
+                return t;
+            case 'easeInQuad':
+                return t * t;
+            case 'easeOutQuad':
+                return t * (2 - t);
+            case 'easeInOutQuad':
+                return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+            case 'easeInCubic':
+                return t * t * t;
+            case 'easeOutCubic':
+                return (--t) * t * t + 1;
+            case 'easeInOutCubic':
+                return t < 0.5 ? 4 * t * t * t : (t - 1) * (2 * t - 2) * (2 * t - 2) + 1;
+            case 'easeInQuart':
+                return t * t * t * t;
+            case 'easeOutQuart':
+                return 1 - (--t) * t * t * t;
+            case 'easeInOutQuart':
+                return t < 0.5 ? 8 * t * t * t * t : 1 - 8 * (--t) * t * t * t;
+            case 'easeInExpo':
+                return t === 0 ? 0 : Math.pow(2, 10 * t - 10);
+            case 'easeOutExpo':
+                return t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
+            case 'easeInOutExpo':
+                return t === 0 ? 0 : t === 1 ? 1 : t < 0.5 ? 
+                    Math.pow(2, 20 * t - 10) / 2 : (2 - Math.pow(2, -20 * t + 10)) / 2;
+            default:
+                return this.getEasingValue(t, 'easeInOutCubic');
+        }
+    }
+    
+    /**
+     * 카메라 속도 설정
+     */
+    setCameraAnimationDuration(duration) {
+        this.cameraAnimation.duration = duration;
+    }
+    
+    /**
+     * 카메라 이징 설정
+     */
+    setCameraEasing(easing) {
+        this.cameraAnimation.easing = easing;
+    }
+    
+    /**
+     * 커스텀 카메라 적용 (블렌더에서 가져온 카메라)
+     */
+    applyCustomCamera(customCamera, animate = true) {
+        if (!customCamera.isPerspectiveCamera) return;
+        
+        // 타겟 위치와 방향 계산
+        const targetPosition = new THREE.Vector3();
+        targetPosition.setFromMatrixPosition(customCamera.matrixWorld);
+        
+        // 카메라가 바라보는 방향 계산
+        const direction = new THREE.Vector3(0, 0, -1);
+        direction.applyQuaternion(customCamera.quaternion);
+        
+        // 타겟 위치 (카메라 앞 일정 거리)
+        const targetLookAt = new THREE.Vector3();
+        targetLookAt.copy(targetPosition).add(direction.multiplyScalar(10));
+        
+        // FOV 및 기타 속성 업데이트
+        this.camera.fov = customCamera.fov;
+        this.camera.aspect = customCamera.aspect;
+        this.camera.near = customCamera.near;
+        this.camera.far = customCamera.far;
+        this.camera.updateProjectionMatrix();
+        
+        if (animate) {
+            this.animateCamera(targetPosition, targetLookAt);
+        } else {
+            this.camera.position.copy(targetPosition);
+            this.camera.lookAt(targetLookAt);
+            this.controls.target.copy(targetLookAt);
+            this.controls.update();
+        }
+        
+        console.log('✅ 카메라 적용됨:', customCamera.name || '이름 없음');
     }
     
     /**
@@ -547,6 +727,9 @@ export class Viewer3D {
      */
     animate = () => {
         requestAnimationFrame(this.animate);
+        
+        // 카메라 애니메이션 업데이트
+        this.updateCameraAnimation();
         
         // 컨트롤 업데이트
         if (this.controls.enableDamping) {

@@ -1,9 +1,9 @@
-// js/app.js - 메인 애플리케이션 컨트롤러 (새로운 UI 구조)
+// js/app.js - 메인 애플리케이션 컨트롤러 (Sprite 핫스팟 시스템 적용)
 import { Viewer3D } from './viewer.js';
 import { ModelLoader } from './loader.js';
 import { UIController } from './ui.js';
 import { AnimationController } from './animation.js';
-import { HotspotManagerV3 } from './hotspot-v3.js';
+import { HotspotSpriteManager } from './hotspot-sprite.js';
 
 // 모델 설정 (실제 GitHub 경로)
 const MODELS = [
@@ -112,6 +112,9 @@ class WallViewerApp {
         
         // GLTF 카메라들
         this.gltfCameras = [];
+        
+        // 현재 핫스팟 데이터
+        this.currentHotspotData = null;
     }
     
     /**
@@ -175,15 +178,8 @@ class WallViewerApp {
         // 애니메이션 컨트롤러
         this.animationController = new AnimationController(this.viewer);
         
-        // 핫스팟 매니저 (CSS2DRenderer 버전)
-        this.hotspotManager = new HotspotManagerV3(this.viewer);
-        
-        // 핫스팟 렌더링을 뷰어의 렌더링 루프에 추가
-        this.viewer.addRenderCallback(() => {
-            if (this.hotspotManager && this.hotspotManager.render) {
-                this.hotspotManager.render();
-            }
-        });
+        // 핫스팟 매니저 (Sprite 버전)
+        this.hotspotManager = new HotspotSpriteManager(this.viewer);
         
         // UI 컨트롤러
         this.ui = new UIController({
@@ -202,10 +198,6 @@ class WallViewerApp {
         // 창 크기 변경
         window.addEventListener('resize', () => {
             this.viewer.handleResize();
-            // CSS2DRenderer도 리사이즈
-            if (this.hotspotManager && this.hotspotManager.cssRenderer) {
-                this.hotspotManager.cssRenderer.setSize(window.innerWidth, window.innerHeight);
-            }
         });
         
         // 전체화면 버튼
@@ -259,28 +251,33 @@ class WallViewerApp {
             });
         }
         
-        // 스타일 선택
+        // 스타일 선택 (Sprite에서는 사용하지 않음)
         const styleSelect = document.getElementById('hotspot-style');
         if (styleSelect) {
-            styleSelect.addEventListener('change', (e) => {
-                this.hotspotManager.setHotspotStyle(e.target.value);
-            });
+            styleSelect.style.display = 'none'; // 숨김
         }
         
-        // 크기 선택
+        // 크기 선택 (Sprite에서는 사용하지 않음)
         const sizeSelect = document.getElementById('hotspot-size');
         if (sizeSelect) {
-            sizeSelect.addEventListener('change', (e) => {
-                this.hotspotManager.setHotspotSize(e.target.value);
-            });
+            sizeSelect.style.display = 'none'; // 숨김
         }
         
-        // 필터 선택 (수정: type 필터에서 status 필터로)
+        // 필터 선택
         const filterSelect = document.getElementById('hotspot-filter');
         if (filterSelect) {
             filterSelect.addEventListener('change', (e) => {
                 this.hotspotManager.filterByStatus(e.target.value);
             });
+            
+            // 옵션 수정
+            filterSelect.innerHTML = `
+                <option value="all">모든 핫스팟</option>
+                <option value="sensors">센서만</option>
+                <option value="normal">정상</option>
+                <option value="warning">경고</option>
+                <option value="danger">위험</option>
+            `;
         }
     }
     
@@ -397,11 +394,14 @@ class WallViewerApp {
             console.log(`📦 모델 로드: ${modelConfig.name}`);
             console.log(`📂 경로: ${modelPath}`);
             
-            // 모델 로드
-            const gltf = await this.loader.loadGLTF(modelPath);
+            // 모델과 핫스팟 데이터 로드
+            const { gltf, hotspotsData } = await this.loader.loadWithHotspots(modelPath);
             
             // 뷰어에 모델 설정
             this.viewer.setModel(gltf.scene);
+            
+            // 핫스팟 데이터 저장
+            this.currentHotspotData = hotspotsData;
             
             // GLTF 파일 내의 카메라 처리
             this.gltfCameras = [];
@@ -449,9 +449,14 @@ class WallViewerApp {
                 this.animationController.setAnimations(gltf.animations, gltf.scene);
             }
             
-            // 핫스팟 설정 (모델에서 추출)
+            // 핫스팟 설정 (모델과 JSON 데이터 결합)
             requestAnimationFrame(() => {
-                this.hotspotManager.extractHotspotsFromModel(gltf.scene);
+                if (hotspotsData) {
+                    this.hotspotManager.loadHotspots(gltf.scene, hotspotsData);
+                    console.log('✅ 핫스팟 데이터 적용 완료');
+                } else {
+                    console.log('ℹ️ 핫스팟 데이터가 없습니다');
+                }
             });
             
             // UI 업데이트
