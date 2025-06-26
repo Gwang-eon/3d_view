@@ -11,6 +11,8 @@ export class HotspotManagerV3 {
         this.cssRenderer = null;
         this.hotspots = [];
         this.activeHotspot = null;
+        this.lastModelMatrix = new THREE.Matrix4();
+        this.modelTransformChanged = false;
         
         // 핫스팟 설정
         this.config = {
@@ -44,6 +46,22 @@ export class HotspotManagerV3 {
         this.init();
     }
     
+    // 모델 변환 감지 메서드 추가
+    checkModelTransform() {
+        if (!this.viewer.currentModel) return false;
+        
+        const currentMatrix = this.viewer.currentModel.matrixWorld;
+        
+        if (!currentMatrix.equals(this.lastModelMatrix)) {
+            this.lastModelMatrix.copy(currentMatrix);
+            return true;
+        }
+        
+        return false;
+    }
+
+
+
     /**
      * 초기화
      */
@@ -278,15 +296,12 @@ export class HotspotManagerV3 {
     updateHotspotPositions() {
         this.hotspots.forEach(hotspot => {
             if (hotspot.empty && hotspot.cssObject) {
-                // Empty의 현재 월드 위치 가져오기
+                // 단순히 위치만 복사 (매트릭스는 Three.js가 알아서 업데이트)
                 hotspot.empty.getWorldPosition(hotspot.worldPosition);
-                
-                // CSS2DObject 위치 업데이트
                 hotspot.cssObject.position.copy(hotspot.worldPosition);
             }
         });
     }
-    
     /**
      * 핫스팟 정보 표시
      */
@@ -519,8 +534,9 @@ export class HotspotManagerV3 {
     render() {
         if (this.cssRenderer && this.viewer.camera) {
             // 핫스팟 위치 업데이트 (중요!)
-            this.updateHotspotPositions();
-            
+            if (this.checkModelTransform()) {
+                this.updateHotspotPositions();
+            }
             // CSS2D 렌더링
             this.cssRenderer.render(this.viewer.scene, this.viewer.camera);
         }

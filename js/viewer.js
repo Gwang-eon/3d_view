@@ -536,12 +536,18 @@ export class Viewer3D {
         if (this.controls.enableDamping) {
             this.controls.update();
         }
-        
-        // 메인 렌더링
-        this.renderer.render(this.scene, this.camera);
+
+        // 모델 매트릭스 강제 업데이트 (추가)
+        if (this.currentModel) {
+            this.currentModel.updateMatrixWorld(true);
+        }
+    
         
         // 추가 렌더링 콜백 실행 (CSS2DRenderer 등)
         this.onRenderCallbacks.forEach(callback => callback());
+
+        // 메인 렌더링
+        this.renderer.render(this.scene, this.camera);
     }
     
     /**
