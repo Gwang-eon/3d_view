@@ -1,4 +1,4 @@
-// js/viewer.js - 3D 뷰어 코어 모듈 (CSS2DRenderer 지원 버전)
+// js/viewer.js - 3D 뷰어 코어 모듈 (카메라 거리 수정)
 
 export class Viewer3D {
     constructor(config) {
@@ -425,30 +425,39 @@ export class Viewer3D {
     }
     
     /**
-     * 뷰 설정
+     * 뷰 설정 (거리 수정)
      */
     setView(viewName) {
-        const distance = 10;
+        if (!this.currentModel) return;
+        
+        // 모델의 크기 계산
+        const box = new THREE.Box3().setFromObject(this.currentModel);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        
+        // 적절한 거리 계산 (모델 크기의 2배)
+        const distance = maxDim * 2;
         let position;
         
         switch(viewName) {
             case 'front':
-                position = new THREE.Vector3(0, 0, distance);
+                position = new THREE.Vector3(center.x, center.y, center.z + distance);
                 break;
             case 'back':
-                position = new THREE.Vector3(0, 0, -distance);
+                position = new THREE.Vector3(center.x, center.y, center.z - distance);
                 break;
             case 'left':
-                position = new THREE.Vector3(-distance, 0, 0);
+                position = new THREE.Vector3(center.x - distance, center.y, center.z);
                 break;
             case 'right':
-                position = new THREE.Vector3(distance, 0, 0);
+                position = new THREE.Vector3(center.x + distance, center.y, center.z);
                 break;
             case 'top':
-                position = new THREE.Vector3(0, distance, 0);
+                position = new THREE.Vector3(center.x, center.y + distance, center.z);
                 break;
             case 'bottom':
-                position = new THREE.Vector3(0, -distance, 0);
+                position = new THREE.Vector3(center.x, center.y - distance, center.z);
                 break;
             case 'reset':
                 this.resetCamera();
@@ -457,8 +466,8 @@ export class Viewer3D {
         
         if (position) {
             this.camera.position.copy(position);
-            this.camera.lookAt(0, 0, 0);
-            this.controls.target.set(0, 0, 0);
+            this.camera.lookAt(center);
+            this.controls.target.copy(center);
             this.controls.update();
         }
     }

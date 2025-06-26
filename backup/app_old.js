@@ -1,4 +1,4 @@
-// js/app.js - 메인 애플리케이션 컨트롤러 (새로운 UI 구조)
+// js/app.js - 메인 애플리케이션 컨트롤러 (CSS2DRenderer 핫스팟 통합)
 import { Viewer3D } from './viewer.js';
 import { ModelLoader } from './loader.js';
 import { UIController } from './ui.js';
@@ -36,12 +36,12 @@ const CONFIG = {
     defaultModel: 0,
     viewer: {
         container: 'viewer',
-        backgroundColor: 0x2a2a2a,
+        backgroundColor: 0x2a2a2a,  // 너무 어두운 0x1a1a1a에서 변경
         fog: {
             enabled: true,
-            color: 0x2a2a2a,
-            near: 20,
-            far: 150
+            color: 0x2a2a2a,  // 안개 색상도 밝게
+            near: 20,  // 10에서 증가
+            far: 150   // 100에서 증가
         },
         showGrid: true,
         showAxes: false
@@ -55,31 +55,32 @@ const CONFIG = {
     },
     controls: {
         enableDamping: true,
-        dampingFactor: 0.15,
+        dampingFactor: 0.15,      // 0.05 → 0.15로 변경
         minDistance: 2,
         maxDistance: 100,
         enablePan: true,
         panSpeed: 0.5,
-        rotateSpeed: 0.5,
-        zoomSpeed: 0.8,
-        minPolarAngle: 0,
-        maxPolarAngle: Math.PI * 0.9
+        rotateSpeed: 0.5,         // 새로 추가
+        zoomSpeed: 0.8,           // 새로 추가
+        // 수직 회전 제한
+        minPolarAngle: 0,         // 새로 추가
+        maxPolarAngle: Math.PI * 0.9  // 새로 추가
     },
     lights: {
         ambient: {
             color: 0xffffff,
-            intensity: 0.8
+            intensity: 0.8  // 0.6에서 증가
         },
         directional: {
             color: 0xffffff,
-            intensity: 1.0,
+            intensity: 1.0,  // 0.8에서 증가
             position: { x: 10, y: 10, z: 5 },
             castShadow: true,
             shadowMapSize: 2048
         },
         point: {
             color: 0xffffff,
-            intensity: 0.6,
+            intensity: 0.6,  // 0.4에서 증가
             position: { x: -5, y: 5, z: -5 }
         }
     },
@@ -112,6 +113,9 @@ class WallViewerApp {
         
         // GLTF 카메라들
         this.gltfCameras = [];
+        
+        // 애니메이션용 시간 추적
+    //    this.lastTime = 0;
     }
     
     /**
@@ -163,7 +167,6 @@ class WallViewerApp {
     async initializeModules() {
         // 3D 뷰어
         this.viewer = new Viewer3D(this.config);
-        this.viewer.app = this; // 상호 참조
         await this.viewer.init();
         
         // 모델 로더
@@ -178,12 +181,29 @@ class WallViewerApp {
         // 핫스팟 매니저 (CSS2DRenderer 버전)
         this.hotspotManager = new HotspotManagerV3(this.viewer);
         
-        // 핫스팟 렌더링을 뷰어의 렌더링 루프에 추가
+        // 핫스팟 렌더링을 뷰어의 렌더링 루프에 추가 - 매 프레임마다 실행되도록
         this.viewer.addRenderCallback(() => {
             if (this.hotspotManager && this.hotspotManager.render) {
                 this.hotspotManager.render();
             }
         });
+        
+        // 애니메이션 업데이트를 렌더링 루프에 추가 - 수정된 버전
+       // this.viewer.addRenderCallback(() => {
+       //     if (this.animationController && this.animationController.mixer) {
+
+        //    this.animationController.mixer.update(0.016);
+              // 수동으로 delta 계산
+              //  const currentTime = performance.now() / 1000; // 밀리초를 초로 변환
+              //  const delta = currentTime - this.lastTime;
+              //  this.lastTime = currentTime;
+                
+              // 첫 프레임이거나 너무 큰 delta는 무시
+              //  if (delta > 0 && delta < 0.1) {
+              //      this.animationController.mixer.update(delta);
+              //  }
+            //}
+        //});
         
         // UI 컨트롤러
         this.ui = new UIController({
@@ -239,12 +259,9 @@ class WallViewerApp {
         
         // 핫스팟 컨트롤
         this.setupHotspotControls();
-        
-        // 카메라 속도 컨트롤 설정
+
+        // 카메라 속도 컨트롤 설정 (새로 추가)
         this.setupCameraSpeedControls();
-        
-        // 타임라인 이벤트
-        this.setupTimelineEvents();
     }
     
     /**
@@ -275,7 +292,7 @@ class WallViewerApp {
             });
         }
         
-        // 필터 선택 (수정: type 필터에서 status 필터로)
+        // 타입 필터
         const filterSelect = document.getElementById('hotspot-filter');
         if (filterSelect) {
             filterSelect.addEventListener('change', (e) => {
@@ -283,7 +300,8 @@ class WallViewerApp {
             });
         }
     }
-    
+
+
     /**
      * 카메라 속도 컨트롤 설정
      */
@@ -315,37 +333,6 @@ class WallViewerApp {
                 const speed = parseFloat(e.target.value);
                 this.viewer.setPanSpeed(speed);
                 document.getElementById('pan-speed-value').textContent = speed.toFixed(1);
-            });
-        }
-    }
-    
-    /**
-     * 타임라인 이벤트 설정
-     */
-    setupTimelineEvents() {
-        // 재생 버튼 클릭
-        window.addEventListener('timeline-play', () => {
-            if (this.animationController) {
-                this.animationController.togglePlayPause();
-            }
-        });
-        
-        // 타임라인 시크
-        window.addEventListener('timeline-seek', (e) => {
-            if (this.animationController && e.detail && e.detail.time !== undefined) {
-                this.animationController.seek(e.detail.time);
-            }
-        });
-        
-        // 타임라인 슬라이더 드래그 시작/종료
-        const timelineSlider = document.getElementById('timeline-slider');
-        if (timelineSlider) {
-            timelineSlider.addEventListener('mousedown', () => {
-                this.ui.setTimelineDragging(true);
-            });
-            
-            timelineSlider.addEventListener('mouseup', () => {
-                this.ui.setTimelineDragging(false);
             });
         }
     }
@@ -404,7 +391,7 @@ class WallViewerApp {
             this.viewer.setModel(gltf.scene);
             
             // GLTF 파일 내의 카메라 처리
-            this.gltfCameras = [];
+            this.gltfCameras = [];  // 카메라 목록 초기화
             const cameraSelect = document.getElementById('camera-select');
             
             if (gltf.cameras && gltf.cameras.length > 0) {
@@ -444,9 +431,10 @@ class WallViewerApp {
                 this.viewer.adjustCameraToModel();
             }
             
-            // 애니메이션 설정
+            // 애니메이션 설정 - AnimationController의 별도 루프 제거됨
             if (gltf.animations && gltf.animations.length > 0) {
                 this.animationController.setAnimations(gltf.animations, gltf.scene);
+                // startUpdateLoop 호출 제거 - 메인 렌더 루프에서 처리
             }
             
             // 핫스팟 설정 (모델에서 추출)
@@ -456,6 +444,7 @@ class WallViewerApp {
             
             // UI 업데이트
             this.ui.hideLoading();
+            this.ui.updateModelInfo(modelConfig);
             
             console.log(`✅ 모델 로드 완료: ${modelConfig.name}`);
             
@@ -504,7 +493,7 @@ class WallViewerApp {
             // 투영 행렬 업데이트
             this.viewer.camera.updateProjectionMatrix();
             
-            // 타겟은 항상 월드 원점으로 설정
+            // 타겟은 항상 월드 원점으로 설정 (블렌더 원점 기준)
             this.viewer.controls.target.set(0, 0, 0);
             this.viewer.controls.update();
             

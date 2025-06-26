@@ -1,4 +1,4 @@
-// js/ui.js - UI 컨트롤러 모듈
+// js/ui.js - 새로운 UI 컨트롤러 모듈
 
 export class UIController {
     constructor(config) {
@@ -13,11 +13,17 @@ export class UIController {
             error: null,
             modelButtons: [],
             viewButtons: [],
-            infoContent: null
+            helpBox: null,
+            cameraBox: null,
+            hotspotBox: null,
+            timeline: null
         };
         
         // 상태
         this.currentModelIndex = -1;
+        this.isHelpOpen = false;
+        this.isSpeedControlOpen = false;
+        this.isHotspotBoxOpen = false;
     }
     
     /**
@@ -26,6 +32,7 @@ export class UIController {
     init() {
         this.cacheElements();
         this.setupEventListeners();
+        this.initFloatingBoxes();
         console.log('✅ UI 컨트롤러 초기화 완료');
     }
     
@@ -37,14 +44,24 @@ export class UIController {
         this.elements.loading = document.getElementById('loading');
         this.elements.error = document.getElementById('error');
         
-        // 모델 버튼
-        this.elements.modelButtons = document.querySelectorAll('.model-btn');
+        // 모델 버튼 (상단)
+        this.elements.modelButtons = document.querySelectorAll('.model-btn-top');
         
         // 뷰 컨트롤 버튼
-        this.elements.viewButtons = document.querySelectorAll('.control-btn');
+        this.elements.viewButtons = document.querySelectorAll('.view-btn');
         
-        // 정보 컨텐츠
-        this.elements.infoContent = document.getElementById('info-content');
+        // 플로팅 박스
+        this.elements.helpBox = document.getElementById('help-floating');
+        this.elements.cameraBox = document.getElementById('camera-floating');
+        this.elements.hotspotBox = document.getElementById('hotspot-floating');
+        
+        // 타임라인
+        this.elements.timeline = document.getElementById('animation-timeline');
+        this.elements.playBtn = document.getElementById('play-btn');
+        this.elements.timelineSlider = document.getElementById('timeline-slider');
+        this.elements.currentTime = document.getElementById('current-time');
+        this.elements.totalTime = document.getElementById('total-time');
+        this.elements.timelineProgress = document.querySelector('.timeline-progress');
     }
     
     /**
@@ -52,7 +69,7 @@ export class UIController {
      */
     setupEventListeners() {
         // 모델 선택 버튼
-        this.elements.modelButtons.forEach((btn, index) => {
+        this.elements.modelButtons.forEach((btn) => {
             btn.addEventListener('click', () => {
                 const modelIndex = parseInt(btn.dataset.model);
                 this.onModelSelect(modelIndex);
@@ -63,14 +80,137 @@ export class UIController {
         this.elements.viewButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 const view = btn.dataset.view;
-                
-                if (view === 'reset') {
-                    this.onReset();
-                } else if (view) {
-                    this.onViewChange(view);
-                }
+                this.onViewChange(view);
             });
         });
+        
+        // 카메라 리셋 버튼
+        const resetBtn = document.querySelector('.reset-camera-btn');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                this.onReset();
+            });
+        }
+        
+        // 핫스팟 토글 버튼 (헤더)
+        const hotspotToggleBtn = document.getElementById('hotspot-toggle-btn');
+        if (hotspotToggleBtn) {
+            hotspotToggleBtn.addEventListener('click', () => {
+                this.toggleHotspotBox();
+            });
+        }
+        
+        // 속도 조절 토글
+        const speedToggle = document.querySelector('.speed-toggle');
+        if (speedToggle) {
+            speedToggle.addEventListener('click', () => {
+                this.toggleSpeedControls();
+            });
+        }
+        
+        // 타임라인 슬라이더
+        if (this.elements.timelineSlider) {
+            this.elements.timelineSlider.addEventListener('input', (e) => {
+                this.onTimelineSeek(e.target.value);
+            });
+        }
+        
+        // 재생 버튼
+        if (this.elements.playBtn) {
+            this.elements.playBtn.addEventListener('click', () => {
+                this.onPlayClick();
+            });
+        }
+    }
+    
+    /**
+     * 플로팅 박스 초기화
+     */
+    initFloatingBoxes() {
+        // 조작법 박스
+        const helpToggle = this.elements.helpBox?.querySelector('.floating-toggle');
+        if (helpToggle) {
+            helpToggle.addEventListener('click', () => {
+                this.toggleHelpBox();
+            });
+        }
+        
+        // 핫스팟 박스 닫기 버튼
+        const hotspotClose = this.elements.hotspotBox?.querySelector('.floating-close');
+        if (hotspotClose) {
+            hotspotClose.addEventListener('click', () => {
+                this.hideHotspotBox();
+            });
+        }
+        
+        // 속도 슬라이더 값 표시
+        this.initSpeedSliders();
+    }
+    
+    /**
+     * 속도 슬라이더 초기화
+     */
+    initSpeedSliders() {
+        const sliders = [
+            { id: 'camera-rotate-speed', valueId: 'rotate-speed-value' },
+            { id: 'camera-zoom-speed', valueId: 'zoom-speed-value' },
+            { id: 'camera-pan-speed', valueId: 'pan-speed-value' }
+        ];
+        
+        sliders.forEach(({ id, valueId }) => {
+            const slider = document.getElementById(id);
+            const valueDisplay = document.getElementById(valueId);
+            
+            if (slider && valueDisplay) {
+                slider.addEventListener('input', (e) => {
+                    valueDisplay.textContent = e.target.value;
+                });
+            }
+        });
+    }
+    
+    /**
+     * 조작법 박스 토글
+     */
+    toggleHelpBox() {
+        this.isHelpOpen = !this.isHelpOpen;
+        if (this.elements.helpBox) {
+            this.elements.helpBox.classList.toggle('open', this.isHelpOpen);
+        }
+    }
+    
+    /**
+     * 속도 컨트롤 토글
+     */
+    toggleSpeedControls() {
+        this.isSpeedControlOpen = !this.isSpeedControlOpen;
+        const speedToggle = document.querySelector('.speed-toggle');
+        const speedControls = document.querySelector('.speed-controls');
+        
+        if (speedToggle && speedControls) {
+            speedToggle.classList.toggle('open', this.isSpeedControlOpen);
+            speedControls.style.display = this.isSpeedControlOpen ? 'block' : 'none';
+        }
+    }
+    
+    /**
+     * 핫스팟 박스 토글
+     */
+    toggleHotspotBox() {
+        this.isHotspotBoxOpen = !this.isHotspotBoxOpen;
+        if (this.elements.hotspotBox) {
+            this.elements.hotspotBox.style.display = this.isHotspotBoxOpen ? 'block' : 'none';
+        }
+    }
+    
+    /**
+     * 핫스팟 박스 숨기기
+     */
+    hideHotspotBox() {
+        this.isHotspotBoxOpen = false;
+        if (this.elements.hotspotBox) {
+            this.elements.hotspotBox.style.display = 'none';
+        }
     }
     
     /**
@@ -140,43 +280,131 @@ export class UIController {
     }
     
     /**
-     * 모델 정보 업데이트
+     * 타임라인 표시
      */
-    updateModelInfo(modelConfig) {
-        if (!this.elements.infoContent) return;
+    showTimeline() {
+        if (this.elements.timeline) {
+            this.elements.timeline.style.display = 'flex';
+            // body에 클래스 추가 (조작법 박스 위치 조정용)
+            document.body.classList.add('has-timeline');
+            // 메인 뷰어 높이 조정
+            const viewer = document.querySelector('.viewer-main');
+            if (viewer) {
+                viewer.style.paddingBottom = 'var(--timeline-height)';
+            }
+        }
+    }
+    
+    /**
+     * 타임라인 숨기기
+     */
+    hideTimeline() {
+        if (this.elements.timeline) {
+            this.elements.timeline.style.display = 'none';
+            // body에서 클래스 제거
+            document.body.classList.remove('has-timeline');
+            // 메인 뷰어 높이 복원
+            const viewer = document.querySelector('.viewer-main');
+            if (viewer) {
+                viewer.style.paddingBottom = '0';
+            }
+        }
+    }
+    
+    /**
+     * 타임라인 설정
+     */
+    setupTimeline(duration) {
+        if (!this.elements.timeline) return;
         
-        this.elements.infoContent.innerHTML = `
-            <h3>${modelConfig.name}</h3>
-            <p>${modelConfig.description}</p>
-            <div style="margin-top: 16px;">
-                <p><strong>파일:</strong> ${modelConfig.fileName}</p>
-                <p><strong>폴더:</strong> ${modelConfig.folder}/</p>
-            </div>
-            <div style="margin-top: 16px;">
-                <h4>조작법</h4>
-                <ul style="list-style: none; padding: 0; color: #b0b0b0; font-size: 0.85rem;">
-                    <li>🖱️ 좌클릭 + 드래그: 회전</li>
-                    <li>🖱️ 우클릭 + 드래그: 이동</li>
-                    <li>🖱️ 스크롤: 확대/축소</li>
-                    <li>⌨️ 1-3: 모델 선택</li>
-                    <li>⌨️ R: 카메라 리셋</li>
-                    <li>⌨️ F: 전체화면</li>
-                    <li>⌨️ G: 그리드 토글</li>
-                    <li>⌨️ H: 핫스팟 토글</li>
-                    <li>⌨️ Space: 애니메이션 재생/정지</li>
-                </ul>
-            </div>
-        `;
+        this.showTimeline();
+        
+        // 총 시간 설정
+        if (this.elements.totalTime) {
+            this.elements.totalTime.textContent = this.formatTime(duration);
+        }
+        
+        // 슬라이더 설정
+        if (this.elements.timelineSlider) {
+            this.elements.timelineSlider.max = duration * 100;
+            this.elements.timelineSlider.value = 0;
+        }
+        
+        // 재생 버튼 초기화
+        this.updatePlayButton(false);
+    }
+    
+    /**
+     * 타임라인 업데이트
+     */
+    updateTimeline(currentTime, duration) {
+        if (!this.elements.timeline) return;
+        
+        // 현재 시간 표시
+        if (this.elements.currentTime) {
+            this.elements.currentTime.textContent = this.formatTime(currentTime);
+        }
+        
+        // 슬라이더 위치
+        if (this.elements.timelineSlider && !this.isTimelineDragging) {
+            const progress = (currentTime / duration) * 100;
+            this.elements.timelineSlider.value = currentTime * 100;
+            
+            // 프로그레스 바
+            if (this.elements.timelineProgress) {
+                this.elements.timelineProgress.style.width = `${progress}%`;
+            }
+        }
+    }
+    
+    /**
+     * 재생 버튼 업데이트
+     */
+    updatePlayButton(isPlaying) {
+        if (this.elements.playBtn) {
+            this.elements.playBtn.innerHTML = isPlaying ? '<span>⏸</span>' : '<span>▶</span>';
+        }
+    }
+    
+    /**
+     * 시간 포맷팅
+     */
+    formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+    
+    /**
+     * 재생 버튼 클릭 핸들러
+     */
+    onPlayClick() {
+        // app.js에서 처리하도록 이벤트 발생
+        const event = new CustomEvent('timeline-play');
+        window.dispatchEvent(event);
+    }
+    
+    /**
+     * 타임라인 시크 핸들러
+     */
+    onTimelineSeek(value) {
+        const time = value / 100;
+        const event = new CustomEvent('timeline-seek', { detail: { time } });
+        window.dispatchEvent(event);
+    }
+    
+    /**
+     * 타임라인 드래그 상태 설정
+     */
+    setTimelineDragging(isDragging) {
+        this.isTimelineDragging = isDragging;
     }
     
     /**
      * 모바일 메뉴 토글 (반응형)
      */
     toggleMobileMenu() {
-        const sidebar = document.querySelector('.sidebar');
-        if (sidebar) {
-            sidebar.classList.toggle('open');
-        }
+        // 새로운 UI에서는 필요 없음
     }
     
     /**

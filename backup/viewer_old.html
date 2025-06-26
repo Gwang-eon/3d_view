@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>옹벽 3D 뷰어</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/hotspot.css">
+</head>
+<body>
+    <!-- 헤더 -->
+    <header class="header">
+        <h1>옹벽 3D 뷰어</h1>
+        <div class="header-controls">
+            <button id="home-btn" class="header-btn" title="홈으로">
+                <span>🏠</span>
+            </button>
+            <button id="fullscreen-btn" class="header-btn" title="전체화면">
+                <span>⛶</span>
+            </button>
+        </div>
+    </header>
+    
+    <!-- 메인 컨테이너 -->
+    <main class="viewer-container">
+        <!-- 3D 뷰어 -->
+        <div id="viewer" class="viewer-canvas"></div>
+        
+        <!-- 사이드바 -->
+        <aside class="sidebar">
+            <!-- 모델 선택 -->
+            <section class="model-selector">
+                <h2>모델 선택</h2>
+                <div class="model-buttons">
+                    <button class="model-btn active" data-model="0">
+                        <span class="model-icon">🧱</span>
+                        <span class="model-name">블록 옹벽</span>
+                    </button>
+                    <button class="model-btn" data-model="1">
+                        <span class="model-icon">🏗️</span>
+                        <span class="model-name">캔틸레버 옹벽</span>
+                    </button>
+                    <button class="model-btn" data-model="2">
+                        <span class="model-icon">🔧</span>
+                        <span class="model-name">MSE 옹벽</span>
+                    </button>
+                </div>
+            </section>
+            
+            <!-- 모델 정보 -->
+            <section class="model-info">
+                <h2>모델 정보</h2>
+                <div id="info-content" class="info-content">
+                    <p>모델을 선택하면 정보가 표시됩니다.</p>
+                </div>
+            </section>
+            
+            <!-- 뷰 컨트롤 -->
+            <section class="view-controls">
+                <h2>뷰 컨트롤</h2>
+                <div class="control-buttons">
+                    <button class="control-btn" data-view="front" title="정면">앞</button>
+                    <button class="control-btn" data-view="back" title="후면">뒤</button>
+                    <button class="control-btn" data-view="left" title="좌측">좌</button>
+                    <button class="control-btn" data-view="right" title="우측">우</button>
+                    <button class="control-btn" data-view="top" title="상단">위</button>
+                    <button class="control-btn" data-view="bottom" title="하단">아래</button>
+                </div>
+                <button class="control-btn reset-btn" data-view="reset">
+                    초기 위치로
+                </button>
+            </section>
+            
+            <!-- 카메라 선택 섹션 (뷰 컨트롤 섹션 뒤에 추가) -->
+            <section class="camera-controls" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid var(--border-color);">
+                <h2>카메라 선택</h2>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <select id="camera-select" class="control-btn" style="width: 100%; text-align: left;">
+                        <option value="default">기본 카메라</option>
+                    </select>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">
+                        블렌더에서 생성한 카메라를 선택할 수 있습니다.
+                    </p>
+                </div>
+            </section>
+            <!-- 카메라 속도 컨트롤 (새로 추가) -->
+            <section class="camera-speed-controls" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid var(--border-color);">
+                <h2>카메라 속도 조절</h2>
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <!-- 회전 속도 -->
+                    <div class="speed-control-item">
+                        <label style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; color: var(--text-secondary);">
+                            <span>회전 속도</span>
+                            <span id="rotate-speed-value">0.5</span>
+                        </label>
+                        <input type="range" id="camera-rotate-speed" min="0.1" max="2.0" step="0.1" value="0.5" 
+                            style="width: 100%; cursor: pointer;">
+                    </div>
+                    
+                    <!-- 줌 속도 -->
+                    <div class="speed-control-item">
+                        <label style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; color: var(--text-secondary);">
+                            <span>줌 속도</span>
+                            <span id="zoom-speed-value">0.8</span>
+                        </label>
+                        <input type="range" id="camera-zoom-speed" min="0.1" max="2.0" step="0.1" value="0.8"
+                            style="width: 100%; cursor: pointer;">
+                    </div>
+                    
+                    <!-- 이동 속도 -->
+                    <div class="speed-control-item">
+                        <label style="display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; color: var(--text-secondary);">
+                            <span>이동 속도</span>
+                            <span id="pan-speed-value">0.5</span>
+                        </label>
+                        <input type="range" id="camera-pan-speed" min="0.1" max="2.0" step="0.1" value="0.5"
+                            style="width: 100%; cursor: pointer;">
+                    </div>
+                    
+                    <!-- 리셋 버튼 -->
+                    <button class="control-btn" style="width: 100%; margin-top: 8px;" 
+                            onclick="window.wallViewerApp?.viewer?.resetControlSpeeds()">
+                        속도 초기화
+                    </button>
+                </div>
+            </section>
+            <!-- 핫스팟 컨트롤 -->
+            <section class="hotspot-controls" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid var(--border-color);">
+                <h2>핫스팟 설정</h2>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <button id="toggle-hotspots" class="control-btn" style="width: 100%;">
+                        핫스팟 표시/숨기기
+                    </button>
+                    
+                    <select id="hotspot-style" class="control-btn" style="width: 100%; text-align: left;">
+                        <option value="default">기본 스타일</option>
+                        <option value="square">사각형 스타일</option>
+                        <option value="tag">태그 스타일</option>
+                        <option value="minimal">미니멀 스타일</option>
+                    </select>
+                    
+                    <select id="hotspot-size" class="control-btn" style="width: 100%; text-align: left;">
+                        <option value="small">작게</option>
+                        <option value="medium" selected>보통</option>
+                        <option value="large">크게</option>
+                    </select>
+                    
+                    <select id="hotspot-filter" class="control-btn" style="width: 100%; text-align: left;">
+                        <option value="all">모든 타입</option>
+                        <option value="info">정보</option>
+                        <option value="warning">경고</option>
+                        <option value="success">성공</option>
+                        <option value="danger">위험</option>
+                    </select>
+                </div>
+            </section>
+        </aside>
+    </main>
+    
+    <!-- 로딩 화면 -->
+    <div id="loading" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">모델 로딩 중...</p>
+    </div>
+    
+    <!-- 에러 화면 -->
+    <div id="error" class="error-screen" style="display: none;">
+        <div class="error-content">
+            <h2>오류 발생</h2>
+            <p id="error-message">모델을 로드할 수 없습니다.</p>
+            <button onclick="location.reload()">다시 시도</button>
+        </div>
+    </div>
+    
+    <!-- Three.js 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+    
+    <!-- 애플리케이션 스크립트 -->
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>
