@@ -31,7 +31,8 @@ export class ModelLoader {
             retryCount: 0,
             phase: 'idle',
             itemsLoaded: 0,
-            itemsTotal: 0
+            itemsTotal: 0,
+            textureErrors: 0  // 텍스처 오류 카운트 추가
         };
         
         // 캐시 시스템
@@ -107,14 +108,26 @@ export class ModelLoader {
     
     setupLoadingManager() {
         this.loadingManager = new THREE.LoadingManager(
-            () => { console.log('[ModelLoader] 모든 리소스 로드 완료'); },
+            () => { 
+                console.log('[ModelLoader] 모든 리소스 로드 완료');
+                if (this.loadingState.textureErrors > 0) {
+                    console.warn(`[ModelLoader] ${this.loadingState.textureErrors}개의 텍스처가 누락되었습니다.`);
+                }
+            },
             (url, itemsLoaded, itemsTotal) => {
                 const progress = (itemsLoaded / itemsTotal) * 100;
                 this.loadingState.progress = progress;
                 this.emit('loading:progress', { url, itemsLoaded, itemsTotal, progress });
             },
             (url) => {
-                console.error(`[ModelLoader] 로드 에러: ${url}`);
+                // 텍스처 파일인 경우 경고만 표시 (모델 로드는 계속)
+                if (url.match(/\.(png|jpg|jpeg|webp)$/i)) {
+                    console.warn(`[ModelLoader] 텍스처 누락: ${url}`);
+                    this.loadingState.textureErrors++;
+                } else {
+                    console.error(`[ModelLoader] 리소스 로드 실패: ${url}`);
+                }
+                
                 this.stats.totalErrors++;
             }
         );
@@ -123,6 +136,8 @@ export class ModelLoader {
     async setupLoaders() {
         // GLTF 로더
         this.gltfLoader = new THREE.GLTFLoader(this.loadingManager);
+        
+        // 기본 경로는 나중에 각 모델별로 설정
         
         // Draco 로더 설정 (압축된 모델용)
         if (getConfig('models.enableDracoLoader', true)) {
@@ -200,12 +215,21 @@ export class ModelLoader {
             
         } catch (error) {
             console.error(`[ModelLoader] 모델 로드 실패: ${modelData.name}`, error);
+            console.error(`[ModelLoader] 모델 폴더: ${modelFolder}`);
             
-            // 에러 복구 시도
-            if (this.loadingState.retryCount < this.errorRecovery.maxRetries) {
-                return await this.retryLoading(index, error);
-            } else if (this.errorRecovery.enableFallback && this.errorRecovery.fallbackModels.length > 0) {
-                return await this.loadFallbackModel(error);
+            // 텍스처 로드 실패는 경고만 표시하고 계속 진행
+            if (this.loadingState.textureErrors > 0 && error.message && !error.message.includes('GLTF')) {
+                console.warn(`[ModelLoader] 일부 텍스처가 누락되었지만 모델 로드를 계속합니다.`);
+            }
+            
+            // GLTF 파일 자체를 로드할 수 없는 경우에만 재시도
+            if (error.message && error.message.includes('GLTF')) {
+                // 에러 복구 시도
+                if (this.loadingState.retryCount < this.errorRecovery.maxRetries) {
+                    return await this.retryLoading(index, error);
+                } else if (this.errorRecovery.enableFallback && this.errorRecovery.fallbackModels.length > 0) {
+                    return await this.loadFallbackModel(error);
+                }
             }
             
             this.setLoadingState(false);
@@ -215,15 +239,23 @@ export class ModelLoader {
     }
     
     async loadFromFile(modelData, index) {
-        const modelPath = `${modelData.folder}/${modelData.fileName}`;
+        const basePath = getConfig('paths.modelsPath', './gltf/');
+        const modelFolder = `${basePath}${modelData.folder}/`;
+        const modelPath = `${modelData.fileName}`;
+        const fullPath = `${modelFolder}${modelPath}`;
         const startTime = performance.now();
         
         try {
             this.loadingState.phase = 'downloading';
             
+            // 이 모델의 폴더를 기본 경로로 설정 (텍스처 등 리소스 로드를 위해)
+            this.gltfLoader.setPath(modelFolder);
+            
+            console.log(`[ModelLoader] GLTF 로드 시작: ${modelFolder}${modelPath}`);
+            
             const gltf = await new Promise((resolve, reject) => {
                 this.gltfLoader.load(
-                    modelPath,
+                    modelPath,  // 파일명만 사용
                     (gltf) => {
                         this.loadingState.phase = 'parsing';
                         resolve(gltf);
@@ -232,7 +264,9 @@ export class ModelLoader {
                         // LoadingManager에서 처리
                     },
                     (error) => {
-                        reject(error);
+                        console.error(`[ModelLoader] GLTF 로드 오류:`, error);
+                        console.error(`[ModelLoader] 경로: ${modelFolder}${modelPath}`);
+                        reject(new Error(`GLTF 파일을 로드할 수 없습니다: ${modelFolder}${modelPath}`));
                     }
                 );
             });
@@ -542,10 +576,12 @@ export class ModelLoader {
             this.loadingState.currentModel = modelIndex;
             this.loadingState.currentModelData = modelData;
             this.loadingState.loadStartTime = performance.now();
+            this.loadingState.textureErrors = 0;
         } else {
             this.loadingState.progress = 0;
             this.loadingState.phase = 'idle';
             this.loadingState.retryCount = 0;
+            this.loadingState.textureErrors = 0;
         }
     }
     
