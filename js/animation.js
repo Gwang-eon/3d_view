@@ -261,23 +261,30 @@ export class AnimationController {
         if (this.animationLoopId) {
             cancelAnimationFrame(this.animationLoopId);
         }
-        
+        let lastTime = performance.now();
+    
         const animate = () => {
             this.animationLoopId = requestAnimationFrame(animate);
             
             if (this.mixer) {
-                const delta = this.clock.getDelta();
-                if (delta > 0) {
+                // 수동으로 delta 계산
+                const currentTime = performance.now();
+                const delta = (currentTime - lastTime) / 1000; // 밀리초를 초로 변환
+                lastTime = currentTime;
+                
+                if (delta > 0 && delta < 0.1) { // 너무 큰 delta 방지
                     this.mixer.update(delta);
+                    
+                    // 디버깅용 - 첫 몇 프레임만 로그
+                    if (this.mixer.time < 0.1) {
+                        console.log(`Mixer 업데이트: delta=${delta.toFixed(4)}, time=${this.mixer.time.toFixed(4)}`);
+                    }
                 }
             }
         };
         
-        // Clock 시작
-        this.clock.start();
         animate();
-        
-        console.log('✅ 애니메이션 업데이트 루프 시작');
+        console.log('✅ 애니메이션 업데이트 루프 시작 (수동 delta)');
     }
     
     /**
