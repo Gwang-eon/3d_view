@@ -55,8 +55,11 @@ export class AnimationController {
         this.showControls();
         this.createAnimationList();
         
-        // 첫 번째 애니메이션 자동 재생
-        if (animations.length > 0) {
+        // 애니메이션이 여러 개인 경우 모두 재생
+        if (animations.length > 1) {
+            console.log('여러 애니메이션 감지 - 모두 재생');
+            this.playAllAnimations();
+        } else if (animations.length === 1) {
             this.playAnimation(animations[0].name);
         }
         
@@ -98,22 +101,76 @@ export class AnimationController {
     }
     
     /**
+     * 모든 애니메이션 동시 재생
+     */
+    playAllAnimations() {
+        console.log('🎬 모든 애니메이션 동시 재생');
+        
+        // 모든 액션 중지
+        this.mixer.stopAllAction();
+        
+        // 모든 액션 재생
+        let playCount = 0;
+        this.actions.forEach((action, name) => {
+            action.reset();
+            action.enabled = true;
+            action.setEffectiveTimeScale(1);
+            action.setEffectiveWeight(1);
+            action.play();
+            playCount++;
+        });
+        
+        console.log(`✅ ${playCount}개 애니메이션 재생 시작`);
+        this.isPlaying = true;
+        this.currentAction = null; // 개별 선택 없음
+        this.updatePlayButton();
+    }
+    
+    /**
+     * 애니메이션 그룹별로 분류
+     */
+    getAnimationGroups() {
+        const groups = {};
+        this.clips.forEach((clip) => {
+            const baseName = clip.name.split('.')[0];
+            if (!groups[baseName]) {
+                groups[baseName] = [];
+            }
+            groups[baseName].push(clip);
+        });
+        return groups;
+    }
+    
+    /**
      * 재생/일시정지 토글
      */
     togglePlayPause() {
-        if (!this.currentAction) {
-            console.warn('재생할 애니메이션이 없습니다.');
-            return;
-        }
-        
-        if (this.isPlaying) {
-            this.currentAction.paused = true;
-            this.isPlaying = false;
-            console.log('⏸️ 애니메이션 일시정지');
-        } else {
-            this.currentAction.paused = false;
-            this.isPlaying = true;
-            console.log('▶️ 애니메이션 재개');
+        if (this.currentAction) {
+            // 개별 애니메이션 토글
+            if (this.isPlaying) {
+                this.currentAction.paused = true;
+                this.isPlaying = false;
+                console.log('⏸️ 애니메이션 일시정지');
+            } else {
+                this.currentAction.paused = false;
+                this.isPlaying = true;
+                console.log('▶️ 애니메이션 재개');
+            }
+        } else if (this.actions.size > 0) {
+            // 전체 애니메이션 토글
+            if (this.isPlaying) {
+                this.actions.forEach(action => {
+                    action.paused = true;
+                });
+                this.isPlaying = false;
+                console.log('⏸️ 모든 애니메이션 일시정지');
+            } else {
+                this.actions.forEach(action => {
+                    action.paused = false;
+                });
+                this.isPlaying = true;
+                console.log('▶️ 모든 애니메이션 재개');
+            }
         }
         
         this.updatePlayButton();
@@ -123,12 +180,10 @@ export class AnimationController {
      * 애니메이션 정지
      */
     stop() {
-        if (this.currentAction) {
-            this.currentAction.stop();
-            this.isPlaying = false;
-            this.currentAction = null;
-            console.log('⏹️ 애니메이션 정지');
-        }
+        this.mixer.stopAllAction();
+        this.isPlaying = false;
+        this.currentAction = null;
+        console.log('⏹️ 모든 애니메이션 정지');
         
         this.updatePlayButton();
     }
@@ -205,6 +260,25 @@ export class AnimationController {
         stopButton.style.cssText = playButton.style.cssText;
         stopButton.onclick = () => this.stop();
         
+        // "모두 재생" 버튼 추가 (애니메이션이 여러 개일 때만)
+        if (this.clips.length > 1) {
+            const playAllButton = document.createElement('button');
+            playAllButton.className = 'anim-btn';
+            playAllButton.innerHTML = '▶️ ALL';
+            playAllButton.style.cssText = playButton.style.cssText;
+            playAllButton.style.width = 'auto';
+            playAllButton.style.padding = '0 12px';
+            playAllButton.onclick = () => this.playAllAnimations();
+            playAllButton.title = '모든 애니메이션 재생';
+            
+            container.appendChild(playButton);
+            container.appendChild(stopButton);
+            container.appendChild(playAllButton);
+        } else {
+            container.appendChild(playButton);
+            container.appendChild(stopButton);
+        }
+        
         // 애니메이션 선택
         const select = document.createElement('select');
         select.id = 'animation-select';
@@ -218,8 +292,6 @@ export class AnimationController {
         `;
         select.onchange = (e) => this.playAnimation(e.target.value);
         
-        container.appendChild(playButton);
-        container.appendChild(stopButton);
         container.appendChild(select);
         
         document.body.appendChild(container);
@@ -235,12 +307,30 @@ export class AnimationController {
         
         select.innerHTML = '';
         
+        // "전체 재생" 옵션 추가 (애니메이션이 여러 개일 때)
+        if (this.clips.length > 1) {
+            const allOption = document.createElement('option');
+            allOption.value = '__all__';
+            allOption.textContent = '전체 애니메이션';
+            select.appendChild(allOption);
+        }
+        
+        // 개별 애니메이션 옵션
         this.clips.forEach((clip, index) => {
             const option = document.createElement('option');
             option.value = clip.name;
             option.textContent = clip.name || `애니메이션 ${index + 1}`;
             select.appendChild(option);
         });
+        
+        // 전체 재생이 선택된 경우 처리
+        select.onchange = (e) => {
+            if (e.target.value === '__all__') {
+                this.playAllAnimations();
+            } else {
+                this.playAnimation(e.target.value);
+            }
+        };
     }
     
     /**
@@ -261,30 +351,23 @@ export class AnimationController {
         if (this.animationLoopId) {
             cancelAnimationFrame(this.animationLoopId);
         }
-        let lastTime = performance.now();
-    
+        
         const animate = () => {
             this.animationLoopId = requestAnimationFrame(animate);
             
             if (this.mixer) {
-                // 수동으로 delta 계산
-                const currentTime = performance.now();
-                const delta = (currentTime - lastTime) / 1000; // 밀리초를 초로 변환
-                lastTime = currentTime;
-                
-                if (delta > 0 && delta < 0.1) { // 너무 큰 delta 방지
+                const delta = this.clock.getDelta();
+                if (delta > 0) {
                     this.mixer.update(delta);
-                    
-                    // 디버깅용 - 첫 몇 프레임만 로그
-                    if (this.mixer.time < 0.1) {
-                        console.log(`Mixer 업데이트: delta=${delta.toFixed(4)}, time=${this.mixer.time.toFixed(4)}`);
-                    }
                 }
             }
         };
         
+        // Clock 시작
+        this.clock.start();
         animate();
-        console.log('✅ 애니메이션 업데이트 루프 시작 (수동 delta)');
+        
+        console.log('✅ 애니메이션 업데이트 루프 시작');
     }
     
     /**
