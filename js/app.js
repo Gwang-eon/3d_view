@@ -30,18 +30,18 @@ const MODELS = [
     }
 ];
 
-// 애플리케이션 설정
+// 애플리케이션 설정 - 밝기 조정
 const CONFIG = {
     basePath: './gltf/',
     defaultModel: 0,
     viewer: {
         container: 'viewer',
-        backgroundColor: 0x1a1a1a,
+        backgroundColor: 0x2a2a2a,  // 너무 어두운 0x1a1a1a에서 변경
         fog: {
             enabled: true,
-            color: 0x1a1a1a,
-            near: 10,
-            far: 100
+            color: 0x2a2a2a,  // 안개 색상도 밝게
+            near: 20,  // 10에서 증가
+            far: 150   // 100에서 증가
         },
         showGrid: true,
         showAxes: false
@@ -57,25 +57,25 @@ const CONFIG = {
         enableDamping: true,
         dampingFactor: 0.05,
         minDistance: 2,
-        maxDistance: 50,
+        maxDistance: 100,  // 50에서 증가
         enablePan: true,
         panSpeed: 0.5
     },
     lights: {
         ambient: {
             color: 0xffffff,
-            intensity: 0.6
+            intensity: 0.8  // 0.6에서 증가
         },
         directional: {
             color: 0xffffff,
-            intensity: 0.8,
+            intensity: 1.0,  // 0.8에서 증가
             position: { x: 10, y: 10, z: 5 },
             castShadow: true,
             shadowMapSize: 2048
         },
         point: {
             color: 0xffffff,
-            intensity: 0.4,
+            intensity: 0.6,  // 0.4에서 증가
             position: { x: -5, y: 5, z: -5 }
         }
     },
@@ -105,6 +105,9 @@ class WallViewerApp {
         // 상태
         this.isLoading = false;
         this.isInitialized = false;
+        
+        // GLTF 카메라들
+        this.gltfCameras = [];
     }
     
     /**
@@ -170,9 +173,19 @@ class WallViewerApp {
         // 핫스팟 매니저 (CSS2DRenderer 버전)
         this.hotspotManager = new HotspotManagerV3(this.viewer);
         
-        // 핫스팟 렌더링을 뷰어의 렌더링 루프에 추가
+        // 핫스팟 렌더링을 뷰어의 렌더링 루프에 추가 - 매 프레임마다 실행되도록
         this.viewer.addRenderCallback(() => {
-            this.hotspotManager.render();
+            if (this.hotspotManager && this.hotspotManager.render) {
+                this.hotspotManager.render();
+            }
+        });
+        
+        // 애니메이션 업데이트를 렌더링 루프에 추가
+        this.viewer.addRenderCallback(() => {
+            if (this.animationController && this.animationController.mixer) {
+                const delta = this.animationController.clock.getDelta();
+                this.animationController.mixer.update(delta);
+            }
         });
         
         // UI 컨트롤러
@@ -192,6 +205,10 @@ class WallViewerApp {
         // 창 크기 변경
         window.addEventListener('resize', () => {
             this.viewer.handleResize();
+            // CSS2DRenderer도 리사이즈
+            if (this.hotspotManager && this.hotspotManager.cssRenderer) {
+                this.hotspotManager.cssRenderer.setSize(window.innerWidth, window.innerHeight);
+            }
         });
         
         // 전체화면 버튼
@@ -207,6 +224,14 @@ class WallViewerApp {
         if (homeBtn) {
             homeBtn.addEventListener('click', () => {
                 window.location.href = 'index.html';
+            });
+        }
+        
+        // 카메라 선택
+        const cameraSelect = document.getElementById('camera-select');
+        if (cameraSelect) {
+            cameraSelect.addEventListener('change', (e) => {
+                this.switchCamera(e.target.value);
             });
         }
         
@@ -251,7 +276,7 @@ class WallViewerApp {
         const filterSelect = document.getElementById('hotspot-filter');
         if (filterSelect) {
             filterSelect.addEventListener('change', (e) => {
-                this.hotspotManager.filterByType(e.target.value);
+                this.hotspotManager.filterByStatus(e.target.value);
             });
         }
     }
@@ -309,9 +334,51 @@ class WallViewerApp {
             // 뷰어에 모델 설정
             this.viewer.setModel(gltf.scene);
             
-            // 애니메이션 설정
+            // GLTF 파일 내의 카메라 처리
+            this.gltfCameras = [];  // 카메라 목록 초기화
+            const cameraSelect = document.getElementById('camera-select');
+            
+            if (gltf.cameras && gltf.cameras.length > 0) {
+                console.log(`📷 커스텀 카메라 ${gltf.cameras.length}개 발견`);
+                
+                // 카메라 목록 저장
+                this.gltfCameras = gltf.cameras;
+                
+                // 카메라 선택 UI 업데이트
+                if (cameraSelect) {
+                    cameraSelect.innerHTML = '<option value="default">기본 카메라</option>';
+                    
+                    gltf.cameras.forEach((camera, index) => {
+                        const cameraName = camera.name || `카메라 ${index + 1}`;
+                        const option = document.createElement('option');
+                        option.value = index;
+                        option.textContent = cameraName;
+                        cameraSelect.appendChild(option);
+                    });
+                    
+                    // 첫 번째 커스텀 카메라 자동 선택
+                    cameraSelect.value = '0';
+                }
+                
+                // 첫 번째 카메라 적용
+                this.applyCamera(gltf.cameras[0]);
+                
+            } else {
+                console.log('📷 커스텀 카메라 없음 - 기본 카메라 사용');
+                
+                // 카메라 선택 UI 리셋
+                if (cameraSelect) {
+                    cameraSelect.innerHTML = '<option value="default">기본 카메라</option>';
+                }
+                
+                // 기본 카메라 위치 조정
+                this.viewer.adjustCameraToModel();
+            }
+            
+            // 애니메이션 설정 - AnimationController의 별도 루프 제거됨
             if (gltf.animations && gltf.animations.length > 0) {
                 this.animationController.setAnimations(gltf.animations, gltf.scene);
+                // startUpdateLoop 호출 제거 - 메인 렌더 루프에서 처리
             }
             
             // 핫스팟 설정 (모델에서 추출)
@@ -329,6 +396,53 @@ class WallViewerApp {
             this.ui.showError(`모델을 로드할 수 없습니다: ${error.message}`);
         } finally {
             this.isLoading = false;
+        }
+    }
+    
+    /**
+     * 카메라 전환
+     */
+    switchCamera(cameraIndex) {
+        if (cameraIndex === 'default') {
+            // 기본 카메라로 전환
+            this.viewer.resetCamera();
+            this.viewer.adjustCameraToModel();
+        } else {
+            // 커스텀 카메라로 전환
+            const index = parseInt(cameraIndex);
+            if (this.gltfCameras[index]) {
+                this.applyCamera(this.gltfCameras[index]);
+            }
+        }
+    }
+    
+    /**
+     * 카메라 적용
+     */
+    applyCamera(customCamera) {
+        if (customCamera.isPerspectiveCamera) {
+            // 기존 카메라의 속성을 업데이트
+            this.viewer.camera.fov = customCamera.fov;
+            this.viewer.camera.aspect = customCamera.aspect;
+            this.viewer.camera.near = customCamera.near;
+            this.viewer.camera.far = customCamera.far;
+            
+            // 카메라 위치와 회전 적용
+            this.viewer.camera.position.copy(customCamera.position);
+            this.viewer.camera.rotation.copy(customCamera.rotation);
+            this.viewer.camera.quaternion.copy(customCamera.quaternion);
+            
+            // 투영 행렬 업데이트
+            this.viewer.camera.updateProjectionMatrix();
+            
+            // 컨트롤 타겟 업데이트 (카메라가 바라보는 지점)
+            const target = new THREE.Vector3();
+            customCamera.getWorldDirection(target);
+            target.multiplyScalar(10).add(customCamera.position);
+            this.viewer.controls.target.copy(target);
+            this.viewer.controls.update();
+            
+            console.log('✅ 카메라 적용됨:', customCamera.name || '이름 없음');
         }
     }
     

@@ -41,6 +41,7 @@ export class AnimationController {
         // 액션 생성
         animations.forEach(clip => {
             const action = this.mixer.clipAction(clip);
+            action.setLoop(THREE.LoopRepeat);
             this.actions.set(clip.name, action);
         });
         
@@ -55,8 +56,6 @@ export class AnimationController {
             this.playAnimation(animations[0].name);
         }
         
-        // 업데이트 루프에 추가
-        this.startUpdateLoop();
     }
     
     /**

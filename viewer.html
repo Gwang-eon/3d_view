@@ -71,6 +71,18 @@
                 </button>
             </section>
             
+            <!-- 카메라 선택 섹션 (뷰 컨트롤 섹션 뒤에 추가) -->
+            <section class="camera-controls" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid var(--border-color);">
+                <h2>카메라 선택</h2>
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <select id="camera-select" class="control-btn" style="width: 100%; text-align: left;">
+                        <option value="default">기본 카메라</option>
+                    </select>
+                    <p style="font-size: 12px; color: var(--text-secondary); margin: 0;">
+                        블렌더에서 생성한 카메라를 선택할 수 있습니다.
+                    </p>
+                </div>
+            </section>
             <!-- 핫스팟 컨트롤 -->
             <section class="hotspot-controls" style="margin-top: var(--spacing-lg); padding-top: var(--spacing-lg); border-top: 1px solid var(--border-color);">
                 <h2>핫스팟 설정</h2>
