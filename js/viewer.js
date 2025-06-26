@@ -160,7 +160,8 @@ export class Viewer3D {
         
         // 톤 매핑
         this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        this.renderer.toneMappingExposure = 1;
+        this.renderer.toneMappingExposure = 1.5;
+
         
         // 컨테이너에 추가
         this.container.appendChild(this.renderer.domElement);
@@ -202,67 +203,48 @@ export class Viewer3D {
      * 조명 설정
      */
     setupLights() {
-        // 환경광
-        const ambientLight = new THREE.AmbientLight(
-            this.config.lights.ambient.color,
-            this.config.lights.ambient.intensity*1.5
-        );
+        // 1. 환경광 (하늘의 산란광)
+        const ambientLight = new THREE.AmbientLight(0x87CEEB, 0.6); // 하늘색 톤
         this.scene.add(ambientLight);
-        this.lights.ambient = ambientLight;
         
-        // 방향광
-        const directionalLight = new THREE.DirectionalLight(
-            this.config.lights.directional.color,
-            this.config.lights.directional.intensity*1.2
+        // 2. 주 태양광 (Directional Light)
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        sunLight.position.set(50, 100, 50); // 높고 멀리 설정
+        sunLight.castShadow = true;
+        
+        // 그림자 설정 (야외 환경에 맞게)
+        sunLight.shadow.camera.left = -20;
+        sunLight.shadow.camera.right = 20;
+        sunLight.shadow.camera.top = 20;
+        sunLight.shadow.camera.bottom = -20;
+        sunLight.shadow.camera.near = 0.1;
+        sunLight.shadow.camera.far = 100;
+        sunLight.shadow.mapSize.width = 1024;
+        sunLight.shadow.mapSize.height = 1024;
+        sunLight.shadow.bias = -0.0001;  // 그림자 아티팩트 방지
+        sunLight.shadow.normalBias = 0.002;  // 추가 옵션
+        
+        this.scene.add(sunLight);
+        
+        // 3. 하늘/땅 반사광
+        const hemisphereLight = new THREE.HemisphereLight(
+            0x87CEEB, // 하늘색
+            0x8B7355, // 흙색
+            0.9
         );
-        
-        directionalLight.position.set(
-            this.config.lights.directional.position.x,
-            this.config.lights.directional.position.y,
-            this.config.lights.directional.position.z
-        );
-        
-        if (this.config.lights.directional.castShadow) {
-            directionalLight.castShadow = true;
-            directionalLight.shadow.mapSize.width = this.config.lights.directional.shadowMapSize;
-            directionalLight.shadow.mapSize.height = this.config.lights.directional.shadowMapSize;
-            directionalLight.shadow.camera.near = 0.1;
-            directionalLight.shadow.camera.far = 50;
-            directionalLight.shadow.camera.left = -10;
-            directionalLight.shadow.camera.right = 10;
-            directionalLight.shadow.camera.top = 10;
-            directionalLight.shadow.camera.bottom = -10;
-            directionalLight.shadow.bias = -0.001;
-        }
-        
-        this.scene.add(directionalLight);
-        this.lights.directional = directionalLight;
-        
-        // 포인트 라이트
-        const pointLight = new THREE.PointLight(
-            this.config.lights.point.color,
-            this.config.lights.point.intensity*1.5
-        );
-        
-        pointLight.position.set(
-            this.config.lights.point.position.x,
-            this.config.lights.point.position.y,
-            this.config.lights.point.position.z
-        );
-        
-        this.scene.add(pointLight);
-        this.lights.point = pointLight;
-
-        // 추가 조명 - 반대편에서 비추는 보조광
-        const fillLight = new THREE.DirectionalLight(0xffffff, 0.5);
-        fillLight.position.set(-10, 5, -10);
-        this.scene.add(fillLight);
-        this.lights.fill = fillLight;
-        
-        // 바닥에서 올라오는 약한 반사광
-        const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x8d8d8d, 0.3);
         this.scene.add(hemisphereLight);
-        this.lights.hemisphere = hemisphereLight;
+        
+        // 4. 보조 태양광 (그림자 없음, 반대편 조명)
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        fillLight.position.set(-20, 30, -20);
+        this.scene.add(fillLight);
+        
+        this.lights = {
+            ambient: ambientLight,
+            directional: sunLight,
+            hemisphere: hemisphereLight,
+            fill: fillLight
+        };
 
     }
     
@@ -322,7 +304,7 @@ export class Viewer3D {
         const size = box.getSize(new THREE.Vector3());
         
         // 모델을 원점으로 이동
-        model.position.sub(center);
+        //model.position.sub(center);
         
         // 크기가 너무 크거나 작은 경우 스케일 조정
         const maxDim = Math.max(size.x, size.y, size.z);

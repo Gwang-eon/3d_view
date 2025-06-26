@@ -493,11 +493,8 @@ class WallViewerApp {
             // 투영 행렬 업데이트
             this.viewer.camera.updateProjectionMatrix();
             
-            // 컨트롤 타겟 업데이트 (카메라가 바라보는 지점)
-            const target = new THREE.Vector3();
-            customCamera.getWorldDirection(target);
-            target.multiplyScalar(10).add(customCamera.position);
-            this.viewer.controls.target.copy(target);
+            // 타겟은 항상 월드 원점으로 설정 (블렌더 원점 기준)
+            this.viewer.controls.target.set(0, 0, 0);
             this.viewer.controls.update();
             
             console.log('✅ 카메라 적용됨:', customCamera.name || '이름 없음');
