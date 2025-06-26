@@ -1,5 +1,5 @@
 // js/ModelLoader.js
-// 모델 로더 - 원본 버전
+// 모델 로더 - 수정된 완성 버전
 
 import { getConfig, setConfig } from './core/ConfigManager.js';
 
@@ -18,7 +18,8 @@ export class ModelLoader {
         
         // 기본 모델 설정
         this.defaultModelIndex = null;
-        this.models = getConfig('models', []);
+        // ✅ 수정: 올바른 경로로 모델 배열 가져오기
+        this.models = getConfig('models.defaultModels', []);
         
         // 로딩 상태 관리
         this.loadingState = {
@@ -258,10 +259,10 @@ export class ModelLoader {
                 this.sceneManager.setModel(gltf.scene, modelInfo);
             }
             
-            // ⚠️ 수정 필요: scene 파라미터 추가
+            // ✅ 수정: scene 파라미터 추가
             // 애니메이션 설정
             if (this.animationController && gltf.animations?.length > 0) {
-                this.animationController.setAnimations(gltf.animations, gltf.scene);  // ← 여기에 , gltf.scene 추가
+                this.animationController.setAnimations(gltf.animations, gltf.scene);
             }
             
             this.loadingState.phase = 'complete';
@@ -301,10 +302,10 @@ export class ModelLoader {
             this.sceneManager.setModel(clonedGltf.scene, modelInfo);
         }
         
-        // ⚠️ 수정 필요: scene 파라미터 추가
+        // ✅ 수정: scene 파라미터 추가
         // 애니메이션 설정
         if (this.animationController && clonedGltf.animations?.length > 0) {
-            this.animationController.setAnimations(clonedGltf.animations, clonedGltf.scene);  // ← 여기에 , clonedGltf.scene 추가
+            this.animationController.setAnimations(clonedGltf.animations, clonedGltf.scene);
         }
         
         this.emit('loading:complete', { gltf: clonedGltf, modelInfo, loadTime, fromCache: true });
@@ -323,109 +324,99 @@ export class ModelLoader {
             name: modelData.name,
             fileName: modelData.fileName,
             folder: modelData.folder,
-            loadTime: loadTime,
-            animations: gltf.animations || [],
-            cameras: gltf.cameras || [],
             scene: gltf.scene,
-            scenes: gltf.scenes || [],
-            asset: gltf.asset || {},
-            userData: gltf.userData || {},
+            animations: gltf.animations,
+            loadTime: loadTime,
             stats: {
                 vertices: 0,
-                triangles: 0,
-                meshes: 0,
+                faces: 0,
                 materials: 0,
                 textures: 0,
-                animations: gltf.animations?.length || 0,
-                bones: 0,
+                lights: 0,
+                cameras: gltf.cameras ? gltf.cameras.length : 0,
+                animationClips: gltf.animations ? gltf.animations.length : 0,
+                animationDuration: 0,
+                boundingBox: null,
                 memoryEstimate: 0
+            },
+            metadata: {
+                generator: gltf.asset?.generator || 'Unknown',
+                version: gltf.asset?.version || '2.0',
+                copyright: gltf.asset?.copyright || '',
+                minVersion: gltf.asset?.minVersion || '2.0'
             }
         };
         
-        // 통계 수집
-        const stats = this.collectModelStats(gltf.scene);
-        info.stats = { ...info.stats, ...stats };
+        // 통계 계산
+        let vertices = 0;
+        let faces = 0;
+        const materials = new Set();
+        const textures = new Set();
         
-        // 메모리 추정
-        info.stats.memoryEstimate = this.estimateMemoryUsage(info.stats);
+        gltf.scene.traverse((child) => {
+            if (child.isMesh && child.geometry) {
+                const geo = child.geometry;
+                vertices += geo.attributes.position ? geo.attributes.position.count : 0;
+                faces += geo.index ? geo.index.count / 3 : 0;
+                
+                if (child.material) {
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(mat => materials.add(mat.uuid));
+                    } else {
+                        materials.add(child.material.uuid);
+                    }
+                    
+                    // 텍스처 수집
+                    const collectTextures = (material) => {
+                        ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap'].forEach(prop => {
+                            if (material[prop]) textures.add(material[prop].uuid);
+                        });
+                    };
+                    
+                    if (Array.isArray(child.material)) {
+                        child.material.forEach(collectTextures);
+                    } else {
+                        collectTextures(child.material);
+                    }
+                }
+            }
+            
+            if (child.isLight) {
+                info.stats.lights++;
+            }
+        });
         
-        // 경계 상자
-        const box = new THREE.Box3().setFromObject(gltf.scene);
-        info.boundingBox = box;
-        info.boundingCenter = box.getCenter(new THREE.Vector3());
-        info.boundingSize = box.getSize(new THREE.Vector3());
+        info.stats.vertices = vertices;
+        info.stats.faces = faces;
+        info.stats.materials = materials.size;
+        info.stats.textures = textures.size;
+        
+        // 바운딩 박스 계산
+        const box = new THREE.Box3();
+        box.setFromObject(gltf.scene);
+        info.stats.boundingBox = {
+            min: box.min.toArray(),
+            max: box.max.toArray(),
+            size: box.getSize(new THREE.Vector3()).toArray(),
+            center: box.getCenter(new THREE.Vector3()).toArray()
+        };
+        
+        // 애니메이션 총 시간
+        if (gltf.animations && gltf.animations.length > 0) {
+            info.stats.animationDuration = Math.max(
+                ...gltf.animations.map(clip => clip.duration)
+            );
+        }
+        
+        // 메모리 추정 (매우 대략적)
+        info.stats.memoryEstimate = (vertices * 12 + faces * 4 + textures.size * 1024 * 1024) / (1024 * 1024); // MB
         
         return info;
     }
     
-    collectModelStats(object) {
-        const stats = {
-            vertices: 0,
-            triangles: 0,
-            meshes: 0,
-            materials: new Set(),
-            textures: new Set(),
-            bones: 0
-        };
-        
-        object.traverse((child) => {
-            if (child.isMesh) {
-                stats.meshes++;
-                
-                if (child.geometry) {
-                    const geo = child.geometry;
-                    stats.vertices += geo.attributes.position?.count || 0;
-                    
-                    if (geo.index) {
-                        stats.triangles += geo.index.count / 3;
-                    } else {
-                        stats.triangles += (geo.attributes.position?.count || 0) / 3;
-                    }
-                }
-                
-                if (child.material) {
-                    const materials = Array.isArray(child.material) ? child.material : [child.material];
-                    materials.forEach(mat => {
-                        stats.materials.add(mat.uuid);
-                        
-                        ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'].forEach(mapName => {
-                            if (mat[mapName]) {
-                                stats.textures.add(mat[mapName].uuid);
-                            }
-                        });
-                    });
-                }
-            }
-            
-            if (child.isBone) {
-                stats.bones++;
-            }
-        });
-        
-        return {
-            ...stats,
-            materials: stats.materials.size,
-            textures: stats.textures.size
-        };
-    }
-    
-    estimateMemoryUsage(stats) {
-        const vertexSize = 32;
-        const indexSize = 4;
-        const textureSize = 4;
-        
-        const memory = (
-            (stats.vertices * vertexSize) +
-            (stats.triangles * 3 * indexSize) +
-            (stats.textures * textureSize * 1024 * 1024)
-        ) / (1024 * 1024);
-        
-        return Math.round(memory * 100) / 100;
-    }
-    
     async processLoadedModel(gltf, modelInfo) {
         // 그림자 설정
-        if (getConfig('renderer.shadowMap', true)) {
+        if (getConfig('models.enableShadows', true)) {
             gltf.scene.traverse((child) => {
                 if (child.isMesh) {
                     child.castShadow = true;
@@ -434,67 +425,31 @@ export class ModelLoader {
             });
         }
         
-        // 머티리얼 최적화
-        this.optimizeMaterials(gltf.scene);
-        
         // 텍스처 최적화
-        this.optimizeTextures(gltf.scene);
-        
-        // 애니메이션 최적화
-        if (gltf.animations?.length > 0) {
-            this.optimizeAnimations(gltf.animations);
-        }
-    }
-    
-    optimizeMaterials(scene) {
-        scene.traverse((child) => {
-            if (child.isMesh && child.material) {
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(mat => {
-                    if (mat.isMeshStandardMaterial) {
-                        mat.envMapIntensity = getConfig('models.envMapIntensity', 1);
-                    }
-                });
-            }
-        });
-    }
-    
-    optimizeTextures(scene) {
-        const textures = new Set();
-        
-        scene.traverse((child) => {
-            if (child.isMesh && child.material) {
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                materials.forEach(mat => {
-                    ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap'].forEach(mapName => {
-                        if (mat[mapName]) {
-                            textures.add(mat[mapName]);
+        if (this.optimization.textureOptimization) {
+            gltf.scene.traverse((child) => {
+                if (child.isMesh && child.material) {
+                    const materials = Array.isArray(child.material) ? child.material : [child.material];
+                    materials.forEach(material => {
+                        if (material.map) {
+                            material.map.anisotropy = getConfig('models.maxAnisotropy', 4);
                         }
                     });
-                });
-            }
-        });
+                }
+            });
+        }
         
-        textures.forEach(texture => {
-            texture.anisotropy = Math.min(
-                getConfig('models.maxAnisotropy', 4),
-                this.sceneManager.renderer.capabilities.getMaxAnisotropy()
-            );
-            
-            texture.generateMipmaps = true;
-            texture.minFilter = THREE.LinearMipmapLinearFilter;
-            
-            if (this.sceneManager.renderer.capabilities.isWebGL2) {
-                texture.format = THREE.RGBAFormat;
-                texture.type = THREE.UnsignedByteType;
-            }
-        });
-    }
-    
-    optimizeAnimations(animations) {
-        animations.forEach(animation => {
-            animation.optimize();
-        });
+        // 모델 중심 정렬
+        const box = new THREE.Box3().setFromObject(gltf.scene);
+        const center = box.getCenter(new THREE.Vector3());
+        gltf.scene.position.sub(center);
+        
+        // 카메라 거리 조정을 위한 크기 계산
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        modelInfo.recommendedCameraDistance = maxDim * 2;
+        
+        console.log(`[ModelLoader] 모델 후처리 완료: ${modelInfo.name}`);
     }
     
     cloneGLTF(gltf) {
