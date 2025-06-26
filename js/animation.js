@@ -11,7 +11,7 @@ export class AnimationController {
         this.mixer = null;
         this.clips = [];
         this.actions = new Map();
-        this.clock = new THREE.Clock(); // Clock이 자동으로 시작됨
+        this.clock = new THREE.Clock();
         
         // 상태
         this.isPlaying = false;
@@ -19,6 +19,9 @@ export class AnimationController {
         
         // UI 요소
         this.controls = null;
+        
+        // 애니메이션 루프 ID (중복 방지용)
+        this.animationLoopId = null;
     }
     
     /**
@@ -43,6 +46,7 @@ export class AnimationController {
             const action = this.mixer.clipAction(clip);
             action.setLoop(THREE.LoopRepeat);
             this.actions.set(clip.name, action);
+            console.log(`액션 생성: ${clip.name}`);
         });
         
         console.log(`✅ ${animations.length}개 애니메이션 로드됨`);
@@ -51,16 +55,13 @@ export class AnimationController {
         this.showControls();
         this.createAnimationList();
         
-        // Clock 재시작 (중요!)
-        this.clock.start();
-        
         // 첫 번째 애니메이션 자동 재생
         if (animations.length > 0) {
-            // 약간의 지연을 주어 안정적으로 시작
-            setTimeout(() => {
-                this.playAnimation(animations[0].name);
-            }, 100);
+            this.playAnimation(animations[0].name);
         }
+        
+        // 독립적인 업데이트 루프 시작
+        this.startUpdateLoop();
     }
     
     /**
@@ -73,23 +74,25 @@ export class AnimationController {
             return;
         }
         
-        console.log(`🎬 애니메이션 재생 시작: ${clipName}`);
+        console.log(`🎬 애니메이션 재생: ${clipName}`);
         
         // 이전 애니메이션 정지
         if (this.currentAction && this.currentAction !== action) {
             this.currentAction.fadeOut(0.5);
         }
         
-        // 새 애니메이션 시작
+        // 새 애니메이션 시작 - 완전한 설정
         action.reset();
+        action.enabled = true;
+        action.setEffectiveTimeScale(1);
+        action.setEffectiveWeight(1);
         action.fadeIn(0.5);
         action.play();
         
         this.currentAction = action;
         this.isPlaying = true;
         
-        // 재생 상태 확인
-        console.log(`▶️ 애니메이션 재생 중: ${clipName}, 상태: ${action.isRunning()}`);
+        console.log(`▶️ 재생 상태: enabled=${action.enabled}, weight=${action.getEffectiveWeight()}`);
         
         this.updatePlayButton();
     }
@@ -98,7 +101,10 @@ export class AnimationController {
      * 재생/일시정지 토글
      */
     togglePlayPause() {
-        if (!this.currentAction) return;
+        if (!this.currentAction) {
+            console.warn('재생할 애니메이션이 없습니다.');
+            return;
+        }
         
         if (this.isPlaying) {
             this.currentAction.paused = true;
@@ -178,7 +184,7 @@ export class AnimationController {
         const playButton = document.createElement('button');
         playButton.id = 'play-pause-btn';
         playButton.className = 'anim-btn';
-        playButton.innerHTML = '⏸️';  // 자동 재생되므로 초기값은 일시정지
+        playButton.innerHTML = '⏸️';
         playButton.style.cssText = `
             background: transparent;
             border: 1px solid rgba(255, 255, 255, 0.2);
@@ -248,25 +254,50 @@ export class AnimationController {
     }
     
     /**
-     * 업데이트 루프 시작 - app.js에서 처리하므로 주석 처리
+     * 업데이트 루프 시작
      */
-    // startUpdateLoop() {
-    //     const animate = () => {
-    //         if (this.mixer) {
-    //             const delta = this.clock.getDelta();
-    //             this.mixer.update(delta);
-    //         }
-    //         
-    //         requestAnimationFrame(animate);
-    //     };
-    //     
-    //     animate();
-    // }
+    startUpdateLoop() {
+        // 기존 루프가 있다면 중지
+        if (this.animationLoopId) {
+            cancelAnimationFrame(this.animationLoopId);
+        }
+        
+        const animate = () => {
+            this.animationLoopId = requestAnimationFrame(animate);
+            
+            if (this.mixer) {
+                const delta = this.clock.getDelta();
+                if (delta > 0) {
+                    this.mixer.update(delta);
+                }
+            }
+        };
+        
+        // Clock 시작
+        this.clock.start();
+        animate();
+        
+        console.log('✅ 애니메이션 업데이트 루프 시작');
+    }
+    
+    /**
+     * 업데이트 루프 중지
+     */
+    stopUpdateLoop() {
+        if (this.animationLoopId) {
+            cancelAnimationFrame(this.animationLoopId);
+            this.animationLoopId = null;
+            console.log('⏹️ 애니메이션 업데이트 루프 중지');
+        }
+    }
     
     /**
      * 정리
      */
     cleanup() {
+        // 업데이트 루프 중지
+        this.stopUpdateLoop();
+        
         if (this.mixer) {
             this.mixer.stopAllAction();
             this.mixer = null;

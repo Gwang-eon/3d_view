@@ -180,7 +180,7 @@ export class HotspotManagerV3 {
         // CSS2DObject 생성
         const cssObject = new THREE.CSS2DObject(hotspotElement);
         
-        // Empty의 월드 위치 가져오기
+        // 초기 위치 설정 (월드 위치)
         const worldPosition = new THREE.Vector3();
         empty.getWorldPosition(worldPosition);
         cssObject.position.copy(worldPosition);
@@ -190,9 +190,10 @@ export class HotspotManagerV3 {
             id: data.id,
             cssObject: cssObject,
             element: hotspotElement,
-            empty: empty,
+            empty: empty,  // Empty 참조 저장 (중요!)
             data: data,
-            isActive: false
+            isActive: false,
+            worldPosition: worldPosition  // 월드 위치 캐시
         };
         
         // 이벤트 핸들러 바인딩
@@ -267,6 +268,21 @@ export class HotspotManagerV3 {
         element.addEventListener('mouseleave', () => {
             if (!hotspot.isActive) {
                 element.classList.remove('hover');
+            }
+        });
+    }
+    
+    /**
+     * 핫스팟 위치 업데이트 (매 프레임 호출)
+     */
+    updateHotspotPositions() {
+        this.hotspots.forEach(hotspot => {
+            if (hotspot.empty && hotspot.cssObject) {
+                // Empty의 현재 월드 위치 가져오기
+                hotspot.empty.getWorldPosition(hotspot.worldPosition);
+                
+                // CSS2DObject 위치 업데이트
+                hotspot.cssObject.position.copy(hotspot.worldPosition);
             }
         });
     }
@@ -502,6 +518,10 @@ export class HotspotManagerV3 {
      */
     render() {
         if (this.cssRenderer && this.viewer.camera) {
+            // 핫스팟 위치 업데이트 (중요!)
+            this.updateHotspotPositions();
+            
+            // CSS2D 렌더링
             this.cssRenderer.render(this.viewer.scene, this.viewer.camera);
         }
     }
