@@ -23,13 +23,13 @@
     --shadow: rgba(0, 0, 0, 0.3);
     
     /* 크기 변수 */
-    --header-height: 60px;
+    --header-height: 70px;
     --timeline-height: 60px;
     --spacing-sm: 8px;
     --spacing-md: 16px;
     --spacing-lg: 24px;
     --border-radius: 8px;
-    --floating-box-width: 320px;
+    --floating-box-width: 240px;
 }
 
 body {

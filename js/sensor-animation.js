@@ -567,7 +567,7 @@ export class SensorAnimationController extends AnimationController {
                     <span class="checkbox-custom"></span>
                     <span class="checkbox-label">
                         <span class="sensor-icon">📡</span>
-                        센서 표시
+                        센서 설치 모드
                     </span>
                 </label>
                 <div class="sensor-info">

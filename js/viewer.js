@@ -38,7 +38,11 @@ export class Viewer3D {
             endTarget: new THREE.Vector3(),
             startTime: 0,
             duration: 1000, // 밀리초
-            easing: 'easeInOutCubic'
+            easing: 'easeInOutCubic',
+            // Top 뷰를 위한 추가 속성
+            isTopView: false,
+            startUp: new THREE.Vector3(0, 1, 0),
+            endUp: new THREE.Vector3(0, 1, 0)
         };
     }
     
@@ -177,11 +181,6 @@ export class Viewer3D {
         this.renderer.physicallyCorrectLights = true;
         
         this.container.appendChild(this.renderer.domElement);
-
-        // 렌더러 추가 후 즉시 리사이즈 (추가)
-        requestAnimationFrame(() => {
-            this.handleResize();
-        }); 
     }
     
     /**
@@ -395,12 +394,6 @@ export class Viewer3D {
         const box = new THREE.Box3().setFromObject(model);
         this.modelCenter = box.getCenter(new THREE.Vector3());
         console.log('📍 모델 중심점 계산:', this.modelCenter);
-
-
-        // 모델 설정 완료 후 리사이즈 (추가)
-        requestAnimationFrame(() => {
-            this.handleResize();
-        });
     }
     
     /**
@@ -496,20 +489,20 @@ export class Viewer3D {
         
         switch(viewName) {
             case 'front':
-                // 정면 - 남쪽에서 북쪽을 보는 뷰 (Z- 방향에서)
-                targetPosition = new THREE.Vector3(center.x, center.y, center.z - distance);
-                break;
-            case 'back':
-                // 우측 - 서쪽에서 동쪽을 보는 뷰 (X- 방향에서)
-                targetPosition = new THREE.Vector3(center.x - distance, center.y, center.z);
-                break;
-            case 'left':
-                // 후면 - 북쪽에서 남쪽을 보는 뷰 (Z+ 방향에서)
+                // 정면 - 앞에서 보는 뷰 (Z+ 방향에서)
                 targetPosition = new THREE.Vector3(center.x, center.y, center.z + distance);
                 break;
-            case 'right':
-                // 정면 - 남쪽에서 북쪽을 보는 뷰 (Z- 방향에서)
+            case 'back':
+                // 후면 - 뒤에서 보는 뷰 (Z- 방향에서)
                 targetPosition = new THREE.Vector3(center.x, center.y, center.z - distance);
+                break;
+            case 'left':
+                // 좌측 - 왼쪽에서 보는 뷰 (X+ 방향에서)
+                targetPosition = new THREE.Vector3(center.x + distance, center.y, center.z);
+                break;
+            case 'right':
+                // 우측 - 오른쪽에서 보는 뷰 (X- 방향에서)
+                targetPosition = new THREE.Vector3(center.x - distance, center.y, center.z);
                 break;
             case 'top':
                 // 상단 - 위에서 아래를 보는 뷰
@@ -521,7 +514,14 @@ export class Viewer3D {
         }
         
         if (targetPosition) {
-            this.animateCamera(targetPosition, center);
+            // top 뷰의 경우 특별한 애니메이션 처리
+            if (viewName === 'top') {
+                this.animateCameraToTop(targetPosition, center);
+            } else {
+                // 다른 뷰들은 기본 up vector 복원하고 애니메이션
+                this.camera.up.set(0, 1, 0);
+                this.animateCamera(targetPosition, center);
+            }
         }
     }
     
@@ -529,6 +529,12 @@ export class Viewer3D {
      * 카메라 리셋
      */
     resetCamera(animate = false) {
+        // 카메라 up vector 기본값으로 복원
+        this.camera.up.set(0, 1, 0);
+        
+        // Top 뷰 플래그 리셋
+        this.cameraAnimation.isTopView = false;
+        
         // 현재 모델이 있으면 그에 맞게 조정
         if (this.currentModel) {
             const box = new THREE.Box3().setFromObject(this.currentModel);
@@ -585,6 +591,7 @@ export class Viewer3D {
         
         // 애니메이션 설정
         this.cameraAnimation.active = true;
+        this.cameraAnimation.isTopView = false; // 일반 뷰로 리셋
         this.cameraAnimation.startPosition.copy(this.camera.position);
         this.cameraAnimation.startTarget.copy(this.controls.target);
         this.cameraAnimation.endPosition.copy(targetPosition);
@@ -592,6 +599,36 @@ export class Viewer3D {
         this.cameraAnimation.startTime = performance.now();
         this.cameraAnimation.duration = duration;
         this.cameraAnimation.easing = easing;
+        
+        // 애니메이션 중 컨트롤 비활성화
+        this.controls.enabled = false;
+    }
+    
+    /**
+     * Top 뷰를 위한 특별한 카메라 애니메이션
+     */
+    animateCameraToTop(targetPosition, targetLookAt, duration = 800) {
+        // 이미 애니메이션 중이면 중단
+        if (this.cameraAnimation.active) {
+            this.cameraAnimation.active = false;
+        }
+        
+        // 애니메이션 설정
+        this.cameraAnimation.active = true;
+        this.cameraAnimation.startPosition.copy(this.camera.position);
+        this.cameraAnimation.startTarget.copy(this.controls.target);
+        this.cameraAnimation.endPosition.copy(targetPosition);
+        this.cameraAnimation.endTarget.copy(targetLookAt);
+        this.cameraAnimation.startTime = performance.now();
+        this.cameraAnimation.duration = duration;
+        this.cameraAnimation.easing = 'easeInOutCubic';
+        
+        // Top 뷰를 위한 특별 플래그
+        this.cameraAnimation.isTopView = true;
+        
+        // 시작 up 벡터 저장
+        this.cameraAnimation.startUp = this.camera.up.clone();
+        this.cameraAnimation.endUp = new THREE.Vector3(0, 0, -1);
         
         // 애니메이션 중 컨트롤 비활성화
         this.controls.enabled = false;
@@ -624,6 +661,15 @@ export class Viewer3D {
             easedProgress
         );
         
+        // Top 뷰인 경우 up 벡터도 보간
+        if (this.cameraAnimation.isTopView) {
+            this.camera.up.lerpVectors(
+                this.cameraAnimation.startUp,
+                this.cameraAnimation.endUp,
+                easedProgress
+            );
+        }
+        
         // 카메라가 타겟을 바라보도록
         this.camera.lookAt(this.controls.target);
         
@@ -633,6 +679,7 @@ export class Viewer3D {
         // 애니메이션 완료 체크
         if (progress >= 1) {
             this.cameraAnimation.active = false;
+            this.cameraAnimation.isTopView = false;
             this.controls.enabled = true;
             this.controls.update();
             console.log('📍 카메라 애니메이션 완료. 최종 타겟:', this.controls.target);
@@ -695,6 +742,12 @@ export class Viewer3D {
      */
     applyCustomCamera(customCamera, animate = true) {
         if (!customCamera.isPerspectiveCamera) return;
+        
+        // 카메라 up vector 기본값으로 복원
+        this.camera.up.set(0, 1, 0);
+        
+        // Top 뷰 플래그 리셋
+        this.cameraAnimation.isTopView = false;
         
         // 타겟 위치와 방향 계산
         const targetPosition = new THREE.Vector3();
