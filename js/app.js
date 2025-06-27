@@ -118,7 +118,57 @@ class WallViewerApp {
         // 현재 핫스팟 데이터
         this.currentHotspotData = null;
     }
+    /**
+ * 동영상 표시
+ */
+showVideo() {
+    const modal = document.getElementById('video-modal');
+    const video = document.getElementById('video-player');
+    const title = document.getElementById('video-title');
     
+    if (!modal || !video) return;
+    
+    // 현재 모델에 맞는 동영상 경로 설정
+    const modelConfig = this.models[this.currentModelIndex];
+    const videoPath = `videos/${modelConfig.folder}.mp4`;
+    
+    // 동영상 소스 설정
+    video.src = videoPath;
+    
+    // 제목 설정
+    title.textContent = `${modelConfig.name} 시공 영상`;
+    
+    // 모달 표시
+    modal.classList.add('show');
+    
+    // 동영상 로드 에러 처리
+    video.onerror = () => {
+        console.error('동영상 로드 실패:', videoPath);
+        this.ui.showError('동영상을 불러올 수 없습니다.');
+        this.closeVideo();
+    };
+    
+    console.log('🎬 동영상 재생:', videoPath);
+}
+
+    /**
+     * 동영상 닫기
+     */
+    closeVideo() {
+        const modal = document.getElementById('video-modal');
+        const video = document.getElementById('video-player');
+        
+        if (!modal) return;
+        
+        // 동영상 정지
+        if (video) {
+            video.pause();
+            video.currentTime = 0;
+        }
+        
+        // 모달 숨기기
+        modal.classList.remove('show');
+    }
     /**
      * 애플리케이션 초기화
      */
@@ -238,6 +288,32 @@ class WallViewerApp {
             });
         }
         
+        // 동영상 버튼 이벤트 추가
+        const videoBtn = document.getElementById('video-btn');
+        if (videoBtn) {
+            videoBtn.addEventListener('click', () => {
+                this.showVideo();
+            });
+        }
+
+        // 동영상 모달 닫기 이벤트
+        const videoClose = document.getElementById('video-close');
+        if (videoClose) {
+            videoClose.addEventListener('click', () => {
+                this.closeVideo();
+            });
+        }
+
+        // 모달 외부 클릭 시 닫기
+        const videoModal = document.getElementById('video-modal');
+        if (videoModal) {
+            videoModal.addEventListener('click', (e) => {
+                if (e.target === videoModal) {
+                    this.closeVideo();
+                }
+            });
+        }
+
         // 키보드 단축키
         document.addEventListener('keydown', (e) => {
             this.handleKeyPress(e);
@@ -576,7 +652,10 @@ class WallViewerApp {
             case 'C':
                 this.toggleSensorChart();
                 break;
-
+            case 'v':
+            case 'V':
+                this.showVideo();
+                break;
             case 'h':
             case 'H':
                 // 핫스팟 토글
@@ -593,6 +672,8 @@ class WallViewerApp {
                 if (document.fullscreenElement) {
                     document.exitFullscreen();
                 }
+                // 동영상 모달도 닫기
+                this.closeVideo();
                 break;
         }
     }

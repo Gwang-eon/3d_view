@@ -170,6 +170,126 @@ body {
     background: var(--bg-primary);
 }
 
+/* ===== 동영상 버튼 ===== */
+.video-btn {
+    width: 100%;
+    padding: var(--spacing-sm);
+    background: linear-gradient(135deg, #ff6b35, #ff4444);
+    border: none;
+    color: white;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.875rem;
+    margin-top: var(--spacing-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-sm);
+}
+
+.video-btn:hover {
+    background: linear-gradient(135deg, #ff4444, #ff1744);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 68, 68, 0.3);
+}
+
+/* ===== 동영상 모달 ===== */
+.video-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 3000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.video-modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 1;
+}
+
+.video-modal-content {
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    width: 90%;
+    max-width: 1000px;
+    max-height: 90vh;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    border: 1px solid var(--border-color);
+}
+
+.video-modal-header {
+    padding: var(--spacing-md) var(--spacing-lg);
+    background: rgba(0, 0, 0, 0.5);
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.video-modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 500;
+}
+
+.video-modal-close {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 2rem;
+    cursor: pointer;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.3s ease;
+}
+
+.video-modal-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.video-modal-body {
+    position: relative;
+    background: #000;
+}
+
+#video-player {
+    width: 100%;
+    height: auto;
+    max-height: calc(90vh - 80px);
+    display: block;
+}
+
+/* 반응형 */
+@media (max-width: 768px) {
+    .video-modal-content {
+        width: 95%;
+        margin: var(--spacing-md);
+    }
+    
+    .video-modal-header {
+        padding: var(--spacing-sm) var(--spacing-md);
+    }
+    
+    .video-modal-header h3 {
+        font-size: 1rem;
+    }
+}
+
+
 /* ===== 플로팅 박스 공통 스타일 ===== */
 .floating-box {
     position: fixed;

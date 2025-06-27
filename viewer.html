@@ -96,6 +96,11 @@
                     초기 위치로
                 </button>
                 
+                <!-- 동영상 버튼 추가 -->
+                <button class="video-btn" id="video-btn" title="동영상 보기">
+                    <span>🎬</span> 동영상 보기
+                </button>
+
                 <!-- 속도 조절 (접기/펼치기) -->
                 <div class="speed-control-section">
                     <button class="speed-toggle">
@@ -201,6 +206,22 @@
         </div>
     </div>
     
+    <!-- 동영상 모달 -->
+    <div id="video-modal" class="video-modal">
+        <div class="video-modal-content">
+            <div class="video-modal-header">
+                <h3 id="video-title">옹벽 시공 영상</h3>
+                <button class="video-modal-close" id="video-close">&times;</button>
+            </div>
+            <div class="video-modal-body">
+                <video id="video-player" controls preload="metadata">
+                    <source src="" type="video/mp4">
+                    브라우저가 동영상 재생을 지원하지 않습니다.
+                </video>
+            </div>
+        </div>
+    </div>
+
     <!-- Three.js 로컬 파일 사용 -->
     <script src="js/three/three.min.js"></script>
     <script src="js/three/GLTFLoader.js"></script>
