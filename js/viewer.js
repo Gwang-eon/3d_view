@@ -378,6 +378,13 @@ export class Viewer3D {
         
         // 카메라 위치 조정
         this.adjustCameraToModel();
+
+        // 모델 로드 시 Grid 자동 숨김
+        if (this.gridHelper) {
+            this.gridHelper.visible = false;
+            console.log('🔲 Grid 숨김 (모델 로드됨)');
+        }
+
     }
     
     /**
@@ -418,7 +425,7 @@ export class Viewer3D {
         // 크기가 너무 크거나 작은 경우 스케일 조정
         const maxDim = Math.max(size.x, size.y, size.z);
         if (maxDim > 10 || maxDim < 1) {
-            const targetSize = 5;
+            const targetSize = 15;
             const scale = targetSize / maxDim;
             model.scale.multiplyScalar(scale);
         }

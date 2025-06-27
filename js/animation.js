@@ -88,14 +88,19 @@ export class AnimationController {
             action.setEffectiveWeight(1);
             action.play();
             action.paused = true; // 일단 일시정지 상태로
+            action.time = 0;
+            action.paused = true;
         });
         
+        this.mixer.update(0);
+
         console.log(`✅ ${this.actions.size}개 애니메이션 준비 완료 (최대 길이: ${this.duration.toFixed(2)}초)`);
         
         // 타임라인 설정
         if (this.viewer.app && this.viewer.app.ui) {
             this.viewer.app.ui.setupTimeline(this.duration);
         }
+        
     }
     
     /**
@@ -234,7 +239,28 @@ export class AnimationController {
         
         this.isSeeking = true;
         this.currentTime = Math.max(0, Math.min(time, this.duration));
-        this.mixer.setTime(this.currentTime);
+        // this.mixer.setTime(this.currentTime);
+
+        // 해결: 각 액션을 명시적으로 업데이트
+    this.actions.forEach(action => {
+        // 액션이 실행 중이 아니면 먼저 play
+        if (!action.isRunning()) {
+            action.play();
+        }
+        // 시간 설정
+        action.time = this.currentTime;
+        // 강제 업데이트
+        action.paused = true;
+    });
+
+        // 믹서 강제 업데이트
+    this.mixer.update(0);
+    
+    this.updateTimeline();
+    
+    setTimeout(() => {
+        this.isSeeking = false;
+    }, 100);
         
         // 시킹 중에는 모든 액션 일시정지
         if (this.isPlaying) {
