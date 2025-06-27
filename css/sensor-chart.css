@@ -1,0 +1,285 @@
+/* css/sensor-chart.css - 센서 차트 UI 스타일 */
+
+/* ===== 센서 차트 컨테이너 ===== */
+.sensor-chart-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    width: 90%;
+    max-width: 1200px;
+    height: 80vh;
+    max-height: 800px;
+    background: rgba(20, 20, 20, 0.98);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+}
+
+.sensor-chart-container.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+    pointer-events: all;
+}
+
+/* ===== 헤더 ===== */
+.sensor-chart-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.sensor-chart-header h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: white;
+}
+
+.sensor-chart-status {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.status-indicator {
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.status-indicator.danger {
+    background: rgba(255, 23, 68, 0.2);
+    color: #ff1744;
+    border: 1px solid #ff1744;
+}
+
+.status-indicator.warning {
+    background: rgba(255, 107, 53, 0.2);
+    color: #ff6b35;
+    border: 1px solid #ff6b35;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
+
+.sensor-chart-close {
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.sensor-chart-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: rotate(90deg);
+}
+
+/* ===== 바디 ===== */
+.sensor-chart-body {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ===== 차트 그리드 ===== */
+.chart-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 20px;
+    flex: 1;
+    min-height: 0;
+}
+
+.chart-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.chart-item h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.chart-item canvas {
+    flex: 1;
+    min-height: 0;
+}
+
+/* ===== 요약 정보 ===== */
+.sensor-summary {
+    margin-top: 20px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    display: flex;
+    justify-content: space-around;
+    flex-shrink: 0;
+}
+
+.summary-item {
+    text-align: center;
+}
+
+.summary-item .label {
+    display: block;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 4px;
+}
+
+.summary-item .value {
+    display: block;
+    font-size: 20px;
+    font-weight: 600;
+    color: white;
+}
+
+.summary-item .value.warning {
+    color: #ff6b35;
+}
+
+.summary-item .value.danger {
+    color: #ff1744;
+}
+
+/* ===== 스크롤바 ===== */
+.sensor-chart-body::-webkit-scrollbar {
+    width: 8px;
+}
+
+.sensor-chart-body::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+.sensor-chart-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.sensor-chart-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* ===== 반응형 디자인 ===== */
+@media (max-width: 1024px) {
+    .sensor-chart-container {
+        width: 95%;
+        height: 90vh;
+    }
+    
+    .chart-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: repeat(4, 300px);
+    }
+}
+
+@media (max-width: 768px) {
+    .sensor-chart-header {
+        padding: 16px 20px;
+    }
+    
+    .sensor-chart-header h3 {
+        font-size: 18px;
+    }
+    
+    .sensor-chart-body {
+        padding: 16px;
+    }
+    
+    .chart-grid {
+        gap: 16px;
+    }
+    
+    .chart-item {
+        padding: 12px;
+    }
+    
+    .sensor-summary {
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+    
+    .summary-item .value {
+        font-size: 18px;
+    }
+}
+
+/* ===== 애니메이션 ===== */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes fadeOut {
+    to {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+}
+
+/* ===== 접근성 ===== */
+@media (prefers-reduced-motion: reduce) {
+    .sensor-chart-container,
+    .sensor-chart-close,
+    .status-indicator {
+        animation: none;
+        transition: none;
+    }
+}
+
+/* ===== 다크모드 강제 적용 ===== */
+.sensor-chart-container {
+    color-scheme: dark;
+}
+
+/* Chart.js 캔버스 스타일 조정 */
+.chart-item canvas {
+    background: transparent !important;
+}

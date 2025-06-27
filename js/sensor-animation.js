@@ -1,6 +1,7 @@
 // js/sensor-animation.js - 센서 체크 기반 애니메이션 컨트롤러 (수정 버전)
 
 import { AnimationController } from './animation.js';
+import { SensorChartManager } from './sensor-chart.js';
 
 export class SensorAnimationController extends AnimationController {
     constructor(viewer) {
@@ -17,6 +18,10 @@ export class SensorAnimationController extends AnimationController {
         
         // 기본 FPS 설정
         this.fps = 30;  // 모든 모델 30fps 기준
+
+
+        // 센서 차트 매니저
+        this.chartManager = null;
         
         // 모델별 프레임 설정 (완전한 설정)
         this.modelFrameSettings = {
