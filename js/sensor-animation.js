@@ -499,6 +499,25 @@ export class SensorAnimationController extends AnimationController {
         
         document.body.appendChild(alert);
         
+        // 센서 차트 표시
+        console.log('📊 센서 차트 표시 시도...');
+        console.log('chartManager:', this.chartManager);
+        console.log('currentModelName:', this.currentModelName);
+        console.log('frame:', frame);
+        
+        if (this.chartManager) {
+            try {
+                this.chartManager.show();
+                const maxFrame = this.timeToFrame(this.duration);
+                this.chartManager.startSimulation(frame, maxFrame, this.currentModelName);
+                console.log('✅ 센서 차트 표시 완료');
+            } catch (error) {
+                console.error('❌ 센서 차트 표시 오류:', error);
+            }
+        } else {
+            console.error('❌ chartManager를 찾을 수 없습니다');
+        }
+
         // 4초 후 자동 제거 (조금 더 길게)
         setTimeout(() => {
             alert.classList.add('fade-out');

@@ -466,7 +466,13 @@ export class SensorChartManager {
      */
     animateWithPrecomputedData(targetFrame) {
         const dataset = this.precomputedData.data;
-        if (!dataset || dataset.length === 0) return;
+        if (!dataset || dataset.length === 0) {
+            console.error('데이터셋이 없습니다');
+            return;
+        }
+        
+        console.log(`📊 데이터 애니메이션 시작: ${targetFrame}프레임까지`);
+        console.log('데이터셋 길이:', dataset.length);
         
         let currentIndex = 0;
         const maxIndex = Math.min(targetFrame, dataset.length - 1);
