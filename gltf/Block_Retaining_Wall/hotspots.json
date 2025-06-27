@@ -16,7 +16,7 @@
       "ui": {
         "icon": "📐",
         "color": "#007bff",
-        "size": 2.0,
+        "size": 0.6,
         "alwaysVisible": true
       },
       "info": {
@@ -41,7 +41,7 @@
       "ui": {
         "icon": "📐",
         "color": "#ff6b35",
-        "size": 2.0,
+        "size": 0.6,
         "alwaysVisible": true
       },
       "info": {
@@ -59,7 +59,7 @@
       "ui": {
         "icon": "🧱",
         "color": "#00ff88",
-        "size": 1.8,
+        "size": 0.6,
         "alwaysVisible": false
       },
       "info": {
@@ -79,7 +79,7 @@
       "ui": {
         "icon": "⚡",
         "color": "#ffd700",
-        "size": 1.8,
+        "size": 0.6,
         "alwaysVisible": false
       },
       "info": {
@@ -99,7 +99,7 @@
       "ui": {
         "icon": "💧",
         "color": "#00bfff",
-        "size": 1.8,
+        "size": 0.6,
         "alwaysVisible": false
       },
       "info": {

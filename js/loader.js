@@ -1,4 +1,4 @@
-// js/loader.js - GLTF 모델 로더 모듈
+// js/loader.js - GLTF 모델 로더 모듈 (핫스팟 지원 포함)
 
 // 전역 THREE 객체 확인
 if (typeof THREE === 'undefined') {
@@ -82,6 +82,53 @@ export class ModelLoader {
     }
     
     /**
+     * 모델과 핫스팟 데이터 함께 로드
+     * @param {string} modelPath - 모델 파일 경로
+     * @returns {Promise<{gltf: Object, hotspotsData: Object|null}>} GLTF와 핫스팟 데이터
+     */
+    async loadWithHotspots(modelPath) {
+        try {
+            // 1. GLTF 모델 로드
+            const gltf = await this.loadGLTF(modelPath);
+            
+            // 2. 핫스팟 JSON 파일 경로 생성
+            // 예: gltf/Block_Retaining_Wall/Block_Retaining_Wall.gltf
+            // -> gltf/Block_Retaining_Wall/hotspots.json
+            const pathParts = modelPath.split('/');
+            const folderPath = pathParts.slice(0, -1).join('/');
+            const hotspotsPath = `${folderPath}/hotspots.json`;
+            
+            console.log('🔍 핫스팟 데이터 확인:', hotspotsPath);
+            
+            // 3. 핫스팟 데이터 로드 시도
+            let hotspotsData = null;
+            try {
+                const response = await fetch(hotspotsPath);
+                if (response.ok) {
+                    hotspotsData = await response.json();
+                    console.log('✅ 핫스팟 데이터 로드 성공');
+                    console.log('📍 핫스팟 개수:', Object.keys(hotspotsData.hotspots || {}).length);
+                } else {
+                    console.log('ℹ️ 핫스팟 데이터 없음 (404)');
+                }
+            } catch (error) {
+                console.log('ℹ️ 핫스팟 데이터 로드 실패:', error.message);
+                // 핫스팟 데이터가 없어도 모델은 정상 로드
+            }
+            
+            // 4. 결과 반환
+            return {
+                gltf: gltf,
+                hotspotsData: hotspotsData
+            };
+            
+        } catch (error) {
+            console.error('모델 로드 실패:', error);
+            throw error;
+        }
+    }
+    
+    /**
      * 모델 정보 로깅
      */
     logModelInfo(gltf) {
@@ -135,6 +182,25 @@ export class ModelLoader {
         if (gltf.cameras && gltf.cameras.length > 0) {
             console.log('  - 카메라:', gltf.cameras.length + '개');
         }
+        
+        // Empty 오브젝트 확인 (핫스팟용)
+        let emptyCount = 0;
+        let hotspotCount = 0;
+        gltf.scene.traverse((child) => {
+            if (child.type === 'Object3D' || child.type === 'Group') {
+                if (!child.geometry && child.children.length === 0) {
+                    emptyCount++;
+                    if (child.name && child.name.startsWith('HS_')) {
+                        hotspotCount++;
+                    }
+                }
+            }
+        });
+        
+        if (emptyCount > 0) {
+            console.log('  - Empty 오브젝트:', emptyCount + '개');
+            console.log('  - 핫스팟(HS_):', hotspotCount + '개');
+        }
     }
     
     /**
@@ -175,5 +241,33 @@ export class ModelLoader {
      */
     getCacheSize() {
         return this.cache.size;
+    }
+    
+    /**
+     * 핫스팟 데이터 검증
+     * @param {Object} hotspotsData - 핫스팟 JSON 데이터
+     * @returns {boolean} 유효성 여부
+     */
+    validateHotspotsData(hotspotsData) {
+        if (!hotspotsData || typeof hotspotsData !== 'object') {
+            return false;
+        }
+        
+        if (!hotspotsData.hotspots || typeof hotspotsData.hotspots !== 'object') {
+            console.warn('핫스팟 데이터에 hotspots 속성이 없습니다.');
+            return false;
+        }
+        
+        // 각 핫스팟 검증
+        for (const [key, hotspot] of Object.entries(hotspotsData.hotspots)) {
+            if (!hotspot.type) {
+                console.warn(`핫스팟 ${key}에 type이 없습니다.`);
+            }
+            if (!hotspot.info) {
+                console.warn(`핫스팟 ${key}에 info가 없습니다.`);
+            }
+        }
+        
+        return true;
     }
 }
