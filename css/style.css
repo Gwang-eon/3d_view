@@ -350,6 +350,11 @@ body {
     left: var(--spacing-lg);
     width: auto;
     transition: bottom 0.3s ease;
+    /* 기본 플로팅 박스 스타일 오버라이드 - 배경 제거 */
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
 }
 
 /* 타임라인이 없을 때 */
@@ -371,6 +376,8 @@ body:not(.has-timeline) .help-box {
     justify-content: center;
     box-shadow: 0 4px 16px rgba(0, 123, 255, 0.4);
     transition: all 0.3s ease;
+    position: relative;
+    z-index: 2;
 }
 
 .floating-toggle:hover {
@@ -384,8 +391,12 @@ body:not(.has-timeline) .help-box {
     bottom: 60px;
     left: 0;
     background: rgba(30, 30, 30, 0.98);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border-color);
     border-radius: var(--border-radius);
+    box-shadow: 0 8px 32px var(--shadow);
     min-width: 280px;
+    padding: var(--spacing-md);
 }
 
 .help-box.open .floating-content {
