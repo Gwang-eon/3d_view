@@ -14,7 +14,7 @@
         "status": "normal"
       },
       "ui": {
-        "icon": "📐",
+        "icon": "/icons/tilt_sensor_icon.svg",
         "color": "#007bff",
         "size": 0.6,
         "alwaysVisible": true
@@ -25,7 +25,13 @@
         "location": "옹벽 상단 좌측",
         "installDate": "2023-12-01",
         "manufacturer": "(주)그렉터",
-        "model": "TLT-3000"
+        "model": "TLT-3000",
+        "specifications": {
+          "측정범위": "±15도",
+          "정밀도": "±0.01도",
+          "해상도": "0.001도",
+          "샘플링": "10Hz"
+        }
       }
     },
     "HS_Tilt_Sensor_002": {
@@ -39,7 +45,7 @@
         "status": "warning"
       },
       "ui": {
-        "icon": "📐",
+        "icon": "/icons/tilt_sensor_icon.svg",
         "color": "#ff6b35",
         "size": 0.6,
         "alwaysVisible": true
@@ -50,57 +56,75 @@
         "location": "옹벽 상단 우측",
         "installDate": "2023-12-01",
         "manufacturer": "(주)그렉터",
-        "model": "TLT-3000"
+        "model": "TLT-3000",
+        "specifications": {
+          "측정범위": "±15도",
+          "정밀도": "±0.01도",
+          "해상도": "0.001도",
+          "샘플링": "10Hz"
+        }
       }
     },
     "HS_Crack_Sensor_001": {
       "type": "sensor",
       "sensorType": "균열센서",
       "data": {
-        "currentValue": 1.2,
-        "unit": "도",
-        "warningThreshold": 1.0,
-        "dangerThreshold": 2.0,
-        "status": "warning"
+        "currentValue": 0.2,
+        "unit": "mm",
+        "warningThreshold": 0.5,
+        "dangerThreshold": 1.0,
+        "status": "normal"
       },
       "ui": {
-        "icon": "📐",
-        "color": "#ff6b35",
+        "icon": "/icons/crack_sensor_icon.svg",
+        "color": "#007bff",
         "size": 0.6,
         "alwaysVisible": true
       },
       "info": {
-        "title": "기울기 센서 #002",
-        "description": "옹벽 상단부 기울기를 실시간으로 모니터링합니다.",
-        "location": "옹벽 상단 우측",
+        "title": "균열 센서 #001",
+        "description": "옹벽 표면의 균열 발생 및 진행 상태를 실시간으로 감지합니다.",
+        "location": "옹벽 중앙부 좌측",
         "installDate": "2023-12-01",
         "manufacturer": "(주)그렉터",
-        "model": "TLT-3000"
+        "model": "CRK-2000",
+        "specifications": {
+          "측정범위": "0~50mm",
+          "정밀도": "±0.01mm",
+          "해상도": "0.001mm",
+          "온도보정": "자동"
+        }
       }
     },
     "HS_Crack_Sensor_002": {
       "type": "sensor",
       "sensorType": "균열센서",
       "data": {
-        "currentValue": 1.2,
-        "unit": "도",
-        "warningThreshold": 1.0,
-        "dangerThreshold": 2.0,
+        "currentValue": 0.8,
+        "unit": "mm",
+        "warningThreshold": 0.5,
+        "dangerThreshold": 1.0,
         "status": "warning"
       },
       "ui": {
-        "icon": "📐",
+        "icon": "/icons/crack_sensor_icon.svg",
         "color": "#ff6b35",
         "size": 0.6,
         "alwaysVisible": true
       },
       "info": {
-        "title": "기울기 센서 #002",
-        "description": "옹벽 상단부 기울기를 실시간으로 모니터링합니다.",
-        "location": "옹벽 상단 우측",
+        "title": "균열 센서 #002",
+        "description": "옹벽 표면의 균열 발생 및 진행 상태를 실시간으로 감지합니다.",
+        "location": "옹벽 중앙부 우측",
         "installDate": "2023-12-01",
         "manufacturer": "(주)그렉터",
-        "model": "TLT-3000"
+        "model": "CRK-2000",
+        "specifications": {
+          "측정범위": "0~50mm",
+          "정밀도": "±0.01mm",
+          "해상도": "0.001mm",
+          "온도보정": "자동"
+        }
       }
     },
     "HS_Block_Unit": {
@@ -127,7 +151,7 @@
       "type": "info",
       "category": "structure",
       "ui": {
-        "icon": "⚡",
+        "icon": "🏗️",
         "color": "#ffd700",
         "size": 0.6,
         "alwaysVisible": false

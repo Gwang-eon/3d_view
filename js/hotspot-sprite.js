@@ -145,121 +145,154 @@ export class HotspotSpriteManager {
         console.log(`📍 Created hotspot: ${config.info?.title || id}`);
     }
     
-/**
- * Create sprite texture with SVG/image support
- */
-createSpriteTexture(config) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 256;
-    const ctx = canvas.getContext('2d');
-    
-    // Anti-aliasing
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, 256, 256);
-    
-    // Determine colors based on status
-    let bgColor = config.ui?.color || '#007bff';
-    
-    if (config.data?.status === 'warning') {
-        bgColor = '#ff6b35';
-    } else if (config.data?.status === 'danger') {
-        bgColor = '#ff1744';
-    }
-    
-    // Draw outer glow
-    const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 100);
-    gradient.addColorStop(0, bgColor + '40');
-    gradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 256, 256);
-    
-    // Draw main circle
-    ctx.fillStyle = bgColor;
-    ctx.beginPath();
-    ctx.arc(128, 128, 80, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Draw inner circle (lighter)
-    const innerGradient = ctx.createRadialGradient(128, 108, 0, 128, 128, 70);
-    innerGradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
-    innerGradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = innerGradient;
-    ctx.beginPath();
-    ctx.arc(128, 128, 70, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Create texture first (will be updated if image loads)
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.needsUpdate = true;
-    
-    // Check if icon is URL
-    const iconValue = config.ui?.icon || '!';
-    if (this.isImageUrl(iconValue)) {
-        // Asynchronously load and draw image
-        this.loadAndDrawIcon(canvas, ctx, iconValue, texture);
-    } else {
-        // Draw text icon immediately
-        this.drawTextIcon(ctx, iconValue);
+    /**
+     * Create sprite texture with SVG/image support
+     */
+    createSpriteTexture(config) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 256;
+        const ctx = canvas.getContext('2d');
+        
+        // Anti-aliasing
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, 256, 256);
+        
+        // Determine colors based on status
+        let bgColor = config.ui?.color || '#007bff';
+        let pulseColor = bgColor;
+        
+        if (config.data?.status === 'warning') {
+            bgColor = '#ff6b35';
+            pulseColor = '#ff8c5a';
+        } else if (config.data?.status === 'danger') {
+            bgColor = '#ff1744';
+            pulseColor = '#ff4569';
+        }
+        
+        // Draw outer glow
+        const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 100);
+        gradient.addColorStop(0, bgColor + '40');
+        gradient.addColorStop(1, 'transparent');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 256, 256);
+        
+        // Draw main circle
+        ctx.fillStyle = bgColor;
+        ctx.beginPath();
+        ctx.arc(128, 128, 80, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw inner circle (lighter)
+        const innerGradient = ctx.createRadialGradient(128, 108, 0, 128, 128, 70);
+        innerGradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
+        innerGradient.addColorStop(1, 'transparent');
+        ctx.fillStyle = innerGradient;
+        ctx.beginPath();
+        ctx.arc(128, 128, 70, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Create texture first (will be updated if image loads)
+        const texture = new THREE.CanvasTexture(canvas);
         texture.needsUpdate = true;
+        
+        // Check if icon is URL
+        const iconValue = config.ui?.icon || '!';
+        if (this.isImageUrl(iconValue)) {
+            // Asynchronously load and draw image
+            this.loadAndDrawIcon(canvas, ctx, iconValue, texture);
+        } else {
+            // Draw text icon immediately
+            this.drawTextIcon(ctx, iconValue);
+            texture.needsUpdate = true;
+        }
+        
+        return texture;
     }
     
-    return texture;
-}
-
-/**
- * Check if string is image URL
- */
-isImageUrl(str) {
-    return str.startsWith('http') || 
-           str.startsWith('/') || 
-           str.includes('.svg') || 
-           str.includes('.png') || 
-           str.includes('.jpg');
-}
-
-/**
- * Load and draw icon image
+    /**
+     * Check if string is image URL
+     */
+    isImageUrl(str) {
+        return str.startsWith('http') || 
+               str.startsWith('/') || 
+               str.includes('.svg') || 
+               str.includes('.png') || 
+               str.includes('.jpg');
+    }
+    
+ /**
+ * Load and draw icon with customizable border
  */
 loadAndDrawIcon(canvas, ctx, url, texture) {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     
     img.onload = () => {
-        // Clear icon area
-        ctx.save();
-        ctx.globalCompositeOperation = 'destination-out';
-        ctx.beginPath();
-        ctx.arc(128, 128, 60, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-        
-        // Draw image
         const iconSize = 80;
         const x = (256 - iconSize) / 2;
         const y = (256 - iconSize) / 2;
         
-        // White background for icon
-        ctx.fillStyle = 'white';
-        ctx.beginPath();
-        ctx.arc(128, 128, 60, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Draw icon with multiply blend
         ctx.save();
-        ctx.globalCompositeOperation = 'multiply';
+        
+        // 원형 클리핑 영역
+        ctx.beginPath();
+        ctx.arc(128, 128, 45, 0, Math.PI * 2);
+        ctx.clip();
+        
+        // 어두운 배경 (흰색 SVG를 위해)
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(x - 5, y - 5, iconSize + 10, iconSize + 10);
+        
+        // SVG 아이콘 그리기
         ctx.drawImage(img, x, y, iconSize, iconSize);
+        
         ctx.restore();
         
-        // Update texture
+        // 원형 테두리 옵션들:
+        
+        // 옵션 1: 얇은 테두리 (1px)
+        // ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        // ctx.lineWidth = 1;
+        
+        // 옵션 2: 중간 테두리 (2px) - 현재 기본값
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 2;
+        
+        // 옵션 3: 두꺼운 테두리 (3px)
+        // ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        // ctx.lineWidth = 3;
+        
+        // 옵션 4: 매우 두꺼운 테두리 (4px)
+        // ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        // ctx.lineWidth = 4;
+        
+        // 옵션 5: 이중 테두리 효과
+        // ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+        // ctx.lineWidth = 4;
+        // ctx.beginPath();
+        // ctx.arc(128, 128, 47, 0, Math.PI * 2);
+        // ctx.stroke();
+        // 
+        // ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        // ctx.lineWidth = 1;
+        // ctx.beginPath();
+        // ctx.arc(128, 128, 45, 0, Math.PI * 2);
+        // ctx.stroke();
+        
+        // 테두리 그리기
+        ctx.beginPath();
+        ctx.arc(128, 128, 45, 0, Math.PI * 1);
+        ctx.stroke();
+        
+        // 텍스처 업데이트
         texture.needsUpdate = true;
     };
     
     img.onerror = () => {
-        // Fallback to text
         console.warn(`Failed to load icon: ${url}`);
         this.drawTextIcon(ctx, '!');
         texture.needsUpdate = true;
@@ -268,16 +301,64 @@ loadAndDrawIcon(canvas, ctx, url, texture) {
     img.src = url;
 }
 
-/**
- * Draw text icon
- */
-drawTextIcon(ctx, text) {
-    ctx.fillStyle = 'white';
-    ctx.font = 'bold 80px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(text, 128, 128);
+// 또는 설정으로 관리하는 방법:
+loadAndDrawIconWithConfig(canvas, ctx, url, texture, config) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    // 설정값
+    const borderWidth = config.ui?.borderWidth || 2;  // 기본 2px
+    const borderColor = config.ui?.borderColor || 'rgba(255, 255, 255, 0.3)';
+    const borderVisible = config.ui?.borderVisible !== false;  // 기본 true
+    
+    img.onload = () => {
+        const iconSize = 80;
+        const x = (256 - iconSize) / 2;
+        const y = (256 - iconSize) / 2;
+        const radius = 45;
+        
+        ctx.save();
+        
+        // 클리핑
+        ctx.beginPath();
+        ctx.arc(128, 128, radius, 0, Math.PI * 2);
+        ctx.clip();
+        
+        // 배경
+        ctx.fillStyle = '#1a1a1a';
+        ctx.fillRect(x - 5, y - 5, iconSize + 10, iconSize + 10);
+        
+        // 아이콘
+        ctx.drawImage(img, x, y, iconSize, iconSize);
+        
+        ctx.restore();
+        
+        // 테두리 (옵션)
+        if (borderVisible) {
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = borderWidth;
+            ctx.beginPath();
+            ctx.arc(128, 128, radius, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        
+        texture.needsUpdate = true;
+    };
+    
+    img.src = url;
 }
+    
+    /**
+     * Draw text icon
+     */
+    drawTextIcon(ctx, text) {
+        ctx.fillStyle = 'black';
+        ctx.font = 'bold 16px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(text, 128, 128);
+    }
+    
     /**
      * Update hotspot positions
      */
@@ -467,58 +548,80 @@ drawTextIcon(ctx, text) {
             let statusClass = 'normal';
             
             if (data.status === 'warning') {
-                statusText = '경고';
-                statusClass = 'warning';
+                statusText = '주의';
+                statusClass = 'status-warning';
             } else if (data.status === 'danger') {
                 statusText = '위험';
-                statusClass = 'danger';
+                statusClass = 'status-danger';
+            } else {
+                statusClass = 'status-normal';
             }
             
-            statusEl.className = `panel-status status-${statusClass}`;
             statusEl.textContent = statusText;
-            statusEl.style.display = 'block';
-        } else if (statusEl) {
-            statusEl.style.display = 'none';
+            statusEl.className = `panel-status ${statusClass}`;
+            statusEl.style.display = 'inline-block';
+        } else {
+            if (statusEl) statusEl.style.display = 'none';
         }
         
-        // Update body
+        // Update body content
         const body = panel.querySelector('.panel-body');
         if (body) {
-            let html = `<p class="description">${info.description || ''}</p>`;
+            let html = '';
+            
+            // Description
+            if (info.description) {
+                html += `<p class="description">${info.description}</p>`;
+            }
             
             // Sensor data
-            if (config.type === 'sensor' && data) {
-                html += `
-                    <div class="data-section">
-                        <h4>센서 데이터</h4>
-                        <table class="info-table">
-                            <tr>
-                                <td>센서 타입</td>
-                                <td>${config.sensorType || '-'}</td>
-                            </tr>
-                            <tr>
-                                <td>현재값</td>
-                                <td class="value">${data.currentValue}${data.unit}</td>
-                            </tr>
-                            <tr>
-                                <td>경고 임계값</td>
-                                <td>${data.warningThreshold}${data.unit}</td>
-                            </tr>
-                            <tr>
-                                <td>위험 임계값</td>
-                                <td>${data.dangerThreshold}${data.unit}</td>
-                            </tr>
-                            <tr>
-                                <td>설치 위치</td>
-                                <td>${info.location || '-'}</td>
-                            </tr>
-                            <tr>
-                                <td>설치일</td>
-                                <td>${info.installDate || '-'}</td>
-                            </tr>
-                        </table>
-                    </div>
-                `;
+            if (config.type === 'sensor') {
+                html += '<div class="data-section"><h4>센서 데이터</h4><table class="info-table">';
+                html += `<tr><td>현재값</td><td class="value">${data.currentValue}${data.unit}</td></tr>`;
+                html += `<tr><td>경고 임계값</td><td>${data.warningThreshold}${data.unit}</td></tr>`;
+                html += `<tr><td>위험 임계값</td><td>${data.dangerThreshold}${data.unit}</td></tr>`;
+                html += `<tr><td>센서 타입</td><td>${config.sensorType || '센서'}</td></tr>`;
+                
+                if (info.location) {
+                    html += `<tr><td>설치 위치</td><td>${info.location}</td></tr>`;
+                }
+                if (info.installDate) {
+                    html += `<tr><td>설치일</td><td>${info.installDate}</td></tr>`;
+                }
+                if (info.manufacturer) {
+                    html += `<tr><td>제조사</td><td>${info.manufacturer}</td></tr>`;
+                }
+                if (info.model) {
+                    html += `<tr><td>모델명</td><td>${info.model}</td></tr>`;
+                }
+                
+                html += '</table></div>';
+                
+                // Specifications
+                if (info.specifications) {
+                    html += '<div class="details-section"><h4>사양</h4><table class="info-table">';
+                    for (const [key, value] of Object.entries(info.specifications)) {
+                        html += `<tr><td>${key}</td><td>${value}</td></tr>`;
+                    }
+                    html += '</table></div>';
+                }
+                
+                // Warning/danger message
+                if (data.status === 'warning') {
+                    html += `
+                        <div class="warning-message">
+                            <strong>⚠️ 주의</strong><br>
+                            측정값이 경고 수준에 도달했습니다. 지속적인 모니터링이 필요합니다.
+                        </div>
+                    `;
+                } else if (data.status === 'danger') {
+                    html += `
+                        <div class="alert-message">
+                            <strong>🚨 위험</strong><br>
+                            측정값이 위험 수준에 도달했습니다. 즉시 점검이 필요합니다.
+                        </div>
+                    `;
+                }
             }
             
             // Structure details
