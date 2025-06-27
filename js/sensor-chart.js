@@ -1,24 +1,34 @@
-// js/sensor-chart.js - 센서 데이터 차트 표시 모듈
+// js/sensor-chart.js - 센서 데이터 차트 표시 모듈 (최적화 버전)
+
+import { SensorDataLoader } from './sensor-data-loader.js';
 
 export class SensorChartManager {
     constructor() {
         this.charts = [];
         this.isVisible = false;
+        this.isAnimating = false;
         this.container = null;
-        this.data = {
-            tilt: {
-                x: [],
-                y: [],
-                z: []
-            },
-            crack: []
+        this.dataLoader = new SensorDataLoader();
+        this.precomputedData = null;  // 미리 계산된 데이터
+        this.currentModelName = null;
+        
+        // 차트 설정
+        this.chartConfig = {
+            animationDuration: 0,
+            maxDataPoints: 50,  // 최대 표시 데이터 포인트
+            updateInterval: 200,  // 200ms (초당 5회)
+            batchSize: 5,  // 한 번에 업데이트할 프레임 수
+            skipFrames: 2  // 프레임 스킵
         };
+        
+        this.init();
+    }
         
         // 차트 설정
         this.chartConfig = {
             animationDuration: 2000,
-            dataPoints: 100,  // 표시할 데이터 포인트 수
-            updateInterval: 50,  // ms
+            dataPoints: 60,  // 표시할 데이터 포인트 수 (줄임)
+            updateInterval: 100,  // ms (늘림)
             dangerThreshold: 0.8,
             warningThreshold: 0.5
         };
@@ -156,7 +166,7 @@ export class SensorChartManager {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: {
-                    duration: 0
+                    duration: 0  // 애니메이션 완전 비활성화
                 },
                 interaction: {
                     mode: 'index',
@@ -167,6 +177,7 @@ export class SensorChartManager {
                         display: false
                     },
                     tooltip: {
+                        enabled: false,  // 툴팁 비활성화로 성능 향상
                         backgroundColor: 'rgba(0, 0, 0, 0.8)',
                         titleColor: '#fff',
                         bodyColor: '#fff',
@@ -256,6 +267,7 @@ export class SensorChartManager {
                         display: false
                     },
                     tooltip: {
+                        enabled: false,  // 툴팁 비활성화로 성능 향상
                         backgroundColor: 'rgba(0, 0, 0, 0.8)',
                         titleColor: '#fff',
                         bodyColor: '#fff',
@@ -348,19 +360,38 @@ export class SensorChartManager {
     }
     
     /**
-     * 시뮬레이션 시작
+     * 시뮬레이션 시작 (최적화 버전)
      */
-    startSimulation(currentFrame = 0, maxFrame = 30) {
+    async startSimulation(currentFrame = 0, maxFrame = 30, modelName = 'Default') {
         console.log(`🎬 센서 시뮬레이션 시작 (프레임: ${currentFrame}/${maxFrame})`);
         
-        // 데이터 초기화
-        this.clearData();
+        // 기존 애니메이션 중단
+        this.stopAnimation();
         
-        // 시뮬레이션 데이터 생성
-        this.generateSimulationData(currentFrame, maxFrame);
+        // 모델명 저장
+        this.currentModelName = modelName;
         
-        // 차트 애니메이션 시작
-        this.animateCharts();
+        // 데이터 로드 또는 생성
+        if (!this.precomputedData || this.precomputedData.modelName !== modelName) {
+            console.log('📊 센서 데이터 생성 중...');
+            this.precomputedData = {
+                modelName: modelName,
+                data: await this.dataLoader.generateFullDataset(modelName, maxFrame)
+            };
+            
+            if (!this.precomputedData.data) {
+                // 폴백: 기본 데이터 생성
+                this.generateDefaultData(currentFrame, maxFrame);
+            }
+        }
+        
+        // 차트 초기화
+        this.clearCharts();
+        
+        // 애니메이션 시작
+        this.animateWithPrecomputedData(currentFrame);
+        
+        console.log('📊 센서 차트가 표시되었습니다. 닫기 버튼(×)을 클릭하면 차트를 닫을 수 있습니다.');
     }
     
     /**
@@ -426,42 +457,145 @@ export class SensorChartManager {
     }
     
     /**
-     * 차트 애니메이션
+     * 미리 계산된 데이터로 애니메이션
      */
-    animateCharts() {
-        let dataIndex = 0;
-        const maxIndex = this.data.crack.length;
-        const interval = 50; // ms
+    animateWithPrecomputedData(targetFrame) {
+        const dataset = this.precomputedData.data;
+        if (!dataset || dataset.length === 0) return;
         
-        const animate = () => {
-            if (dataIndex >= maxIndex) {
-                this.updateSummary();
+        let currentIndex = 0;
+        const maxIndex = Math.min(targetFrame, dataset.length - 1);
+        this.isAnimating = true;
+        
+        // 차트 데이터 배열 초기화
+        const chartData = {
+            tilt: { x: [], y: [], z: [] },
+            crack: []
+        };
+        
+        const updateCharts = () => {
+            if (!this.isAnimating || currentIndex > maxIndex) {
+                this.updateSummary(maxIndex);
+                this.isAnimating = false;
                 return;
             }
             
-            // 각 차트 업데이트
-            this.charts.forEach(({ chart, axis, type }) => {
-                if (type === 'tilt') {
-                    const data = this.data.tilt[axis].slice(0, dataIndex + 1);
-                    chart.data.labels = data.map(d => d.x);
-                    chart.data.datasets[0].data = data.map(d => d.y);
-                } else if (type === 'crack') {
-                    const data = this.data.crack.slice(0, dataIndex + 1);
-                    chart.data.labels = data.map(d => d.x);
-                    chart.data.datasets[0].data = data.map(d => d.y);
+            // 배치 데이터 추가
+            const endIndex = Math.min(currentIndex + this.chartConfig.batchSize, maxIndex + 1);
+            
+            for (let i = currentIndex; i < endIndex; i += this.chartConfig.skipFrames) {
+                const frame = dataset[i];
+                if (!frame) continue;
+                
+                // 최대 데이터 포인트 체크
+                if (chartData.crack.length >= this.chartConfig.maxDataPoints) {
+                    // 오래된 데이터 제거
+                    ['x', 'y', 'z'].forEach(axis => chartData.tilt[axis].shift());
+                    chartData.crack.shift();
                 }
                 
-                chart.update('none'); // 애니메이션 없이 업데이트
-            });
+                // 새 데이터 추가
+                chartData.tilt.x.push({ x: frame.time, y: frame.tilt.x });
+                chartData.tilt.y.push({ x: frame.time, y: frame.tilt.y });
+                chartData.tilt.z.push({ x: frame.time, y: frame.tilt.z });
+                chartData.crack.push({ x: frame.time, y: frame.crack });
+            }
+            
+            // 차트 업데이트 (requestAnimationFrame 사용하지 않음)
+            this.updateChartsDirectly(chartData);
             
             // 요약 정보 업데이트
-            this.updateSummary(dataIndex);
+            if (dataset[endIndex - 1]) {
+                this.updateSummaryFromData(dataset[endIndex - 1]);
+            }
             
-            dataIndex++;
-            setTimeout(animate, interval);
+            currentIndex = endIndex;
+            
+            // 다음 업데이트 예약
+            if (this.isAnimating) {
+                setTimeout(updateCharts, this.chartConfig.updateInterval);
+            }
         };
         
-        animate();
+        // 첫 업데이트
+        updateCharts();
+    }
+    
+    /**
+     * 차트 직접 업데이트 (성능 최적화)
+     */
+    updateChartsDirectly(data) {
+        this.charts.forEach(({ chart, axis, type }) => {
+            if (type === 'tilt' && data.tilt[axis]) {
+                const chartData = data.tilt[axis];
+                chart.data.labels = chartData.map(d => d.x);
+                chart.data.datasets[0].data = chartData.map(d => d.y);
+            } else if (type === 'crack' && data.crack) {
+                const chartData = data.crack;
+                chart.data.labels = chartData.map(d => d.x);
+                chart.data.datasets[0].data = chartData.map(d => d.y);
+            }
+            
+            // 애니메이션 없이 업데이트
+            chart.update('none');
+        });
+    }
+    
+    /**
+     * 데이터 기반 요약 업데이트
+     */
+    updateSummaryFromData(frameData) {
+        // 현재 프레임
+        const frameEl = document.getElementById('current-frame');
+        if (frameEl) {
+            frameEl.textContent = frameData.frame;
+        }
+        
+        // 최대 기울기
+        const maxTiltEl = document.getElementById('max-tilt');
+        if (maxTiltEl) {
+            const maxTilt = Math.max(
+                Math.abs(frameData.tilt.x),
+                Math.abs(frameData.tilt.y),
+                Math.abs(frameData.tilt.z)
+            );
+            maxTiltEl.textContent = maxTilt.toFixed(2) + '°';
+            maxTiltEl.className = maxTilt > 0.8 ? 'value danger' : maxTilt > 0.5 ? 'value warning' : 'value';
+        }
+        
+        // 균열 폭
+        const crackEl = document.getElementById('crack-width');
+        if (crackEl) {
+            const crackWidth = frameData.crack;
+            crackEl.textContent = crackWidth.toFixed(2) + 'mm';
+            crackEl.className = crackWidth > 2.0 ? 'value danger' : crackWidth > 1.0 ? 'value warning' : 'value';
+        }
+    }
+    
+    /**
+     * 기본 데이터 생성 (폴백)
+     */
+    generateDefaultData(currentFrame, maxFrame) {
+        // 기존 로직 유지
+        this.generateSimulationData(currentFrame, maxFrame);
+    }
+    
+    /**
+     * 애니메이션 중단
+     */
+    stopAnimation() {
+        this.isAnimating = false;
+    }
+    
+    /**
+     * 차트 초기화
+     */
+    clearCharts() {
+        this.charts.forEach(({ chart }) => {
+            chart.data.labels = [];
+            chart.data.datasets[0].data = [];
+            chart.update('none');
+        });
     }
     
     /**
@@ -530,6 +664,8 @@ export class SensorChartManager {
         if (this.container) {
             this.container.classList.remove('show');
             this.isVisible = false;
+            // 애니메이션 중단
+            this.isAnimating = false;
         }
     }
     

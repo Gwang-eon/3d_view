@@ -5,6 +5,7 @@ import { UIController } from './ui.js';
 // import { AnimationController } from './animation.js';
 import { SensorAnimationController } from './sensor-animation.js';  // 새로운 import
 import { HotspotSpriteManager } from './hotspot-sprite.js';
+import { SensorChartManager } from './sensor-chart.js';  // 차트 매니저 import 추가
 
 // 모델 설정 (실제 GitHub 경로)
 const MODELS = [
@@ -190,6 +191,10 @@ class WallViewerApp {
             onReset: () => this.viewer.resetCamera()
         });
         this.ui.init();
+
+        // 센서 차트 매니저
+        this.chartManager = new SensorChartManager();
+        this.chartManager.init();
     }
     
     /**
