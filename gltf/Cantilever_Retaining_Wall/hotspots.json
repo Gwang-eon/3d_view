@@ -1,0 +1,176 @@
+{
+  "version": "1.0",
+  "lastUpdate": "2024-01-20",
+  "modelName": "Cantilever_Retaining_Wall",
+  "hotspots": {
+    "HS_Tilt_Sensor_001": {
+      "type": "sensor",
+      "sensorType": "기울기센서",
+      "data": {
+        "currentValue": 0.5,
+        "unit": "도",
+        "warningThreshold": 1.0,
+        "dangerThreshold": 2.0,
+        "status": "normal"
+      },
+      "ui": {
+        "icon": "📐",
+        "color": "#007bff",
+        "size": 0.6,
+        "alwaysVisible": true
+      },
+      "info": {
+        "title": "기울기 센서 #001",
+        "description": "옹벽 상단부 기울기를 실시간으로 모니터링합니다.",
+        "location": "옹벽 상단 좌측",
+        "installDate": "2023-12-01",
+        "manufacturer": "(주)그렉터",
+        "model": "TLT-3000"
+      }
+    },
+    "HS_Tilt_Sensor_002": {
+      "type": "sensor",
+      "sensorType": "기울기센서",
+      "data": {
+        "currentValue": 1.2,
+        "unit": "도",
+        "warningThreshold": 1.0,
+        "dangerThreshold": 2.0,
+        "status": "warning"
+      },
+      "ui": {
+        "icon": "📐",
+        "color": "#ff6b35",
+        "size": 0.6,
+        "alwaysVisible": true
+      },
+      "info": {
+        "title": "기울기 센서 #002",
+        "description": "옹벽 상단부 기울기를 실시간으로 모니터링합니다.",
+        "location": "옹벽 상단 우측",
+        "installDate": "2023-12-01",
+        "manufacturer": "(주)그렉터",
+        "model": "TLT-3000"
+      }
+    },
+    "HS_Crack_Sensor_001": {
+      "type": "sensor",
+      "sensorType": "균열센서",
+      "data": {
+        "currentValue": 1.2,
+        "unit": "도",
+        "warningThreshold": 1.0,
+        "dangerThreshold": 2.0,
+        "status": "warning"
+      },
+      "ui": {
+        "icon": "📐",
+        "color": "#ff6b35",
+        "size": 0.6,
+        "alwaysVisible": true
+      },
+      "info": {
+        "title": "기울기 센서 #002",
+        "description": "옹벽 상단부 기울기를 실시간으로 모니터링합니다.",
+        "location": "옹벽 상단 우측",
+        "installDate": "2023-12-01",
+        "manufacturer": "(주)그렉터",
+        "model": "TLT-3000"
+      }
+    },
+    "HS_Crack_Sensor_002": {
+      "type": "sensor",
+      "sensorType": "균열센서",
+      "data": {
+        "currentValue": 1.2,
+        "unit": "도",
+        "warningThreshold": 1.0,
+        "dangerThreshold": 2.0,
+        "status": "warning"
+      },
+      "ui": {
+        "icon": "📐",
+        "color": "#ff6b35",
+        "size": 0.6,
+        "alwaysVisible": true
+      },
+      "info": {
+        "title": "기울기 센서 #002",
+        "description": "옹벽 상단부 기울기를 실시간으로 모니터링합니다.",
+        "location": "옹벽 상단 우측",
+        "installDate": "2023-12-01",
+        "manufacturer": "(주)그렉터",
+        "model": "TLT-3000"
+      }
+    },
+    "HS_Block_Unit": {
+      "type": "info",
+      "category": "structure",
+      "ui": {
+        "icon": "🧱",
+        "color": "#00ff88",
+        "size": 0.6,
+        "alwaysVisible": false
+      },
+      "info": {
+        "title": "블록 유닛",
+        "description": "프리캐스트 콘크리트 블록으로 제작되어 현장에서 조립합니다.",
+        "details": {
+          "재질": "고강도 콘크리트",
+          "규격": "600×300×300mm",
+          "무게": "약 130kg/개",
+          "압축강도": "35MPa 이상"
+        }
+      }
+    },
+    "HS_Foundation": {
+      "type": "info",
+      "category": "structure",
+      "ui": {
+        "icon": "⚡",
+        "color": "#ffd700",
+        "size": 0.6,
+        "alwaysVisible": false
+      },
+      "info": {
+        "title": "기초부",
+        "description": "안정적인 지지를 위한 콘크리트 기초입니다.",
+        "details": {
+          "형식": "직접기초",
+          "깊이": "1.5m 이상",
+          "콘크리트": "fck=24MPa",
+          "지지력": "200kN/㎡ 이상"
+        }
+      }
+    },
+    "HS_Drainage": {
+      "type": "info",
+      "category": "structure",
+      "ui": {
+        "icon": "💧",
+        "color": "#00bfff",
+        "size": 0.6,
+        "alwaysVisible": false
+      },
+      "info": {
+        "title": "배수시설",
+        "description": "벽체 배면의 수압을 감소시키는 배수 시스템입니다.",
+        "details": {
+          "배수재": "자갈 또는 쇄석",
+          "입경": "20~40mm",
+          "배수관": "Φ100mm 유공관",
+          "간격": "2~3m"
+        }
+      }
+    }
+  },
+  "settings": {
+    "defaultVisibility": true,
+    "animationEnabled": true,
+    "interactionDistance": 50,
+    "spriteScale": {
+      "min": 1.5,
+      "max": 3.0
+    }
+  }
+}
