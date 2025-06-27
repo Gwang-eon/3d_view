@@ -162,12 +162,16 @@ body {
     height: 100vh;
     padding-top: var(--header-height);
     position: relative;
+    box-sizing: border-box;  /* padding을 높이에 포함 */
 }
 
 .viewer-canvas {
     width: 100%;
-    height: 100%;
+    height: calc(100% - var(--header-height));  /* 정확한 높이 계산 */
     background: var(--bg-primary);
+    position: absolute;
+    top: var(--header-height);
+    left: 0;
 }
 
 /* ===== 동영상 버튼 ===== */

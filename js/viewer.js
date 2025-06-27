@@ -177,6 +177,11 @@ export class Viewer3D {
         this.renderer.physicallyCorrectLights = true;
         
         this.container.appendChild(this.renderer.domElement);
+
+        // 렌더러 추가 후 즉시 리사이즈 (추가)
+        requestAnimationFrame(() => {
+            this.handleResize();
+        }); 
     }
     
     /**
@@ -390,6 +395,12 @@ export class Viewer3D {
         const box = new THREE.Box3().setFromObject(model);
         this.modelCenter = box.getCenter(new THREE.Vector3());
         console.log('📍 모델 중심점 계산:', this.modelCenter);
+
+
+        // 모델 설정 완료 후 리사이즈 (추가)
+        requestAnimationFrame(() => {
+            this.handleResize();
+        });
     }
     
     /**
