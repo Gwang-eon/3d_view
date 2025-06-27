@@ -2,8 +2,7 @@
 import { Viewer3D } from './viewer.js';
 import { ModelLoader } from './loader.js';
 import { UIController } from './ui.js';
-// import { AnimationController } from './animation.js';
-import { SensorAnimationController } from './sensor-animation.js';  // 새로운 import
+import { AnimationController } from './animation.js';
 import { HotspotSpriteManager } from './hotspot-sprite.js';
 
 // 모델 설정 (실제 GitHub 경로)
@@ -177,7 +176,7 @@ class WallViewerApp {
         });
         
         // 애니메이션 컨트롤러
-        this.animationController = new SensorAnimationController(this.viewer);
+        this.animationController = new AnimationController(this.viewer);
         
         // 핫스팟 매니저 (Sprite 버전)
         this.hotspotManager = new HotspotSpriteManager(this.viewer);
@@ -400,12 +399,6 @@ class WallViewerApp {
             
             // 뷰어에 모델 설정
             this.viewer.setModel(gltf.scene);
-
-
-            // 애니메이션 컨트롤러에 모델명 전달
-            if (this.animationController.setModelName) {
-                this.animationController.setModelName(modelConfig.folder);
-            }
             
             // 핫스팟 데이터 저장
             this.currentHotspotData = hotspotsData;

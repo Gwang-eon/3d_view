@@ -24,7 +24,7 @@
         "description": "옹벽 상단부 기울기를 실시간으로 모니터링합니다.",
         "location": "옹벽 상단 좌측",
         "installDate": "2023-12-01",
-        "manufacturer": "센서테크",
+        "manufacturer": "(주)그렉터",
         "model": "TLT-3000"
       }
     },
@@ -49,7 +49,57 @@
         "description": "옹벽 상단부 기울기를 실시간으로 모니터링합니다.",
         "location": "옹벽 상단 우측",
         "installDate": "2023-12-01",
-        "manufacturer": "센서테크",
+        "manufacturer": "(주)그렉터",
+        "model": "TLT-3000"
+      }
+    },
+    "HS_Crack_Sensor_001": {
+      "type": "sensor",
+      "sensorType": "균열센서",
+      "data": {
+        "currentValue": 1.2,
+        "unit": "도",
+        "warningThreshold": 1.0,
+        "dangerThreshold": 2.0,
+        "status": "warning"
+      },
+      "ui": {
+        "icon": "📐",
+        "color": "#ff6b35",
+        "size": 0.6,
+        "alwaysVisible": true
+      },
+      "info": {
+        "title": "기울기 센서 #002",
+        "description": "옹벽 상단부 기울기를 실시간으로 모니터링합니다.",
+        "location": "옹벽 상단 우측",
+        "installDate": "2023-12-01",
+        "manufacturer": "(주)그렉터",
+        "model": "TLT-3000"
+      }
+    },
+    "HS_Crack_Sensor_002": {
+      "type": "sensor",
+      "sensorType": "균열센서",
+      "data": {
+        "currentValue": 1.2,
+        "unit": "도",
+        "warningThreshold": 1.0,
+        "dangerThreshold": 2.0,
+        "status": "warning"
+      },
+      "ui": {
+        "icon": "📐",
+        "color": "#ff6b35",
+        "size": 0.6,
+        "alwaysVisible": true
+      },
+      "info": {
+        "title": "기울기 센서 #002",
+        "description": "옹벽 상단부 기울기를 실시간으로 모니터링합니다.",
+        "location": "옹벽 상단 우측",
+        "installDate": "2023-12-01",
+        "manufacturer": "(주)그렉터",
         "model": "TLT-3000"
       }
     },
