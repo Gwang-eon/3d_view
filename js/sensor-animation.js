@@ -1,4 +1,4 @@
-// js/sensor-animation.js - 센서 체크 기반 애니메이션 컨트롤러 (완성 버전)
+// js/sensor-animation.js - 센서 체크 기반 애니메이션 컨트롤러 (수정 버전)
 
 import { AnimationController } from './animation.js';
 
@@ -377,7 +377,7 @@ export class SensorAnimationController extends AnimationController {
     }
     
     /**
-     * 센서(핫스팟 + 3D 모델) 표시/숨김
+     * 센서(핫스팟 + 3D 모델) 표시/숨김 - 개별 센서 제어
      */
     showSensors(show) {
         // 1. 핫스팟 표시/숨김
@@ -388,43 +388,68 @@ export class SensorAnimationController extends AnimationController {
             });
         }
         
-        // 2. 3D 센서 모델 표시/숨김
+        // 2. 3D 센서 모델 표시/숨김 - 개별 센서 오브젝트 제어
         if (this.viewer.currentModel) {
-            // 센서 이름 패턴 (실제 모델 구조에 맞게 수정)
-            const sensorPatterns = [
-                'crack_sensor',     // 균열 센서
-                'tilt_sensor',      // 기울기 센서
-                'pressure_sensor',  // 압력 센서 (있을 경우)
-                'sensor'            // 일반 센서
-            ];
-            
+            const sensorNames = [];
             let sensorCount = 0;
             
-            // 모델 순회하며 센서 찾기
+            // 모델 순회하며 센서 관련 오브젝트 찾기
             this.viewer.currentModel.traverse((child) => {
                 if (child.name) {
-                    const nameLower = child.name.toLowerCase();
+                    const name = child.name.toLowerCase();
                     
-                    // 센서 패턴 매칭
-                    const isSensor = sensorPatterns.some(pattern => 
-                        nameLower.includes(pattern)
+                    // 센서 관련 이름 패턴 매칭
+                    // crack_sensor.001, crack_sensor.002, tilt_sensor.001, tilt_sensor.002
+                    // base, base.001, sensor.001, sensor.002 등
+                    const isSensor = (
+                        // crack_sensor로 시작하는 경우
+                        name.startsWith('crack_sensor') ||
+                        // tilt_sensor로 시작하는 경우
+                        name.startsWith('tilt_sensor') ||
+                        // sensor로 시작하고 번호가 붙은 경우 (sensor.001 등)
+                        /^sensor\.\d+$/.test(name) ||
+                        // 정확히 sensor인 경우
+                        name === 'sensor' ||
+                        // base로 시작하는 경우 (base, base.001 등)
+                        /^base(\.\d+)?$/.test(name) ||
+                        // _sensor로 끝나는 경우
+                        name.endsWith('_sensor')
                     );
                     
                     if (isSensor) {
                         child.visible = show;
                         sensorCount++;
+                        sensorNames.push(child.name);
                         
                         // 하위 오브젝트도 모두 표시/숨김
                         child.traverse((subChild) => {
                             subChild.visible = show;
                         });
-                        
-                        console.log(`${show ? '👁️' : '🙈'} 센서: ${child.name}`);
                     }
                 }
             });
             
-            console.log(`${show ? '👁️' : '🙈'} 총 ${sensorCount}개 센서 ${show ? '표시' : '숨김'}`);
+            if (sensorCount > 0) {
+                console.log(`${show ? '👁️' : '🙈'} ${sensorCount}개 센서 ${show ? '표시' : '숨김'}`);
+                if (show && sensorNames.length <= 10) {
+                    console.log('센서 목록:', sensorNames.join(', '));
+                }
+            } else {
+                console.warn('⚠️ 센서 오브젝트를 찾을 수 없습니다.');
+                // 디버깅을 위해 모든 오브젝트 이름 출력
+                console.log('=== 모델 내 오브젝트 목록 ===');
+                const allObjects = [];
+                this.viewer.currentModel.traverse((child) => {
+                    if (child.name) {
+                        allObjects.push({
+                            name: child.name,
+                            type: child.type,
+                            visible: child.visible
+                        });
+                    }
+                });
+                console.table(allObjects);
+            }
         }
         
         console.log(show ? '👁️ 센서 표시 완료' : '🙈 센서 숨김 완료');

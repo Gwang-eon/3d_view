@@ -75,14 +75,12 @@
                 <h3>카메라 컨트롤</h3>
             </div>
             <div class="floating-content always-visible">
-                <!-- 프리셋 뷰 버튼 -->
-                <div class="preset-view-grid">
-                    <button class="view-btn" data-view="front" title="정면">앞</button>
-                    <button class="view-btn" data-view="back" title="후면">뒤</button>
-                    <button class="view-btn" data-view="left" title="좌측">좌</button>
-                    <button class="view-btn" data-view="right" title="우측">우</button>
+                <!-- 프리셋 뷰 버튼 (좌/아래 제거) -->
+                <div class="preset-view-grid" style="grid-template-columns: repeat(2, 1fr);">
+                    <button class="view-btn" data-view="front" title="좌측">좌</button>
+                    <button class="view-btn" data-view="back" title="우측">우</button>
+                    <button class="view-btn" data-view="right" title="정면">앞</button>
                     <button class="view-btn" data-view="top" title="상단">위</button>
-                    <button class="view-btn" data-view="bottom" title="하단">아래</button>
                 </div>
                 
                 <!-- 카메라 선택 -->

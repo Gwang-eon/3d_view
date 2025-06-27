@@ -1,4 +1,4 @@
-// js/viewer.js - 3D 뷰어 코어 모듈 (밝기 및 그림자 개선 + 카메라 애니메이션)
+// js/viewer.js - 3D 뷰어 코어 모듈 (카메라 방향 수정)
 
 export class Viewer3D {
     constructor(config) {
@@ -463,7 +463,7 @@ export class Viewer3D {
     }
     
     /**
-     * 뷰 설정 - 부드러운 카메라 전환
+     * 뷰 설정 - 수정된 방향으로 부드러운 카메라 전환
      */
     setView(viewName) {
         if (!this.currentModel) return;
@@ -480,22 +480,24 @@ export class Viewer3D {
         
         switch(viewName) {
             case 'front':
-                targetPosition = new THREE.Vector3(center.x, center.y, center.z + distance);
-                break;
-            case 'back':
+                // 정면 - 남쪽에서 북쪽을 보는 뷰 (Z- 방향에서)
                 targetPosition = new THREE.Vector3(center.x, center.y, center.z - distance);
                 break;
-            case 'left':
+            case 'back':
+                // 우측 - 서쪽에서 동쪽을 보는 뷰 (X- 방향에서)
                 targetPosition = new THREE.Vector3(center.x - distance, center.y, center.z);
                 break;
+            case 'left':
+                // 후면 - 북쪽에서 남쪽을 보는 뷰 (Z+ 방향에서)
+                targetPosition = new THREE.Vector3(center.x, center.y, center.z + distance);
+                break;
             case 'right':
-                targetPosition = new THREE.Vector3(center.x + distance, center.y, center.z);
+                // 정면 - 남쪽에서 북쪽을 보는 뷰 (Z- 방향에서)
+                targetPosition = new THREE.Vector3(center.x, center.y, center.z - distance);
                 break;
             case 'top':
+                // 상단 - 위에서 아래를 보는 뷰
                 targetPosition = new THREE.Vector3(center.x, center.y + distance, center.z);
-                break;
-            case 'bottom':
-                targetPosition = new THREE.Vector3(center.x, center.y - distance, center.z);
                 break;
             case 'reset':
                 this.resetCamera(true); // 애니메이션 플래그 추가
@@ -669,7 +671,7 @@ export class Viewer3D {
     }
     
     /**
-     * 커스텀 카메라 적용 (블렌더에서 가져온 카메라)
+     * 커스텀 카메라 적용 (블렌더에서 가져온 카메라) - 애니메이션 추가
      */
     applyCustomCamera(customCamera, animate = true) {
         if (!customCamera.isPerspectiveCamera) return;
@@ -694,6 +696,7 @@ export class Viewer3D {
         this.camera.updateProjectionMatrix();
         
         if (animate) {
+            // 애니메이션으로 전환
             this.animateCamera(targetPosition, targetLookAt);
         } else {
             this.camera.position.copy(targetPosition);

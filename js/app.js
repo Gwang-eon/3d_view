@@ -436,8 +436,8 @@ class WallViewerApp {
                     cameraSelect.value = '0';
                 }
                 
-                // 첫 번째 카메라 적용
-                this.applyCamera(gltf.cameras[0]);
+                // 첫 번째 카메라 적용 (애니메이션 없이 즉시 적용)
+                this.viewer.applyCustomCamera(gltf.cameras[0], false);
                 
             } else {
                 console.log('📷 커스텀 카메라 없음 - 기본 카메라 사용');
@@ -486,41 +486,14 @@ class WallViewerApp {
     switchCamera(cameraIndex) {
         if (cameraIndex === 'default') {
             // 기본 카메라로 전환
-            this.viewer.resetCamera();
-            this.viewer.adjustCameraToModel();
+            this.viewer.resetCamera(true);  // 애니메이션 적용
         } else {
             // 커스텀 카메라로 전환
             const index = parseInt(cameraIndex);
             if (this.gltfCameras[index]) {
-                this.applyCamera(this.gltfCameras[index]);
+                // viewer의 applyCustomCamera 메서드 직접 사용
+                this.viewer.applyCustomCamera(this.gltfCameras[index], true);
             }
-        }
-    }
-    
-    /**
-     * 카메라 적용
-     */
-    applyCamera(customCamera) {
-        if (customCamera.isPerspectiveCamera) {
-            // 기존 카메라의 속성을 업데이트
-            this.viewer.camera.fov = customCamera.fov;
-            this.viewer.camera.aspect = customCamera.aspect;
-            this.viewer.camera.near = customCamera.near;
-            this.viewer.camera.far = customCamera.far;
-            
-            // 카메라 위치와 회전 적용
-            this.viewer.camera.position.copy(customCamera.position);
-            this.viewer.camera.rotation.copy(customCamera.rotation);
-            this.viewer.camera.quaternion.copy(customCamera.quaternion);
-            
-            // 투영 행렬 업데이트
-            this.viewer.camera.updateProjectionMatrix();
-            
-            // 타겟은 항상 월드 원점으로 설정
-            this.viewer.controls.target.set(0, 0, 0);
-            this.viewer.controls.update();
-            
-            console.log('✅ 카메라 적용됨:', customCamera.name || '이름 없음');
         }
     }
     
