@@ -21,7 +21,7 @@ export class SensorAnimationController extends AnimationController {
 
 
         // 센서 차트 매니저
-        this.chartManager = new SensorChartManager();;
+        //this.chartManager = new SensorChartManager();
         
         // 모델별 프레임 설정 (완전한 설정)
         this.modelFrameSettings = {
@@ -505,11 +505,12 @@ export class SensorAnimationController extends AnimationController {
         console.log('currentModelName:', this.currentModelName);
         console.log('frame:', frame);
         
-        if (this.chartManager) {
+        const chartManager = this.viewer.app?.chartManager;
+        if (chartManager) {
             try {
-                this.chartManager.show();
+                chartManager.show();
                 const maxFrame = this.timeToFrame(this.duration);
-                this.chartManager.startSimulation(frame, maxFrame, this.currentModelName);
+                chartManager.startSimulation(frame, maxFrame, this.currentModelName);
                 console.log('✅ 센서 차트 표시 완료');
             } catch (error) {
                 console.error('❌ 센서 차트 표시 오류:', error);

@@ -193,7 +193,7 @@ class WallViewerApp {
         this.ui.init();
 
         // 센서 차트 매니저
-        // this.chartManager = new SensorChartManager();
+         this.chartManager = new SensorChartManager();
         //this.chartManager.init();
     }
     
@@ -219,6 +219,14 @@ class WallViewerApp {
         if (homeBtn) {
             homeBtn.addEventListener('click', () => {
                 window.location.href = 'index.html';
+            });
+        }
+
+        // 센서 차트 버튼
+        const chartBtn = document.getElementById('chart-toggle-btn');
+        if (chartBtn) {
+            chartBtn.addEventListener('click', () => {
+                this.toggleSensorChart();
             });
         }
         
@@ -503,6 +511,38 @@ class WallViewerApp {
     }
     
     /**
+     * 센서 차트 토글
+     */
+    toggleSensorChart() {
+        if (!this.chartManager) {
+            console.error('차트 매니저가 초기화되지 않았습니다');
+            return;
+        }
+        
+        // 차트가 보이지 않으면 표시
+        if (!this.chartManager.isVisible) {
+            this.chartManager.show();
+            
+            // 현재 애니메이션 프레임 가져오기
+            if (this.animationController && this.animationController.currentTime) {
+                const currentFrame = this.animationController.timeToFrame(this.animationController.currentTime);
+                const maxFrame = this.animationController.timeToFrame(this.animationController.duration);
+                const modelName = this.models[this.currentModelIndex].folder;
+                
+                // 차트 시뮬레이션 시작
+                this.chartManager.startSimulation(currentFrame, maxFrame, modelName);
+            } else {
+                // 애니메이션이 없으면 기본 데이터 표시
+                const modelName = this.models[this.currentModelIndex].folder;
+                this.chartManager.startSimulation(0, 30, modelName);
+            }
+        } else {
+            // 차트 숨기기
+            this.chartManager.hide();
+        }
+    }
+
+    /**
      * 키보드 단축키 처리
      */
     handleKeyPress(event) {
@@ -528,6 +568,11 @@ class WallViewerApp {
             case 'G':
                 this.viewer.toggleGrid();
                 break;
+            case 'c':
+            case 'C':
+                this.toggleSensorChart();
+                break;
+
             case 'h':
             case 'H':
                 // 핫스팟 토글
