@@ -193,8 +193,8 @@ class WallViewerApp {
         this.ui.init();
 
         // 센서 차트 매니저
-        this.chartManager = new SensorChartManager();
-        this.chartManager.init();
+        // this.chartManager = new SensorChartManager();
+        //this.chartManager.init();
     }
     
     /**

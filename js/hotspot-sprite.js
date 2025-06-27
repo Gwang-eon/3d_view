@@ -40,6 +40,7 @@ export class HotspotSpriteManager {
      */
     init() {
         this.setupEventListeners();
+        this.isAnimating = false;  // 애니메이션 상태 플래그 추가
         console.log('✅ HotspotSpriteManager initialized');
     }
     
@@ -51,8 +52,11 @@ export class HotspotSpriteManager {
         canvas.addEventListener('mousemove', this.onMouseMove);
         canvas.addEventListener('click', this.onMouseClick);
         
-        // Add to render loop
-        this.viewer.addRenderCallback(this.animate);
+        // Add to render loop (중복 방지)
+        if (!this.isAnimating) {
+            this.viewer.addRenderCallback(this.animate);
+            this.isAnimating = true;
+        }
     }
     
     /**
@@ -720,6 +724,7 @@ export class HotspotSpriteManager {
         
         // Remove from render loop
         this.viewer.removeRenderCallback(this.animate);
+        this.isAnimating = false;  // 플래그 리셋 추가
         
         // Clear hotspots
         this.clearHotspots();

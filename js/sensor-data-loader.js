@@ -4,7 +4,7 @@ export class SensorDataLoader {
     constructor() {
         this.dataCache = null;
         this.currentModel = null;
-        this.dataPath = './data/sensor-data.json';
+        this.dataPath = './sensor-data.json';  // 수정됨: ./data/ 제거
     }
     
     /**

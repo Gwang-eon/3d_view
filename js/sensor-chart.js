@@ -18,17 +18,8 @@ export class SensorChartManager {
             maxDataPoints: 50,  // 최대 표시 데이터 포인트
             updateInterval: 200,  // 200ms (초당 5회)
             batchSize: 5,  // 한 번에 업데이트할 프레임 수
-            skipFrames: 2  // 프레임 스킵
-        };
-        
-        this.init();
-    }
-        
-        // 차트 설정
-        this.chartConfig = {
-            animationDuration: 2000,
-            dataPoints: 60,  // 표시할 데이터 포인트 수 (줄임)
-            updateInterval: 100,  // ms (늘림)
+            skipFrames: 2,  // 프레임 스킵
+            dataPoints: 60,  // 표시할 데이터 포인트 수
             dangerThreshold: 0.8,
             warningThreshold: 0.5
         };
@@ -40,6 +31,12 @@ export class SensorChartManager {
             dangerRange: { min: 0.8, max: 1.5 },       // 위험 범위
             transitionFrame: 20,  // 급격한 변화 시작 프레임
             maxFrame: 30        // 최대 프레임
+        };
+        
+        // 데이터 저장소
+        this.data = {
+            tilt: { x: [], y: [], z: [] },
+            crack: []
         };
         
         this.init();
@@ -122,6 +119,12 @@ export class SensorChartManager {
      * 차트 생성
      */
     createCharts() {
+        // 기존 차트 제거 (중복 방지)
+        this.charts.forEach(({ chart }) => {
+            chart.destroy();
+        });
+        this.charts = [];
+        
         // Chart.js 기본 설정
         Chart.defaults.color = 'rgba(255, 255, 255, 0.8)';
         Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
@@ -137,6 +140,8 @@ export class SensorChartManager {
         
         // 균열 차트
         this.createCrackChart();
+        
+        console.log('✅ 차트 생성 완료:', this.charts.length + '개');
     }
     
     /**

@@ -21,7 +21,7 @@ export class SensorAnimationController extends AnimationController {
 
 
         // 센서 차트 매니저
-        this.chartManager = null;
+        this.chartManager = new SensorChartManager();;
         
         // 모델별 프레임 설정 (완전한 설정)
         this.modelFrameSettings = {
