@@ -368,7 +368,7 @@ export class SensorChartManager {
      * 시뮬레이션 시작 (최적화 버전)
      */
     async startSimulation(currentFrame = 0, maxFrame = 30, modelName = 'Default') {
-        console.log(`🎬 센서 시뮬레이션 시작 (프레임: ${currentFrame}/${maxFrame})`);
+        console.log(`🎬 센서 시뮬레이션 시작 (프레임: ${currentFrame}/${maxFrame}, 모델: ${modelName})`);
         
         // 기존 애니메이션 중단
         this.stopAnimation();
@@ -376,6 +376,12 @@ export class SensorChartManager {
         // 모델명 저장
         this.currentModelName = modelName;
         
+        // 데이터 로드 확인
+        if (!this.dataLoader.dataCache) {
+            console.log('📊 센서 데이터 최초 로드 중...');
+            await this.dataLoader.loadData();
+        }
+
         // 데이터 로드 또는 생성
         if (!this.precomputedData || this.precomputedData.modelName !== modelName) {
             console.log('📊 센서 데이터 생성 중...');
@@ -385,6 +391,7 @@ export class SensorChartManager {
             };
             
             if (!this.precomputedData.data) {
+                console.warn('⚠️ 모델 데이터 없음, 기본 데이터 사용');
                 // 폴백: 기본 데이터 생성
                 this.generateDefaultData(currentFrame, maxFrame);
             }
@@ -399,6 +406,32 @@ export class SensorChartManager {
         console.log('📊 센서 차트가 표시되었습니다. 닫기 버튼(×)을 클릭하면 차트를 닫을 수 있습니다.');
     }
     
+    /**
+     * 기본 데이터셋 생성 (폴백)
+     */
+    async generateDefaultDataset(maxFrame) {
+        const fps = 30;
+        const dataset = [];
+        
+        for (let frame = 0; frame <= maxFrame; frame++) {
+            const time = frame / fps;
+            const progress = frame / maxFrame;
+            
+            dataset.push({
+                frame: frame,
+                time: time,
+                tilt: {
+                    x: Math.sin(time * 2) * 0.5 * progress,
+                    y: Math.cos(time * 1.5) * 0.4 * progress,
+                    z: Math.sin(time * 3) * 0.3 * progress
+                },
+                crack: Math.max(0, progress * 2.5 - 0.5)
+            });
+        }
+        
+        return dataset;
+    }
+
     /**
      * 시뮬레이션 데이터 생성
      */

@@ -513,7 +513,7 @@ class WallViewerApp {
     /**
      * 센서 차트 토글
      */
-    toggleSensorChart() {
+    async toggleSensorChart() {
         if (!this.chartManager) {
             console.error('차트 매니저가 초기화되지 않았습니다');
             return;
@@ -523,25 +523,29 @@ class WallViewerApp {
         if (!this.chartManager.isVisible) {
             this.chartManager.show();
             
+            // 모델 폴더명 가져오기
+            const modelName = this.models[this.currentModelIndex].folder;
+            console.log('📊 차트 표시 - 모델:', modelName);
+            
             // 현재 애니메이션 프레임 가져오기
-            if (this.animationController && this.animationController.currentTime) {
+            if (this.animationController && this.animationController.currentTime !== undefined) {
                 const currentFrame = this.animationController.timeToFrame(this.animationController.currentTime);
                 const maxFrame = this.animationController.timeToFrame(this.animationController.duration);
-                const modelName = this.models[this.currentModelIndex].folder;
                 
-                // 차트 시뮬레이션 시작
-                this.chartManager.startSimulation(currentFrame, maxFrame, modelName);
+                console.log(`📊 애니메이션 데이터: ${currentFrame}/${maxFrame} 프레임`);
+                
+                // 차트 시뮬레이션 시작 (await 추가)
+                await this.chartManager.startSimulation(currentFrame, maxFrame, modelName);
             } else {
                 // 애니메이션이 없으면 기본 데이터 표시
-                const modelName = this.models[this.currentModelIndex].folder;
-                this.chartManager.startSimulation(0, 30, modelName);
+                console.log('📊 기본 데이터 표시 (애니메이션 없음)');
+                await this.chartManager.startSimulation(0, 30, modelName);
             }
         } else {
             // 차트 숨기기
             this.chartManager.hide();
         }
     }
-
     /**
      * 키보드 단축키 처리
      */
