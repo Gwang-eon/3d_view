@@ -1491,7 +1491,7 @@
 					"bool_duplicate":0
 				}
 			},
-			"name":"base",
+			"name":"Crack_Sensor_002",
 			"rotation":[
 				0.9974291324615479,
 				0.011308839544653893,
@@ -1634,7 +1634,7 @@
 				},
 				"booleans":{}
 			},
-			"name":"sensor.001",
+			"name":"Tilt_Sensor_001",
 			"rotation":[
 				0,
 				0,
@@ -2025,7 +2025,7 @@
 					"bool_duplicate":0
 				}
 			},
-			"name":"base.001",
+			"name":"Crack_Sensor_001",
 			"rotation":[
 				0,
 				0,
@@ -2168,7 +2168,7 @@
 				},
 				"booleans":{}
 			},
-			"name":"sensor.002",
+			"name":"Tilt_Sensor_002",
 			"rotation":[
 				0,
 				0,

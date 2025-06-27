@@ -240,8 +240,12 @@ export class SensorAnimationController extends AnimationController {
         const settings = this.getCurrentSettings();
         const endTime = this.playEndTime || this.duration;
         
-        // 현재 위치가 종료 지점이면 시작 프레임으로 이동
-        if (this.currentTime >= endTime - 0.01) {
+        // 균열 감지 모드에서 균열 프레임에 도달한 경우 또는
+        // 전체 재생 모드에서 끝에 도달한 경우
+        const isAtEnd = this.currentTime >= endTime - 0.01;
+        
+        // 재생이 끝난 상태에서 다시 재생 버튼을 누른 경우만 초기화
+        if (isAtEnd) {
             this.currentTime = this.playStartTime;
             this.mixer.setTime(this.playStartTime);
             
@@ -320,6 +324,7 @@ export class SensorAnimationController extends AnimationController {
                         shouldStop = true;
                         console.log(`⏸️ 균열 감지 프레임 도달: ${currentFrame}프레임`);
                         this.showCrackDetectionAlert();
+                        // 현재 프레임 상태 유지
                     } else if (!this.sensorsEnabled && this.currentTime >= this.duration - 0.01) {
                         // 전체 재생 완료
                         shouldStop = true;
@@ -358,7 +363,7 @@ export class SensorAnimationController extends AnimationController {
     }
     
     /**
-     * 정지 (오버라이드)
+     * 정지 (오버라이드) - 명시적으로 호출될 때만 초기화
      */
     stop() {
         if (!this.mixer) return;
@@ -393,37 +398,60 @@ export class SensorAnimationController extends AnimationController {
             const sensorNames = [];
             let sensorCount = 0;
             
+            // 디버깅: 첫 실행 시 모든 오브젝트 출력
+            if (!this._debugged) {
+                console.log('=== 모든 오브젝트 목록 (디버깅) ===');
+                const allObjects = [];
+                this.viewer.currentModel.traverse((child) => {
+                    if (child.name) {
+                        allObjects.push({
+                            name: child.name,
+                            type: child.type,
+                            visible: child.visible,
+                            parent: child.parent ? child.parent.name : 'root'
+                        });
+                    }
+                });
+                console.table(allObjects);
+                this._debugged = true;
+            }
+            
             // 모델 순회하며 센서 관련 오브젝트 찾기
             this.viewer.currentModel.traverse((child) => {
                 if (child.name) {
-                    const name = child.name.toLowerCase();
+                    // 원본 이름 사용 (대소문자 구분)
+                    const originalName = child.name;
+                    const lowerName = originalName.toLowerCase();
                     
-                    // 센서 관련 이름 패턴 매칭
-                    // crack_sensor.001, crack_sensor.002, tilt_sensor.001, tilt_sensor.002
-                    // base, base.001, sensor.001, sensor.002 등
+                    // 센서 관련 이름 패턴 매칭 (대소문자 무시)
                     const isSensor = (
                         // crack_sensor로 시작하는 경우
-                        name.startsWith('crack_sensor') ||
+                        lowerName.startsWith('crack_sensor') ||
                         // tilt_sensor로 시작하는 경우
-                        name.startsWith('tilt_sensor') ||
-                        // sensor로 시작하고 번호가 붙은 경우 (sensor.001 등)
-                        /^sensor\.\d+$/.test(name) ||
+                        lowerName.startsWith('tilt_sensor') ||
+                        // sensor.001, sensor.002 등
+                        /^sensor\.\d+$/.test(lowerName) ||
                         // 정확히 sensor인 경우
-                        name === 'sensor' ||
-                        // base로 시작하는 경우 (base, base.001 등)
-                        /^base(\.\d+)?$/.test(name) ||
+                        lowerName === 'sensor' ||
+                        // base 또는 base.001 등
+                        lowerName === 'base' ||
+                        /^base\.\d+$/.test(lowerName) ||
                         // _sensor로 끝나는 경우
-                        name.endsWith('_sensor')
+                        lowerName.endsWith('_sensor') ||
+                        // 추가: sensor가 포함되고 hotspot이 포함되지 않은 경우
+                        (lowerName.includes('sensor') && !lowerName.includes('hotspot'))
                     );
                     
                     if (isSensor) {
                         child.visible = show;
                         sensorCount++;
-                        sensorNames.push(child.name);
+                        sensorNames.push(originalName);
                         
                         // 하위 오브젝트도 모두 표시/숨김
                         child.traverse((subChild) => {
-                            subChild.visible = show;
+                            if (subChild !== child) {  // 자기 자신 제외
+                                subChild.visible = show;
+                            }
                         });
                     }
                 }
@@ -431,24 +459,10 @@ export class SensorAnimationController extends AnimationController {
             
             if (sensorCount > 0) {
                 console.log(`${show ? '👁️' : '🙈'} ${sensorCount}개 센서 ${show ? '표시' : '숨김'}`);
-                if (show && sensorNames.length <= 10) {
-                    console.log('센서 목록:', sensorNames.join(', '));
-                }
+                console.log('센서 목록:', sensorNames.join(', '));
             } else {
                 console.warn('⚠️ 센서 오브젝트를 찾을 수 없습니다.');
-                // 디버깅을 위해 모든 오브젝트 이름 출력
-                console.log('=== 모델 내 오브젝트 목록 ===');
-                const allObjects = [];
-                this.viewer.currentModel.traverse((child) => {
-                    if (child.name) {
-                        allObjects.push({
-                            name: child.name,
-                            type: child.type,
-                            visible: child.visible
-                        });
-                    }
-                });
-                console.table(allObjects);
+                console.log('Tip: 센서 이름이 crack_sensor.001, tilt_sensor.001, base, sensor.001 형식인지 확인하세요.');
             }
         }
         
@@ -470,18 +484,38 @@ export class SensorAnimationController extends AnimationController {
                 <h4>균열 감지!</h4>
                 <p>센서가 위험 수준의 균열을 감지했습니다.</p>
                 <p style="font-size: 12px; opacity: 0.8;">
-                    ${frame}프레임 / ${this.playEndTime?.toFixed(2)}초
+                    감지 프레임: ${frame}프레임 (${this.playEndTime?.toFixed(2)}초)
+                </p>
+                <p style="font-size: 11px; opacity: 0.6; margin-top: 4px;">
+                    재생 버튼을 다시 누르면 처음부터 재생됩니다.
                 </p>
             </div>
         `;
         
         document.body.appendChild(alert);
         
-        // 3초 후 자동 제거
+        // 4초 후 자동 제거 (조금 더 길게)
         setTimeout(() => {
             alert.classList.add('fade-out');
             setTimeout(() => alert.remove(), 300);
-        }, 3000);
+        }, 4000);
+    }
+    
+    /**
+     * 애니메이션 완료 처리
+     */
+    onAnimationComplete() {
+        console.log('🏁 애니메이션 완료');
+        
+        this.isPlaying = false;
+        this.updatePlayButton();
+        
+        // 콜백 실행
+        if (this.onAnimationEnd) {
+            this.onAnimationEnd();
+        }
+        
+        // 자동 초기화 제거 - 사용자가 다시 재생 버튼을 누를 때까지 현재 상태 유지
     }
     
     /**
@@ -614,10 +648,37 @@ export class SensorAnimationController extends AnimationController {
                 
                 infoText.innerHTML = `균열 감지: <strong>${frame}프레임</strong> (${time.toFixed(2)}초)`;
                 infoText.style.color = '#00ff88';
+                infoText.title = '균열 감지 시 자동 정지됩니다';
             } else {
                 const endFrame = settings.endFrame || this.timeToFrame(this.duration);
                 infoText.innerHTML = `전체 붕괴: <strong>${endFrame}프레임</strong>`;
                 infoText.style.color = '#ff6b35';
+                infoText.title = '끝까지 재생됩니다';
+            }
+        }
+    }
+    
+    /**
+     * 재생 버튼 업데이트
+     */
+    updatePlayButton() {
+        if (this.viewer.app && this.viewer.app.ui) {
+            this.viewer.app.ui.updatePlayButton(this.isPlaying);
+            
+            // 재생 버튼 툴팁 업데이트
+            const playBtn = document.getElementById('play-btn');
+            if (playBtn) {
+                const settings = this.getCurrentSettings();
+                const endTime = this.playEndTime || this.duration;
+                const isAtEnd = this.currentTime >= endTime - 0.01;
+                
+                if (isAtEnd && !this.isPlaying) {
+                    playBtn.title = '처음부터 재생';
+                } else if (this.isPlaying) {
+                    playBtn.title = '일시정지';
+                } else {
+                    playBtn.title = '재생';
+                }
             }
         }
     }
@@ -627,6 +688,9 @@ export class SensorAnimationController extends AnimationController {
      */
     updateTimeline() {
         super.updateTimeline();
+        
+        // 재생 버튼 상태 업데이트
+        this.updatePlayButton();
         
         // 프레임 정보 추가 표시 (옵션)
         if (this.viewer.app && this.viewer.app.ui) {
@@ -765,11 +829,12 @@ export class SensorAnimationController extends AnimationController {
                 border-radius: 8px;
                 box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
                 display: flex;
-                align-items: center;
+                align-items: flex-start;
                 gap: 12px;
                 z-index: 10000;
                 animation: slideIn 0.3s ease-out;
                 border: 1px solid rgba(255, 255, 255, 0.2);
+                max-width: 400px;
             }
             
             .crack-detection-alert.fade-out {
@@ -832,6 +897,41 @@ export class SensorAnimationController extends AnimationController {
                 50% {
                     transform: scale(1.1);
                 }
+            }
+            
+            /* 재생 버튼 상태 스타일 */
+            .timeline-btn[title="처음부터 재생"] {
+                background: linear-gradient(135deg, #28a745, #20c444);
+            }
+            
+            .timeline-btn[title="처음부터 재생"]:hover {
+                background: linear-gradient(135deg, #20c444, #18b63a);
+            }
+            
+            /* 툴팁 스타일 */
+            [title] {
+                position: relative;
+            }
+            
+            [title]:hover::after {
+                content: attr(title);
+                position: absolute;
+                bottom: 100%;
+                left: 50%;
+                transform: translateX(-50%);
+                padding: 4px 8px;
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                font-size: 12px;
+                white-space: nowrap;
+                border-radius: 4px;
+                pointer-events: none;
+                opacity: 0;
+                animation: tooltipFadeIn 0.2s ease-out 0.5s forwards;
+            }
+            
+            @keyframes tooltipFadeIn {
+                to { opacity: 1; }
             }
         `;
         

@@ -17,6 +17,7 @@ export class Viewer3D {
         
         // 현재 모델
         this.currentModel = null;
+        this.modelCenter = null;  // 모델 중심점 저장
         
         // 헬퍼
         this.gridHelper = null;
@@ -384,7 +385,11 @@ export class Viewer3D {
             this.gridHelper.visible = false;
             console.log('🔲 Grid 숨김 (모델 로드됨)');
         }
-
+        
+        // 모델 중심점 저장 (카메라 회전용)
+        const box = new THREE.Box3().setFromObject(model);
+        this.modelCenter = box.getCenter(new THREE.Vector3());
+        console.log('📍 모델 중심점 계산:', this.modelCenter);
     }
     
     /**
@@ -611,11 +616,15 @@ export class Viewer3D {
         // 카메라가 타겟을 바라보도록
         this.camera.lookAt(this.controls.target);
         
+        // 컨트롤 업데이트 (중요!)
+        this.controls.update();
+        
         // 애니메이션 완료 체크
         if (progress >= 1) {
             this.cameraAnimation.active = false;
             this.controls.enabled = true;
             this.controls.update();
+            console.log('📍 카메라 애니메이션 완료. 최종 타겟:', this.controls.target);
         }
     }
     
@@ -680,13 +689,20 @@ export class Viewer3D {
         const targetPosition = new THREE.Vector3();
         targetPosition.setFromMatrixPosition(customCamera.matrixWorld);
         
-        // 카메라가 바라보는 방향 계산
-        const direction = new THREE.Vector3(0, 0, -1);
-        direction.applyQuaternion(customCamera.quaternion);
+        // 모델의 중심점을 타겟으로 설정
+        let targetLookAt = new THREE.Vector3(0, 0, 0); // 기본값
         
-        // 타겟 위치 (카메라 앞 일정 거리)
-        const targetLookAt = new THREE.Vector3();
-        targetLookAt.copy(targetPosition).add(direction.multiplyScalar(10));
+        // 저장된 모델 중심점 사용 또는 재계산
+        if (this.modelCenter) {
+            targetLookAt = this.modelCenter.clone();
+        } else if (this.currentModel) {
+            // 현재 모델의 중심점 계산
+            const box = new THREE.Box3().setFromObject(this.currentModel);
+            targetLookAt = box.getCenter(new THREE.Vector3());
+            this.modelCenter = targetLookAt.clone();
+        }
+        
+        console.log('📍 카메라 타겟 설정:', targetLookAt);
         
         // FOV 및 기타 속성 업데이트
         this.camera.fov = customCamera.fov;
@@ -706,6 +722,8 @@ export class Viewer3D {
         }
         
         console.log('✅ 카메라 적용됨:', customCamera.name || '이름 없음');
+        console.log('   위치:', targetPosition);
+        console.log('   타겟:', targetLookAt);
     }
     
     /**
