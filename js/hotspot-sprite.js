@@ -224,136 +224,59 @@ export class HotspotSpriteManager {
                str.includes('.jpg');
     }
     
- /**
- * Load and draw icon with customizable border
- */
-loadAndDrawIcon(canvas, ctx, url, texture) {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    
-    img.onload = () => {
-        const iconSize = 80;
-        const x = (256 - iconSize) / 2;
-        const y = (256 - iconSize) / 2;
+    /**
+     * Load and draw icon image - 수정된 버전 (얇은 border)
+     */
+    loadAndDrawIcon(canvas, ctx, url, texture) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
         
-        ctx.save();
-        
-        // 원형 클리핑 영역
-        ctx.beginPath();
-        ctx.arc(128, 128, 45, 0, Math.PI * 2);
-        ctx.clip();
-        
-        // 어두운 배경 (흰색 SVG를 위해)
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fillRect(x - 5, y - 5, iconSize + 10, iconSize + 10);
-        
-        // SVG 아이콘 그리기
-        ctx.drawImage(img, x, y, iconSize, iconSize);
-        
-        ctx.restore();
-        
-        // 원형 테두리 옵션들:
-        
-        // 옵션 1: 얇은 테두리 (1px)
-        // ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-        // ctx.lineWidth = 1;
-        
-        // 옵션 2: 중간 테두리 (2px) - 현재 기본값
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.lineWidth = 2;
-        
-        // 옵션 3: 두꺼운 테두리 (3px)
-        // ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        // ctx.lineWidth = 3;
-        
-        // 옵션 4: 매우 두꺼운 테두리 (4px)
-        // ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-        // ctx.lineWidth = 4;
-        
-        // 옵션 5: 이중 테두리 효과
-        // ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        // ctx.lineWidth = 4;
-        // ctx.beginPath();
-        // ctx.arc(128, 128, 47, 0, Math.PI * 2);
-        // ctx.stroke();
-        // 
-        // ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-        // ctx.lineWidth = 1;
-        // ctx.beginPath();
-        // ctx.arc(128, 128, 45, 0, Math.PI * 2);
-        // ctx.stroke();
-        
-        // 테두리 그리기
-        ctx.beginPath();
-        ctx.arc(128, 128, 45, 0, Math.PI * 1);
-        ctx.stroke();
-        
-        // 텍스처 업데이트
-        texture.needsUpdate = true;
-    };
-    
-    img.onerror = () => {
-        console.warn(`Failed to load icon: ${url}`);
-        this.drawTextIcon(ctx, '!');
-        texture.needsUpdate = true;
-    };
-    
-    img.src = url;
-}
-
-// 또는 설정으로 관리하는 방법:
-loadAndDrawIconWithConfig(canvas, ctx, url, texture, config) {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    
-    // 설정값
-    const borderWidth = config.ui?.borderWidth || 2;  // 기본 2px
-    const borderColor = config.ui?.borderColor || 'rgba(255, 255, 255, 0.3)';
-    const borderVisible = config.ui?.borderVisible !== false;  // 기본 true
-    
-    img.onload = () => {
-        const iconSize = 80;
-        const x = (256 - iconSize) / 2;
-        const y = (256 - iconSize) / 2;
-        const radius = 45;
-        
-        ctx.save();
-        
-        // 클리핑
-        ctx.beginPath();
-        ctx.arc(128, 128, radius, 0, Math.PI * 2);
-        ctx.clip();
-        
-        // 배경
-        ctx.fillStyle = '#1a1a1a';
-        ctx.fillRect(x - 5, y - 5, iconSize + 10, iconSize + 10);
-        
-        // 아이콘
-        ctx.drawImage(img, x, y, iconSize, iconSize);
-        
-        ctx.restore();
-        
-        // 테두리 (옵션)
-        if (borderVisible) {
-            ctx.strokeStyle = borderColor;
-            ctx.lineWidth = borderWidth;
+        img.onload = () => {
+            const iconSize = 60;  // 아이콘 크기 줄임
+            const x = (256 - iconSize) / 2;
+            const y = (256 - iconSize) / 2;
+            
+            // 아이콘 그리기 (배경 없이)
+            ctx.save();
+            
+            // 원형 마스크 (선택사항)
+            // ctx.beginPath();
+            // ctx.arc(128, 128, 40, 0, Math.PI * 2);
+            // ctx.clip();
+            
+            // SVG 아이콘 그리기
+            ctx.drawImage(img, x, y, iconSize, iconSize);
+            
+            ctx.restore();
+            
+            // 얇은 테두리 (선택사항 - 필요없으면 주석처리)
+            /*
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.arc(128, 128, radius, 0, Math.PI * 2);
+            ctx.arc(128, 128, 40, 0, Math.PI * 2);
             ctx.stroke();
-        }
+            */
+            
+            // 텍스처 업데이트
+            texture.needsUpdate = true;
+        };
         
-        texture.needsUpdate = true;
-    };
-    
-    img.src = url;
-}
+        img.onerror = () => {
+            console.warn(`Failed to load icon: ${url}`);
+            this.drawTextIcon(ctx, '!');
+            texture.needsUpdate = true;
+        };
+        
+        img.src = url;
+    }
     
     /**
      * Draw text icon
      */
     drawTextIcon(ctx, text) {
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 16px Arial';
+        ctx.fillStyle = 'white';
+        ctx.font = 'bold 80px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(text, 128, 128);
