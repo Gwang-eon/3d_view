@@ -145,81 +145,139 @@ export class HotspotSpriteManager {
         console.log(`📍 Created hotspot: ${config.info?.title || id}`);
     }
     
-    /**
-     * Create sprite texture using Canvas
-     */
-    createSpriteTexture(config) {
-        const key = `${config.ui?.icon}_${config.ui?.color}_${config.data?.status}`;
-        
-        // Check cache
-        if (this.textureCache.has(key)) {
-            return this.textureCache.get(key);
-        }
-        
-        // Create canvas
-        const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 256;
-        const ctx = canvas.getContext('2d');
-        
-        // Enable smoothing
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        
-        // Clear canvas
-        ctx.clearRect(0, 0, 256, 256);
-        
-        // Determine colors based on status
-        let bgColor = config.ui?.color || '#007bff';
-        let pulseColor = bgColor;
-        
-        if (config.data?.status === 'warning') {
-            bgColor = '#ff6b35';
-            pulseColor = '#ff8c5a';
-        } else if (config.data?.status === 'danger') {
-            bgColor = '#ff1744';
-            pulseColor = '#ff4569';
-        }
-        
-        // Draw outer glow
-        const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 100);
-        gradient.addColorStop(0, bgColor + '40');
-        gradient.addColorStop(1, 'transparent');
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 256, 256);
-        
-        // Draw main circle
-        ctx.fillStyle = bgColor;
-        ctx.beginPath();
-        ctx.arc(128, 128, 80, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Draw inner circle (lighter)
-        const innerGradient = ctx.createRadialGradient(128, 108, 0, 128, 128, 70);
-        innerGradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
-        innerGradient.addColorStop(1, 'transparent');
-        ctx.fillStyle = innerGradient;
-        ctx.beginPath();
-        ctx.arc(128, 128, 70, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Draw icon
-        ctx.fillStyle = 'white';
-        ctx.font = 'bold 80px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(config.ui?.icon || '!', 128, 128);
-        
-        // Create texture
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.needsUpdate = true;
-        
-        // Cache texture
-        this.textureCache.set(key, texture);
-        
-        return texture;
+/**
+ * Create sprite texture with SVG/image support
+ */
+createSpriteTexture(config) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    
+    // Anti-aliasing
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, 256, 256);
+    
+    // Determine colors based on status
+    let bgColor = config.ui?.color || '#007bff';
+    
+    if (config.data?.status === 'warning') {
+        bgColor = '#ff6b35';
+    } else if (config.data?.status === 'danger') {
+        bgColor = '#ff1744';
     }
     
+    // Draw outer glow
+    const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 100);
+    gradient.addColorStop(0, bgColor + '40');
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 256, 256);
+    
+    // Draw main circle
+    ctx.fillStyle = bgColor;
+    ctx.beginPath();
+    ctx.arc(128, 128, 80, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw inner circle (lighter)
+    const innerGradient = ctx.createRadialGradient(128, 108, 0, 128, 128, 70);
+    innerGradient.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
+    innerGradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = innerGradient;
+    ctx.beginPath();
+    ctx.arc(128, 128, 70, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Create texture first (will be updated if image loads)
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    
+    // Check if icon is URL
+    const iconValue = config.ui?.icon || '!';
+    if (this.isImageUrl(iconValue)) {
+        // Asynchronously load and draw image
+        this.loadAndDrawIcon(canvas, ctx, iconValue, texture);
+    } else {
+        // Draw text icon immediately
+        this.drawTextIcon(ctx, iconValue);
+        texture.needsUpdate = true;
+    }
+    
+    return texture;
+}
+
+/**
+ * Check if string is image URL
+ */
+isImageUrl(str) {
+    return str.startsWith('http') || 
+           str.startsWith('/') || 
+           str.includes('.svg') || 
+           str.includes('.png') || 
+           str.includes('.jpg');
+}
+
+/**
+ * Load and draw icon image
+ */
+loadAndDrawIcon(canvas, ctx, url, texture) {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => {
+        // Clear icon area
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath();
+        ctx.arc(128, 128, 60, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        
+        // Draw image
+        const iconSize = 80;
+        const x = (256 - iconSize) / 2;
+        const y = (256 - iconSize) / 2;
+        
+        // White background for icon
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(128, 128, 60, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Draw icon with multiply blend
+        ctx.save();
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.drawImage(img, x, y, iconSize, iconSize);
+        ctx.restore();
+        
+        // Update texture
+        texture.needsUpdate = true;
+    };
+    
+    img.onerror = () => {
+        // Fallback to text
+        console.warn(`Failed to load icon: ${url}`);
+        this.drawTextIcon(ctx, '!');
+        texture.needsUpdate = true;
+    };
+    
+    img.src = url;
+}
+
+/**
+ * Draw text icon
+ */
+drawTextIcon(ctx, text) {
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 80px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 128, 128);
+}
     /**
      * Update hotspot positions
      */
