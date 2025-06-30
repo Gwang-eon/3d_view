@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>옹벽 3D 뷰어</title>
     <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/icons.css">
     <link rel="stylesheet" href="css/hotspot.css">
     <link rel="stylesheet" href="css/hotspot-sprite.css">
     <link rel="stylesheet" href="css/sensor-chart.css">
@@ -14,7 +15,7 @@
     <header class="header">
         <div class="header-left">
             <button id="home-btn" class="header-btn" title="홈으로">
-                <span>🏠</span>
+                <span data-icon="home"></span>
             </button>
             <h1>옹벽 3D 뷰어</h1>
         </div>
@@ -37,13 +38,13 @@
         
         <div class="header-right">
             <button id="hotspot-toggle-btn" class="header-btn" title="핫스팟 토글">
-                <span>📍</span>
+                <span data-icon="map-pin"></span>
             </button>
             <button id="chart-toggle-btn" class="header-btn" title="센서 차트">
-                <span>📊</span>
+                <span data-icon="bar-chart-3"></span>
             </button>
             <button id="fullscreen-btn" class="header-btn" title="전체화면">
-                <span>⛶</span>
+                <span data-icon="maximize-2"></span>
             </button>
         </div>
     </header>
@@ -55,23 +56,23 @@
         <!-- 조작법 플로팅 박스 (좌측 하단) -->
         <div id="help-floating" class="floating-box help-box">
             <button class="floating-toggle" title="조작법">
-                <span>?</span>
+                <span data-icon="help-circle"></span>
             </button>
             <div class="floating-content">
                 <h3>조작법</h3>
                 <ul class="help-list">
-                    <li><span class="help-icon">🖱️</span> 좌클릭 + 드래그: 회전</li>
-                    <li><span class="help-icon">🖱️</span> 우클릭 + 드래그: 이동</li>
-                    <li><span class="help-icon">🖱️</span> 스크롤: 확대/축소</li>
-                    <li><span class="help-icon">⌨️</span> 1-3: 모델 선택</li>
-                    <li><span class="help-icon">⌨️</span> R: 카메라 리셋</li>
-                    <li><span class="help-icon">⌨️</span> F: 전체화면</li>
-                    <li><span class="help-icon">⌨️</span> G: 그리드 토글</li>
-                    <li><span class="help-icon">⌨️</span> H: 핫스팟 토글</li>
-                    <li><span class="help-icon">⌨️</span> C: 센서 차트</li>
-                    <li><span class="help-icon">⌨️</span> V: 동영상 보기</li>
-                    <li><span class="help-icon">⌨️</span> Space: 애니메이션 재생</li>
-                    <li><span class="help-icon">⌨️</span> Esc: 닫기</li>
+                    <li><span class="help-icon" data-icon="mouse-pointer"></span> 좌클릭 + 드래그: 회전</li>
+                    <li><span class="help-icon" data-icon="mouse-pointer"></span> 우클릭 + 드래그: 이동</li>
+                    <li><span class="help-icon" data-icon="mouse-pointer"></span> 스크롤: 확대/축소</li>
+                    <li><span class="help-icon" data-icon="keyboard"></span> 1-3: 모델 선택</li>
+                    <li><span class="help-icon" data-icon="keyboard"></span> R: 카메라 리셋</li>
+                    <li><span class="help-icon" data-icon="keyboard"></span> F: 전체화면</li>
+                    <li><span class="help-icon" data-icon="keyboard"></span> G: 그리드 토글</li>
+                    <li><span class="help-icon" data-icon="keyboard"></span> H: 핫스팟 토글</li>
+                    <li><span class="help-icon" data-icon="keyboard"></span> C: 센서 차트</li>
+                    <li><span class="help-icon" data-icon="keyboard"></span> V: 동영상 보기</li>
+                    <li><span class="help-icon" data-icon="keyboard"></span> Space: 애니메이션 재생</li>
+                    <li><span class="help-icon" data-icon="keyboard"></span> Esc: 닫기</li>
                 </ul>
             </div>
         </div>
@@ -101,14 +102,14 @@
                 
                 <!-- 동영상 버튼 추가 -->
                 <button class="video-btn" id="video-btn" title="동영상 보기">
-                    <span>🎬</span> 동영상 보기
+                    <span data-icon="video" data-icon-size="16"></span> 동영상 보기
                 </button>
 
                 <!-- 속도 조절 (접기/펼치기) -->
                 <div class="speed-control-section">
                     <button class="speed-toggle">
                         <span>속도 조절</span>
-                        <span class="toggle-icon">▼</span>
+                        <span class="toggle-icon" data-icon="chevron-down"></span>
                     </button>
                     <div class="speed-controls" style="display: none;">
                         <div class="speed-control-item">
@@ -147,7 +148,9 @@
         <div id="hotspot-floating" class="floating-box hotspot-box" style="display: none;">
             <div class="floating-header">
                 <h3>핫스팟 설정</h3>
-                <button class="floating-close">×</button>
+                <button class="floating-close">
+                    <span data-icon="x"></span>
+                </button>
             </div>
             <div class="floating-content">
                 <button id="toggle-hotspots" class="hotspot-btn">
@@ -181,7 +184,7 @@
     <!-- 애니메이션 타임라인 (하단) -->
     <div id="animation-timeline" class="timeline-container" style="display: none;">
         <button id="play-btn" class="timeline-btn" title="재생">
-            <span>▶</span>
+            <span data-icon="play"></span>
         </button>
         
         <div class="timeline-track">
@@ -214,7 +217,9 @@
         <div class="video-modal-content">
             <div class="video-modal-header">
                 <h3 id="video-title">옹벽 시공 영상</h3>
-                <button class="video-modal-close" id="video-close">&times;</button>
+                <button class="video-modal-close" id="video-close">
+                    <span data-icon="x"></span>
+                </button>
             </div>
             <div class="video-modal-body">
                 <video id="video-player" controls preload="metadata">
@@ -233,6 +238,32 @@
 
     <!-- Chart.js 로컬 파일 사용 -->
     <script src="js/libs/chart.umd.min.js"></script>
+
+    <!-- 아이콘 로더 초기화 -->
+    <script type="module">
+        import { iconLoader } from './js/icon-loader.js';
+        
+        // 필요한 아이콘 프리로드
+        await iconLoader.preloadIcons([
+            'home', 'map-pin', 'bar-chart-3', 'maximize-2',
+            'help-circle', 'play', 'pause', 'video', 'x',
+            'chevron-down', 'chevron-up', 'refresh-ccw',
+            'mouse-pointer', 'keyboard', 'eye', 'eye-off',
+            'alert-triangle', 'info', 'grid-3x3'
+        ]);
+        
+        // 전역 노출
+        window.iconLoader = iconLoader;
+        
+        // DOM 로드 후 아이콘 교체
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', async () => {
+                await iconLoader.replaceAllIcons();
+            });
+        } else {
+            await iconLoader.replaceAllIcons();
+        }
+    </script>
 
     <!-- 애플리케이션 스크립트 -->
     <script type="module" src="js/app.js"></script>

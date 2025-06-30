@@ -1,0 +1,321 @@
+/* css/icons.css - 아이콘 시스템 스타일 */
+
+/* ===== 기본 아이콘 스타일 ===== */
+.lucide-icon {
+    display: inline-block;
+    vertical-align: middle;
+    stroke-width: 2;
+    stroke: currentColor;
+    fill: none;
+    transition: all 0.3s ease;
+}
+
+/* 기본 아이콘 색상 (currentColor 폴백) */
+.lucide-icon:not([style*="color"]) {
+    stroke: #ffffff;
+}
+
+/* 아이콘 래퍼 */
+.icon-wrapper {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ===== 아이콘 크기 시스템 ===== */
+.icon-xs { width: 16px; height: 16px; }
+.icon-sm { width: 20px; height: 20px; }
+.icon-md { width: 24px; height: 24px; } /* 기본값 */
+.icon-lg { width: 32px; height: 32px; }
+.icon-xl { width: 40px; height: 40px; }
+
+/* ===== 버튼별 아이콘 색상 명시 ===== */
+
+/* 동영상 버튼 아이콘 */
+.video-btn .lucide-icon {
+    stroke: #ffffff !important;
+    fill: none;
+}
+
+/* 플로팅 토글 버튼 (도움말, 재생 등) */
+.floating-toggle .lucide-icon,
+.timeline-btn .lucide-icon {
+    stroke: #ffffff !important;
+    fill: none;
+}
+
+/* 헤더 버튼 아이콘 */
+.header-btn .lucide-icon {
+    stroke: #ffffff !important;
+}
+
+/* 센서 모드 아이콘 */
+.sensor-icon {
+    filter: none !important;
+    color: #ffffff !important;
+}
+
+/* 토글 아이콘 */
+.toggle-icon .lucide-icon {
+    stroke: rgba(255, 255, 255, 0.8) !important;
+}
+
+.header-btn:hover .lucide-icon {
+    transform: scale(1.1);
+}
+
+.header-btn:active .lucide-icon {
+    transform: scale(0.95);
+}
+
+/* ===== 모델 버튼 아이콘 스타일 ===== */
+.model-btn-top .lucide-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+}
+
+.model-btn-top.active .lucide-icon {
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
+}
+
+/* ===== 타임라인 버튼 아이콘 스타일 ===== */
+.timeline-btn .lucide-icon {
+    width: 24px;
+    height: 24px;
+    stroke-width: 2.5;
+}
+
+/* ===== 플로팅 박스 아이콘 스타일 ===== */
+.floating-toggle .lucide-icon {
+    width: 28px;
+    height: 28px;
+    stroke-width: 2.5;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.floating-close .lucide-icon {
+    width: 20px;
+    height: 20px;
+    stroke-width: 3;
+    transition: transform 0.3s ease;
+}
+
+.floating-close:hover .lucide-icon {
+    transform: rotate(90deg);
+}
+
+/* ===== 도움말 리스트 아이콘 스타일 ===== */
+.help-icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 12px;
+    opacity: 0.8;
+}
+
+.help-list .lucide-icon {
+    width: 18px;
+    height: 18px;
+    stroke-width: 2;
+}
+
+/* ===== 특정 UI 컨텍스트 아이콘 색상 ===== */
+
+/* 동영상 버튼 내부 아이콘 */
+.video-btn [data-icon="video"] svg,
+.video-btn .lucide-icon {
+    stroke: #ffffff !important;
+    opacity: 1 !important;
+}
+
+/* 센서 모드 토글 내부 이모지/아이콘 */
+.sensor-icon,
+.checkbox-label .sensor-icon {
+    filter: none !important;
+    opacity: 1 !important;
+}
+
+/* 타임라인 재생 버튼 */
+#play-btn svg,
+#play-btn .lucide-icon {
+    stroke: #ffffff !important;
+    fill: none !important;
+}
+
+/* 플로팅 박스 토글 버튼 */
+.floating-toggle svg,
+.floating-toggle .lucide-icon {
+    stroke: #ffffff !important;
+    fill: none !important;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+/* 도움말 리스트 아이콘 */
+.help-list [data-icon] svg,
+.help-icon svg {
+    stroke: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* 활성 상태 버튼 아이콘 */
+.model-btn-top.active .lucide-icon,
+.model-btn-top.active svg {
+    stroke: #ffffff !important;
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.5));
+}
+
+/* 호버 상태 */
+button:hover .lucide-icon,
+button:hover svg {
+    stroke: #ffffff !important;
+    opacity: 1 !important;
+    filter: brightness(1.2);
+}
+
+/* 에러/경고 아이콘 특별 처리 */
+[data-icon="alert-triangle"] svg {
+    stroke: #ff6b35 !important;
+}
+
+[data-icon="alert-circle"] svg {
+    stroke: #ff1744 !important;
+}
+
+[data-icon="info"] svg {
+    stroke: #00b4d8 !important;
+}
+
+[data-icon="check-circle"] svg {
+    stroke: #00ff88 !important;
+}
+
+/* 속도 조절 토글 아이콘 */
+.speed-toggle .toggle-icon svg {
+    stroke: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* 카메라 박스 내부 아이콘들 */
+.camera-box button:not(.video-btn) svg {
+    stroke: currentColor !important;
+}
+
+/* 비디오 모달 닫기 버튼 */
+.video-modal-close svg {
+    stroke: rgba(255, 255, 255, 0.8) !important;
+}
+
+.video-modal-close:hover svg {
+    stroke: #ffffff !important;
+}
+
+/* ===== 아이콘 애니메이션 ===== */
+@keyframes icon-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.icon-spin {
+    animation: icon-spin 2s linear infinite;
+}
+
+@keyframes icon-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.icon-pulse {
+    animation: icon-pulse 2s ease-in-out infinite;
+}
+
+/* ===== 반응형 아이콘 크기 ===== */
+@media (max-width: 768px) {
+    .header-btn .lucide-icon {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .model-btn-top .lucide-icon {
+        width: 18px;
+        height: 18px;
+    }
+    
+    .floating-toggle .lucide-icon {
+        width: 24px;
+        height: 24px;
+    }
+}
+
+/* ===== 아이콘 호버 효과 ===== */
+button:hover .lucide-icon,
+a:hover .lucide-icon {
+    filter: brightness(1.2);
+}
+
+/* 특정 버튼 호버 효과 */
+.view-btn:hover .lucide-icon,
+.hotspot-btn:hover .lucide-icon {
+    color: var(--accent);
+}
+
+/* ===== 폴백 스타일 ===== */
+.icon-fallback {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--text-secondary);
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+}
+
+/* ===== 접근성 개선 ===== */
+.lucide-icon[role="img"] {
+    /* 스크린 리더를 위한 스타일 */
+}
+
+/* 포커스 표시 */
+button:focus .lucide-icon,
+a:focus .lucide-icon {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* ===== 데이터 속성 아이콘 기본 스타일 ===== */
+[data-icon] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+[data-icon]:empty::before {
+    content: '⏳';
+    font-size: 16px;
+    opacity: 0.5;
+}
+
+/* SVG가 로드된 후 기본 색상 보장 */
+[data-icon] svg {
+    stroke: #ffffff !important;
+    fill: none !important;
+}
+
+/* ===== 다크모드 대응 ===== */
+@media (prefers-color-scheme: light) {
+    .lucide-icon {
+        stroke: #333;
+    }
+    
+    .header-btn .lucide-icon,
+    .model-btn-top .lucide-icon {
+        stroke: #333 !important;
+    }
+    
+    .floating-toggle .lucide-icon,
+    .timeline-btn .lucide-icon,
+    .video-btn .lucide-icon {
+        stroke: #ffffff !important;
+    }
+}
