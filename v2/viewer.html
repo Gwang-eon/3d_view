@@ -3,156 +3,276 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>옹벽 3D 뷰어 v2</title>
-    <link rel="stylesheet" href="assets/styles/main.css">
+    <title>옹벽 3D 뷰어</title>
+    <!-- Tailwind CSS (오프라인) -->
+    <link rel="stylesheet" href="assets/styles/tailwind.css">
 </head>
-<body>
-    <!-- 메인 앱 컨테이너 -->
-    <div id="app" class="app-container">
+<body class="bg-wall-primary text-wall-primary overflow-hidden h-screen">
+    <!-- 헤더 -->
+    <header class="fixed top-0 left-0 right-0 h-[70px] bg-black/80 backdrop-blur-md flex items-center justify-between px-6 z-[1000] border-b border-white/10">
+        <div class="flex items-center gap-4">
+            <button id="home-btn" class="bg-transparent border border-white/10 text-wall-primary w-10 h-10 rounded-lg cursor-pointer flex items-center justify-content center transition-all duration-300 text-lg hover:bg-white/10 hover:border-blue-600" title="홈으로">
+                <span>🏠</span>
+            </button>
+            <h1 class="text-xl font-medium">옹벽 3D 뷰어</h1>
+        </div>
         
-        <!-- 헤더 -->
-        <header class="header">
-            <h1 class="title">옹벽 3D 뷰어 v2</h1>
-            <div class="model-selector">
-                <!-- 모델 버튼들이 동적으로 생성됨 -->
+        <!-- 모델 선택 버튼 (중앙) -->
+        <div class="flex gap-2 lg:gap-1">
+            <button class="flex items-center gap-2 px-4 py-2 bg-wall-tertiary border border-white/10 rounded-lg cursor-pointer transition-all duration-300 text-sm min-w-[120px] lg:min-w-[100px] lg:px-2 lg:py-2 lg:text-sm hover:bg-white/10 hover:-translate-y-1 hover:shadow-wall active wall-model-btn" data-model="0">
+                <img class="w-5 h-5" src="assets/icons/retaining_wall.svg" alt="블록 옹벽">
+                <span class="whitespace-nowrap lg:hidden">블록 옹벽</span>
+            </button>
+            <button class="flex items-center gap-2 px-4 py-2 bg-wall-tertiary border border-white/10 rounded-lg cursor-pointer transition-all duration-300 text-sm min-w-[120px] lg:min-w-[100px] lg:px-2 lg:py-2 lg:text-sm hover:bg-white/10 hover:-translate-y-1 hover:shadow-wall wall-model-btn" data-model="1">
+                <img class="w-5 h-5" src="assets/icons/retaining_wall.svg" alt="캔틸레버 옹벽">
+                <span class="whitespace-nowrap lg:hidden">캔틸레버 옹벽</span>
+            </button>
+            <button class="flex items-center gap-2 px-4 py-2 bg-wall-tertiary border border-white/10 rounded-lg cursor-pointer transition-all duration-300 text-sm min-w-[120px] lg:min-w-[100px] lg:px-2 lg:py-2 lg:text-sm hover:bg-white/10 hover:-translate-y-1 hover:shadow-wall wall-model-btn" data-model="2">
+                <img class="w-5 h-5" src="assets/icons/retaining_wall.svg" alt="MSE 옹벽">
+                <span class="whitespace-nowrap lg:hidden">MSE 옹벽</span>
+            </button>
+        </div>
+        
+        <div class="flex gap-2">
+            <button id="hotspot-toggle-btn" class="bg-transparent border border-white/10 text-wall-primary w-10 h-10 rounded-lg cursor-pointer flex items-center justify-center transition-all duration-300 text-lg hover:bg-white/10 hover:border-blue-600" title="핫스팟 토글">
+                <span>📍</span>
+            </button>
+            <button id="chart-toggle-btn" class="bg-transparent border border-white/10 text-wall-primary w-10 h-10 rounded-lg cursor-pointer flex items-center justify-center transition-all duration-300 text-lg hover:bg-white/10 hover:border-blue-600" title="센서 차트">
+                <span>📊</span>
+            </button>
+            <button id="fullscreen-btn" class="bg-transparent border border-white/10 text-wall-primary w-10 h-10 rounded-lg cursor-pointer flex items-center justify-center transition-all duration-300 text-lg hover:bg-white/10 hover:border-blue-600" title="전체화면">
+                <span>⛶</span>
+            </button>
+        </div>
+    </header>
+    
+    <!-- 메인 뷰어 -->
+    <main class="h-screen pt-[70px] relative overflow-hidden">
+        <div id="viewer" class="w-full h-full bg-wall-primary absolute top-0 left-0"></div>
+        
+        <!-- 조작법 플로팅 박스 (좌측 하단) -->
+        <div id="help-floating" class="fixed bottom-6 left-6 w-[240px] md:w-full md:left-6 md:right-6 bg-gray-900/90 backdrop-blur-md rounded-lg border border-white/10 shadow-wall z-50">
+            <button class="w-full flex items-center justify-center h-12 bg-transparent border-none text-wall-primary text-xl cursor-pointer transition-all duration-300 hover:bg-white/10 rounded-t-lg" title="조작법">
+                <span>?</span>
+            </button>
+            <div class="p-4 hidden" id="help-content">
+                <h3 class="text-lg font-medium mb-4">조작법</h3>
+                <ul class="space-y-2 text-sm">
+                    <li class="flex items-center"><span class="w-5 h-5 mr-3 opacity-80">🖱️</span> 좌클릭 + 드래그: 회전</li>
+                    <li class="flex items-center"><span class="w-5 h-5 mr-3 opacity-80">🖱️</span> 우클릭 + 드래그: 이동</li>
+                    <li class="flex items-center"><span class="w-5 h-5 mr-3 opacity-80">🖱️</span> 스크롤: 확대/축소</li>
+                    <li class="flex items-center"><span class="w-5 h-5 mr-3 opacity-80">⌨️</span> 1-3: 모델 선택</li>
+                    <li class="flex items-center"><span class="w-5 h-5 mr-3 opacity-80">⌨️</span> R: 카메라 리셋</li>
+                    <li class="flex items-center"><span class="w-5 h-5 mr-3 opacity-80">⌨️</span> F: 전체화면</li>
+                    <li class="flex items-center"><span class="w-5 h-5 mr-3 opacity-80">⌨️</span> G: 그리드 토글</li>
+                    <li class="flex items-center"><span class="w-5 h-5 mr-3 opacity-80">⌨️</span> H: 핫스팟 토글</li>
+                    <li class="flex items-center"><span class="w-5 h-5 mr-3 opacity-80">⌨️</span> C: 센서 차트</li>
+                    <li class="flex items-center"><span class="w-5 h-5 mr-3 opacity-80">⌨️</span> V: 동영상 보기</li>
+                    <li class="flex items-center"><span class="w-5 h-5 mr-3 opacity-80">⌨️</span> Space: 애니메이션 재생</li>
+                    <li class="flex items-center"><span class="w-5 h-5 mr-3 opacity-80">⌨️</span> Esc: 닫기</li>
+                </ul>
             </div>
-        </header>
+        </div>
         
-        <!-- 메인 뷰어 영역 -->
-        <main class="main-content">
-            <div id="viewer" class="viewer-container"></div>
-            
-            <!-- 컨트롤 패널 -->
-            <div id="controls" class="controls-panel">
-                <div class="control-group">
-                    <label>카메라</label>
-                    <select id="camera-select">
-                        <option value="default">기본 카메라</option>
+        <!-- 카메라 컨트롤 플로팅 박스 (우측 상단) -->
+        <div id="camera-floating" class="fixed top-24 right-6 w-[240px] lg:w-[280px] md:w-full md:left-6 md:right-6 md:top-auto md:bottom-24 bg-gray-900/90 backdrop-blur-md rounded-lg border border-white/10 shadow-wall z-50">
+            <div class="flex items-center justify-between p-4 border-b border-white/10">
+                <h3 class="text-lg font-medium">카메라 컨트롤</h3>
+            </div>
+            <div class="p-4">
+                <!-- 프리셋 뷰 버튼 -->
+                <div class="grid grid-cols-2 gap-2 mb-4">
+                    <button class="px-3 py-2 bg-wall-tertiary border border-white/10 rounded-lg text-sm transition-all duration-300 hover:bg-white/10 cursor-pointer view-btn" data-view="front" title="좌측">좌측면</button>
+                    <button class="px-3 py-2 bg-wall-tertiary border border-white/10 rounded-lg text-sm transition-all duration-300 hover:bg-white/10 cursor-pointer view-btn" data-view="back" title="우측">우측면</button>
+                    <button class="px-3 py-2 bg-wall-tertiary border border-white/10 rounded-lg text-sm transition-all duration-300 hover:bg-white/10 cursor-pointer view-btn" data-view="top" title="상단">상단뷰</button>
+                    <button class="px-3 py-2 bg-wall-tertiary border border-white/10 rounded-lg text-sm transition-all duration-300 hover:bg-white/10 cursor-pointer view-btn" data-view="reset" title="리셋">리셋</button>
+                </div>
+
+                <!-- 카메라 선택 -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">카메라 선택</label>
+                    <select id="camera-select" class="w-full px-3 py-2 bg-wall-tertiary border border-white/10 rounded-lg text-sm cursor-pointer focus:outline-none focus:border-blue-600">
+                        <option value="perspective">원근 카메라</option>
+                        <option value="orthographic">직교 카메라</option>
                     </select>
                 </div>
-                
-                <div class="control-group">
-                    <label>뷰 모드</label>
-                    <div class="view-buttons">
-                        <button id="view-front" class="view-btn">정면</button>
-                        <button id="view-side" class="view-btn">측면</button>
-                        <button id="view-top" class="view-btn">상단</button>
-                        <button id="view-iso" class="view-btn">아이소</button>
-                    </div>
+
+                <!-- 그리드 및 축 표시 -->
+                <div class="space-y-3">
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <span class="text-sm">그리드 표시</span>
+                        <input type="checkbox" id="grid-toggle" class="w-4 h-4 bg-wall-tertiary border border-white/10 rounded focus:outline-none">
+                    </label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <span class="text-sm">좌표축 표시</span>
+                        <input type="checkbox" id="axes-toggle" class="w-4 h-4 bg-wall-tertiary border border-white/10 rounded focus:outline-none">
+                    </label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <span class="text-sm">와이어프레임</span>
+                        <input type="checkbox" id="wireframe-toggle" class="w-4 h-4 bg-wall-tertiary border border-white/10 rounded focus:outline-none">
+                    </label>
                 </div>
-                
-                <div class="control-group">
-                    <label>핫스팟</label>
-                    <div class="hotspot-controls">
-                        <button id="toggle-hotspots" class="control-btn">핫스팟 토글</button>
-                        <select id="hotspot-filter">
-                            <option value="all">모든 타입</option>
-                            <option value="normal">정상</option>
-                            <option value="warning">경고</option>
-                            <option value="danger">위험</option>
-                        </select>
-                    </div>
-                </div>
-                
-                <div class="control-group">
-                    <label>기타</label>
-                    <div class="other-controls">
-                        <button id="reset-camera" class="control-btn">카메라 리셋</button>
-                        <button id="toggle-grid" class="control-btn">그리드 토글</button>
-                    </div>
-                </div>
+
+                <!-- 동영상 버튼 -->
+                <button id="video-btn" class="w-full mt-4 px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 border-none text-white rounded-lg cursor-pointer transition-all duration-300 text-sm flex items-center justify-center gap-2 hover:from-red-600 hover:to-red-700 hover:-translate-y-1 hover:shadow-red">
+                    <span>📹</span>
+                    <span>동영상 보기</span>
+                </button>
             </div>
-        </main>
+        </div>
         
-        <!-- 애니메이션 타임라인 -->
-        <div id="timeline" class="timeline-container" style="display: none;">
-            <button id="play-btn" class="timeline-btn">
-                <span class="play-icon">▶</span>
+        <!-- 핫스팟 정보 박스 (동적 생성) -->
+        <div id="hotspot-floating" class="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-lg max-h-[90vh] bg-gray-900/90 backdrop-blur-md rounded-xl border border-white/10 shadow-2xl z-[2000] hidden overflow-hidden">
+            <!-- 핫스팟 내용은 JavaScript로 동적 생성 -->
+        </div>
+    </main>
+
+    <!-- 타임라인 (애니메이션이 있을 때 표시) -->
+    <div id="timeline" class="fixed bottom-0 left-0 right-0 h-[60px] bg-black/80 backdrop-blur-md border-t border-white/10 z-[1000] hidden">
+        <div class="flex items-center h-full px-6 gap-4">
+            <!-- 재생/일시정지 버튼 -->
+            <button id="play-btn" class="w-10 h-10 bg-wall-accent rounded-lg flex items-center justify-center cursor-pointer transition-all duration-300 hover:bg-blue-700">
+                <span class="text-white text-lg">▶️</span>
             </button>
             
-            <div class="timeline-track">
-                <input type="range" id="timeline-slider" class="timeline-slider" 
-                       min="0" max="100" value="0">
-                <div class="timeline-progress"></div>
+            <!-- 타임라인 슬라이더 -->
+            <div class="flex-1 flex items-center gap-4">
+                <span id="current-time" class="text-sm text-wall-secondary min-w-[40px]">00:00</span>
+                <div class="flex-1 relative">
+                    <input type="range" id="timeline-slider" class="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer" min="0" max="100" value="0">
+                </div>
+                <span id="total-time" class="text-sm text-wall-secondary min-w-[40px]">00:00</span>
             </div>
             
-            <div class="timeline-time">
-                <span id="current-time">0:00</span> / 
-                <span id="total-time">0:00</span>
-            </div>
-            
-            <div class="timeline-options">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="sensor-mode" checked>
-                    <span>센서 모드 (균열까지만)</span>
-                </label>
-            </div>
-        </div>
-        
-        <!-- 로딩 화면 -->
-        <div id="loading" class="loading-overlay" style="display: none;">
-            <div class="loading-content">
-                <div class="loading-spinner"></div>
-                <p class="loading-text">모델 로딩 중...</p>
-            </div>
-        </div>
-        
-        <!-- 에러 메시지 -->
-        <div id="error" class="error-overlay" style="display: none;">
-            <div class="error-content">
-                <h3>오류 발생</h3>
-                <p id="error-message">알 수 없는 오류가 발생했습니다.</p>
-                <button id="error-close" class="error-btn">닫기</button>
-            </div>
-        </div>
-        
-        <!-- 핫스팟 정보 패널 -->
-        <div id="hotspot-info" class="hotspot-info-panel" style="display: none;">
-            <div class="hotspot-info-header">
-                <h4 id="hotspot-title">센서 정보</h4>
-                <button id="hotspot-close" class="close-btn">×</button>
-            </div>
-            <div class="hotspot-info-body">
-                <!-- 센서 정보가 동적으로 표시됨 -->
+            <!-- 속도 조절 -->
+            <div class="flex items-center gap-2">
+                <label class="text-sm text-wall-secondary">속도:</label>
+                <select id="speed-select" class="px-2 py-1 bg-wall-tertiary border border-white/10 rounded text-sm cursor-pointer focus:outline-none">
+                    <option value="0.5">0.5x</option>
+                    <option value="1" selected>1x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="2">2x</option>
+                </select>
             </div>
         </div>
     </div>
-    
-    <!-- Three.js 라이브러리 -->
-    <script src="../js/three/three.min.js"></script>
-    <script src="../js/three/GLTFLoader.js"></script>
-    <script src="../js/three/OrbitControls.js"></script>
-    
-    <!-- 메인 애플리케이션 -->
-    <script type="module" src="src/WallViewer.js"></script>
-    
-    <!-- 앱 초기화 -->
+
+    <!-- 로딩 화면 -->
+    <div id="loading" class="fixed inset-0 bg-black/90 flex flex-col items-center justify-center z-[2000]">
+        <div class="w-16 h-16 border-4 border-gray-700 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+        <p class="text-wall-secondary text-lg">모델을 로드하는 중...</p>
+        <div id="loading-progress" class="w-64 h-2 bg-gray-700 rounded-full mt-4 overflow-hidden">
+            <div id="loading-bar" class="h-full bg-blue-600 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+        <p id="loading-text" class="text-wall-secondary text-sm mt-2">준비 중...</p>
+    </div>
+
+    <!-- 에러 화면 -->
+    <div id="error" class="fixed inset-0 bg-black/90 flex items-center justify-center z-[2000] hidden">
+        <div class="bg-wall-secondary p-8 rounded-lg text-center border border-red-600 max-w-md">
+            <h2 class="text-red-600 text-xl font-semibold mb-4">오류 발생</h2>
+            <p id="error-message" class="mb-6 text-wall-secondary">알 수 없는 오류가 발생했습니다.</p>
+            <button id="error-retry" class="bg-red-600 text-white px-6 py-2 rounded-lg cursor-pointer transition-all duration-300 hover:bg-red-700">
+                다시 시도
+            </button>
+        </div>
+    </div>
+
+    <!-- 동영상 모달 -->
+    <div id="video-modal" class="fixed inset-0 bg-black/90 z-[3000] hidden items-center justify-center opacity-0 transition-opacity duration-300">
+        <div class="bg-wall-secondary rounded-lg w-[90%] max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl border border-white/10">
+            <div class="flex items-center justify-between p-4 border-b border-white/10">
+                <h3 class="text-lg font-medium">동영상 플레이어</h3>
+                <button id="video-close" class="w-8 h-8 flex items-center justify-center text-xl cursor-pointer transition-all duration-300 hover:bg-white/10 rounded">
+                    ×
+                </button>
+            </div>
+            <div class="p-4">
+                <video id="video-player" class="w-full h-auto max-h-[70vh] bg-black" controls>
+                    <source src="../videos/" type="video/mp4">
+                    동영상을 재생할 수 없습니다.
+                </video>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript 모듈 -->
     <script type="module">
-        import { WallViewer } from './src/WallViewer.js';
+        import { WallViewerApp } from './js/app.js';
         
-        // 설정 로드 후 뷰어 시작
-        async function startApp() {
+        // 애플리케이션 시작
+        document.addEventListener('DOMContentLoaded', async () => {
+            const app = new WallViewerApp();
+            
             try {
-                const response = await fetch('./config.json');
-                const config = await response.json();
-                
-                const viewer = new WallViewer(config);
-                await viewer.init();
+                await app.init();
                 
                 // 전역 접근 (디버깅용)
-                window.wallViewer = viewer;
-                
-                console.log('✅ 옹벽 3D 뷰어 v2 시작 완료');
+                window.wallViewerApp = app;
                 
             } catch (error) {
-                console.error('❌ 앱 시작 실패:', error);
-                document.getElementById('error-message').textContent = error.message;
-                document.getElementById('error').style.display = 'flex';
+                console.error('애플리케이션 시작 실패:', error);
             }
-        }
-        
-        // DOM 로드 완료 후 앱 시작
-        document.addEventListener('DOMContentLoaded', startApp);
+        });
+
+        // 플로팅 박스 토글 기능
+        document.addEventListener('DOMContentLoaded', () => {
+            // 조작법 박스 토글
+            const helpToggle = document.querySelector('#help-floating button');
+            const helpContent = document.getElementById('help-content');
+            
+            if (helpToggle && helpContent) {
+                helpToggle.addEventListener('click', () => {
+                    helpContent.classList.toggle('hidden');
+                });
+            }
+
+            // 에러 재시도 버튼
+            const errorRetry = document.getElementById('error-retry');
+            if (errorRetry) {
+                errorRetry.addEventListener('click', () => {
+                    window.location.reload();
+                });
+            }
+
+            // 동영상 모달 제어
+            const videoBtn = document.getElementById('video-btn');
+            const videoModal = document.getElementById('video-modal');
+            const videoClose = document.getElementById('video-close');
+            const videoPlayer = document.getElementById('video-player');
+
+            if (videoBtn && videoModal) {
+                videoBtn.addEventListener('click', () => {
+                    videoModal.classList.remove('hidden');
+                    videoModal.classList.add('flex');
+                    setTimeout(() => {
+                        videoModal.classList.remove('opacity-0');
+                        videoModal.classList.add('opacity-100');
+                    }, 10);
+                });
+            }
+
+            if (videoClose && videoModal) {
+                videoClose.addEventListener('click', () => {
+                    videoModal.classList.add('opacity-0');
+                    videoModal.classList.remove('opacity-100');
+                    setTimeout(() => {
+                        videoModal.classList.add('hidden');
+                        videoModal.classList.remove('flex');
+                        if (videoPlayer) {
+                            videoPlayer.pause();
+                        }
+                    }, 300);
+                });
+            }
+
+            // ESC 키로 모달 닫기
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && videoModal && !videoModal.classList.contains('hidden')) {
+                    videoClose.click();
+                }
+            });
+        });
     </script>
 </body>
 </html>
