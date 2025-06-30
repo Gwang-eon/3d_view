@@ -848,35 +848,55 @@ export class Viewer3D {
         this.renderer.setSize(width, height);
     }
     
-    /**
-     * 애니메이션 루프
-     */
-    animate = () => {
-        requestAnimationFrame(this.animate);
-        
-        // 카메라 애니메이션 업데이트
+/**
+ * 애니메이션 루프 (최적화된 버전)
+ */
+animate = () => {
+    requestAnimationFrame(this.animate);
+    
+    let needsMatrixUpdate = false;
+    
+    // 카메라 애니메이션 업데이트
+    if (this.cameraAnimation.active) {
         this.updateCameraAnimation();
-        
-        // 컨트롤 업데이트
-        if (this.controls.enableDamping) {
-            this.controls.update();
-        }
-
-        // 모델 매트릭스 강제 업데이트
-        if (this.currentModel) {
-            this.currentModel.updateMatrixWorld(true);
-        }
-        
-        // 렌더링 전에 매트릭스 업데이트
-        this.scene.updateMatrixWorld();
-
-        // 메인 렌더링
-        this.renderer.render(this.scene, this.camera);
-        
-        // 추가 렌더링 콜백 실행 (CSS2DRenderer 등)
-        this.onRenderCallbacks.forEach(callback => callback());
+        needsMatrixUpdate = true;
     }
     
+    // 컨트롤 업데이트
+    if (this.controls.enableDamping) {
+        const controlsChanged = this.controls.update();
+        if (controlsChanged) {
+            needsMatrixUpdate = true;
+        }
+    }
+
+    // ✅ 조건부 모델 매트릭스 업데이트 (최적화)
+    if (this.currentModel) {
+        // 애니메이션 중이거나 첫 번째 프레임인 경우만 강제 업데이트
+        const hasAnimation = this.app?.animationController?.isPlaying;
+        const isFirstFrame = !this.currentModel.matrixWorldNeedsUpdate && this.frameCount < 3;
+        
+        if (hasAnimation || needsMatrixUpdate || isFirstFrame) {
+            this.currentModel.updateMatrixWorld(true);
+        }
+    }
+    
+    // 렌더링 전에 씬 매트릭스 업데이트 (필요시에만)
+    if (needsMatrixUpdate || this.scene.matrixWorldNeedsUpdate) {
+        this.scene.updateMatrixWorld();
+    }
+
+    // 메인 렌더링
+    this.renderer.render(this.scene, this.camera);
+    
+    // 추가 렌더링 콜백 실행 (CSS2DRenderer 등)
+    this.onRenderCallbacks.forEach(callback => callback());
+    
+    // 프레임 카운터 증가 (초기화 시에만 사용)
+    if (this.frameCount < 10) {
+        this.frameCount++;
+    }
+}
     /**
      * 렌더링 콜백 추가
      */
