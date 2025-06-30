@@ -683,43 +683,70 @@ export class WallViewerApp {
         }
     }
     
-    /**
-     * 센서 차트 토글
-     */
-    async toggleSensorChart() {
-        if (!this.chartManager) return;
-        
-        if (this.chartManager.isVisible()) {
-            this.chartManager.hide();
-        } else {
-            const currentModel = this.models[this.state.currentModelIndex];
-            if (currentModel) {
-                await this.autoDisplayChart(currentModel.name);
+        /**
+         * 센서 차트 토글 (수정된 버전)
+         */
+        async toggleSensorChart() {
+            if (!this.chartManager) {
+                console.log('📊 chartManager가 없습니다.');
+                return;
             }
-        }
-    }
-    
-    /**
-     * 차트 자동 표시
-     */
-    async autoDisplayChart(modelName, animations = null) {
-        if (!this.chartManager || this.chartManager.isVisible()) return;
-        
-        try {
-            // 애니메이션이 있고 재생 중인 경우
-            if (animations && animations.length > 0 && this.animationController?.isPlaying) {
-                console.log('📊 애니메이션 동기화 차트 표시');
-                this.chartManager.syncWithAnimation(this.animationController);
+            
+            // ✅ isVisible() 메서드 호출 -> isVisible 프로퍼티 접근으로 수정
+            if (this.chartManager.isVisible) {
+                // ✅ hide 메서드 존재 여부 확인
+                if (typeof this.chartManager.hide === 'function') {
+                    this.chartManager.hide();
+                }
             } else {
-                // 정적 데이터 표시
-                console.log('📊 기본 데이터 표시 (애니메이션 없음)');
-                await this.chartManager.startSimulation(0, 30, modelName);
+                const currentModel = this.models[this.state.currentModelIndex];
+                if (currentModel) {
+                    await this.autoDisplayChart(currentModel.name);
+                }
             }
-        } catch (error) {
-            console.error('차트 표시 오류:', error);
         }
-    }
     
+        /**
+         * 차트 자동 표시 (수정된 버전)
+         */
+        async autoDisplayChart(modelName, animations = null) {
+            // ✅ 안전한 chartManager 체크 및 isVisible 프로퍼티 접근
+            if (!this.chartManager) {
+                console.log('📊 chartManager가 없습니다. 차트 표시 건너뜀');
+                return;
+            }
+            
+            // ✅ isVisible() 메서드 호출 -> isVisible 프로퍼티 접근으로 수정
+            if (this.chartManager.isVisible) {
+                console.log('📊 차트가 이미 표시되어 있습니다.');
+                return;
+            }
+            
+            try {
+                // 애니메이션이 있고 재생 중인 경우
+                if (animations && animations.length > 0 && this.animationController?.isPlaying) {
+                    console.log('📊 애니메이션 동기화 차트 표시');
+                    // ✅ syncWithAnimation 메서드 존재 여부 확인
+                    if (typeof this.chartManager.syncWithAnimation === 'function') {
+                        this.chartManager.syncWithAnimation(this.animationController);
+                    } else {
+                        console.warn('📊 syncWithAnimation 메서드가 없습니다.');
+                    }
+                } else {
+                    // 정적 데이터 표시
+                    console.log('📊 기본 데이터 표시 (애니메이션 없음)');
+                    // ✅ startSimulation 메서드 존재 여부 확인
+                    if (typeof this.chartManager.startSimulation === 'function') {
+                        await this.chartManager.startSimulation(0, 30, modelName);
+                    } else {
+                        console.warn('📊 startSimulation 메서드가 없습니다.');
+                    }
+                }
+            } catch (error) {
+                console.error('📊 차트 표시 오류:', error);
+                // 차트 오류로 인해 전체 로딩이 실패하지 않도록 처리
+            }
+        }
     /**
      * 전체화면 토글
      */
