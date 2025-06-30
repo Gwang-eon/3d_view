@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="css/hotspot.css">
     <link rel="stylesheet" href="css/hotspot-sprite.css">
     <link rel="stylesheet" href="css/sensor-chart.css">
+    <link rel="stylesheet" href="css/progressive-loading.css">
+    <link rel="stylesheet" href="css/loading-ui.css">
 </head>
 <body>
     <!-- 헤더 -->
@@ -267,5 +269,18 @@
 
     <!-- 애플리케이션 스크립트 -->
     <script type="module" src="js/app.js"></script>
+
+    <!-- JavaScript 모듈 -->
+    <script type="module">
+        // app.js에서 프로그레시브 로더 import 추가
+        import { WallViewerApp } from './js/app.js';
+        
+        // 앱 시작
+        window.addEventListener('DOMContentLoaded', () => {
+            const app = new WallViewerApp();
+            window.app = app; // 디버깅용
+        });
+    </script>
+
 </body>
 </html>

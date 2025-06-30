@@ -1,11 +1,12 @@
-// js/app.js - 메인 애플리케이션 컨트롤러 (Sprite 핫스팟 시스템 적용)
+// js/app.js - 메인 애플리케이션 컨트롤러 (프로그레시브 로딩 통합)
+
 import { Viewer3D } from './viewer.js';
-import { ModelLoader } from './loader.js';
+import { ProgressiveLoader, LOADING_MESSAGES } from './progressive-loader.js';
+import { loadingUI } from './loading-ui.js';
 import { UIController } from './ui.js';
-// import { AnimationController } from './animation.js';
-import { SensorAnimationController } from './sensor-animation.js';  // 새로운 import
+import { SensorAnimationController } from './sensor-animation.js';
 import { HotspotSpriteManager } from './hotspot-sprite.js';
-import { SensorChartManager } from './sensor-chart.js';  // 차트 매니저 import 추가
+import { SensorChartManager } from './sensor-chart.js';
 
 // 모델 설정 (실제 GitHub 경로)
 const MODELS = [
@@ -95,121 +96,58 @@ const CONFIG = {
 /**
  * 옹벽 3D 뷰어 애플리케이션
  */
-class WallViewerApp {
+export class WallViewerApp {
     constructor() {
         this.config = CONFIG;
         this.models = MODELS;
-        this.currentModelIndex = 0;
         
-        // 모듈
+        // 모듈 인스턴스
         this.viewer = null;
         this.loader = null;
+        this.progressiveLoader = null;
         this.ui = null;
         this.animationController = null;
         this.hotspotManager = null;
+        this.chartManager = null;
         
         // 상태
         this.isLoading = false;
-        this.isInitialized = false;
-        
-        // GLTF 카메라들
+        this.currentModelIndex = null;
+        this.currentHotspotData = null;
         this.gltfCameras = [];
         
-        // 현재 핫스팟 데이터
-        this.currentHotspotData = null;
+        // 초기화
+        this.init();
     }
-    /**
- * 동영상 표시
- */
-showVideo() {
-    const modal = document.getElementById('video-modal');
-    const video = document.getElementById('video-player');
-    const title = document.getElementById('video-title');
     
-    if (!modal || !video) return;
-    
-    // 현재 모델에 맞는 동영상 경로 설정
-    const modelConfig = this.models[this.currentModelIndex];
-    const videoPath = `videos/${modelConfig.folder}.mp4`;
-    
-    // 동영상 소스 설정
-    video.src = videoPath;
-    
-    // 제목 설정
-    title.textContent = `${modelConfig.name} 시공 영상`;
-    
-    // 모달 표시
-    modal.classList.add('show');
-    
-    // 동영상 로드 에러 처리
-    video.onerror = () => {
-        console.error('동영상 로드 실패:', videoPath);
-        this.ui.showError('동영상을 불러올 수 없습니다.');
-        this.closeVideo();
-    };
-    
-    console.log('🎬 동영상 재생:', videoPath);
-}
-
-    /**
-     * 동영상 닫기
-     */
-    closeVideo() {
-        const modal = document.getElementById('video-modal');
-        const video = document.getElementById('video-player');
-        
-        if (!modal) return;
-        
-        // 동영상 정지
-        if (video) {
-            video.pause();
-            video.currentTime = 0;
-        }
-        
-        // 모달 숨기기
-        modal.classList.remove('show');
-    }
     /**
      * 애플리케이션 초기화
      */
     async init() {
         try {
-            console.log('🚀 옹벽 3D 뷰어 시작...');
+            console.log('🚀 3D 뷰어 초기화 시작...');
             
-            // 환경 체크
-            if (!this.checkEnvironment()) {
-                throw new Error('WebGL을 지원하지 않는 브라우저입니다.');
-            }
+            // URL 파라미터 처리
+            this.handleURLParams();
             
             // 모듈 초기화
             await this.initializeModules();
             
-            // 이벤트 설정
+            // 이벤트 리스너
             this.setupEventListeners();
             
-            // URL 파라미터 확인
-            this.handleURLParams();
-            
             // 초기 모델 로드
-            const initialModel = this.getInitialModelIndex();
-            await this.loadModel(initialModel);
+            const initialIndex = this.getInitialModelIndex();
+            await this.loadModel(initialIndex);
             
-            this.isInitialized = true;
-            console.log('✅ 초기화 완료');
+            console.log('✅ 3D 뷰어 초기화 완료!');
             
         } catch (error) {
             console.error('❌ 초기화 실패:', error);
-            this.handleFatalError(error);
+            if (this.ui) {
+                this.ui.showError('뷰어 초기화에 실패했습니다.');
+            }
         }
-    }
-    
-    /**
-     * WebGL 지원 확인
-     */
-    checkEnvironment() {
-        const canvas = document.createElement('canvas');
-        const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        return !!gl;
     }
     
     /**
@@ -221,11 +159,25 @@ showVideo() {
         this.viewer.app = this; // 상호 참조
         await this.viewer.init();
         
-        // 모델 로더
-        this.loader = new ModelLoader({
+        // 프로그레시브 로더
+        this.progressiveLoader = new ProgressiveLoader({
             basePath: this.config.basePath,
-            loadingManager: this.viewer.loadingManager
+            loadingManager: this.viewer.loadingManager,
+            
+            // 상태 변경 콜백
+            onStateChange: (state) => {
+                console.log(`📊 로딩 상태: ${state}`);
+                loadingUI.updateState(state);
+            },
+            
+            // 진행률 콜백
+            onProgress: (progress) => {
+                loadingUI.updateProgress(progress);
+            }
         });
+        
+        // 하위 호환성을 위해 loader도 참조
+        this.loader = this.progressiveLoader;
         
         // 애니메이션 컨트롤러
         this.animationController = new SensorAnimationController(this.viewer);
@@ -243,8 +195,7 @@ showVideo() {
         this.ui.init();
 
         // 센서 차트 매니저
-         this.chartManager = new SensorChartManager();
-        //this.chartManager.init();
+        this.chartManager = new SensorChartManager();
     }
     
     /**
@@ -288,143 +239,7 @@ showVideo() {
             });
         }
         
-        // 동영상 버튼 이벤트 추가
-        const videoBtn = document.getElementById('video-btn');
-        if (videoBtn) {
-            videoBtn.addEventListener('click', () => {
-                this.showVideo();
-            });
-        }
-
-        // 동영상 모달 닫기 이벤트
-        const videoClose = document.getElementById('video-close');
-        if (videoClose) {
-            videoClose.addEventListener('click', () => {
-                this.closeVideo();
-            });
-        }
-
-        // 모달 외부 클릭 시 닫기
-        const videoModal = document.getElementById('video-modal');
-        if (videoModal) {
-            videoModal.addEventListener('click', (e) => {
-                if (e.target === videoModal) {
-                    this.closeVideo();
-                }
-            });
-        }
-
-        // 키보드 단축키
-        document.addEventListener('keydown', (e) => {
-            this.handleKeyPress(e);
-        });
-        
-        // 핫스팟 컨트롤
-        this.setupHotspotControls();
-        
-        // 카메라 속도 컨트롤 설정
-        this.setupCameraSpeedControls();
-        
-        // 타임라인 이벤트
-        this.setupTimelineEvents();
-    }
-    
-    /**
-     * 핫스팟 컨트롤 설정
-     */
-    setupHotspotControls() {
-        // 핫스팟 토글 버튼
-        const toggleBtn = document.getElementById('toggle-hotspots');
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', () => {
-                this.hotspotManager.toggleHotspots();
-            });
-        }
-        
-        // 스타일 선택 (Sprite에서는 사용하지 않음)
-        const styleSelect = document.getElementById('hotspot-style');
-        if (styleSelect) {
-            styleSelect.style.display = 'none'; // 숨김
-        }
-        
-        // 크기 선택 (Sprite에서는 사용하지 않음)
-        const sizeSelect = document.getElementById('hotspot-size');
-        if (sizeSelect) {
-            sizeSelect.style.display = 'none'; // 숨김
-        }
-        
-        // 필터 선택
-        const filterSelect = document.getElementById('hotspot-filter');
-        if (filterSelect) {
-            filterSelect.addEventListener('change', (e) => {
-                this.hotspotManager.filterByStatus(e.target.value);
-            });
-            
-            // 옵션 수정
-            filterSelect.innerHTML = `
-                <option value="all">모든 핫스팟</option>
-                <option value="sensors">센서만</option>
-                <option value="normal">정상</option>
-                <option value="warning">경고</option>
-                <option value="danger">위험</option>
-            `;
-        }
-    }
-    
-    /**
-     * 카메라 속도 컨트롤 설정
-     */
-    setupCameraSpeedControls() {
-        // 회전 속도
-        const rotateSpeedSlider = document.getElementById('camera-rotate-speed');
-        if (rotateSpeedSlider) {
-            rotateSpeedSlider.addEventListener('input', (e) => {
-                const speed = parseFloat(e.target.value);
-                this.viewer.setRotateSpeed(speed);
-                document.getElementById('rotate-speed-value').textContent = speed.toFixed(1);
-            });
-        }
-        
-        // 줌 속도
-        const zoomSpeedSlider = document.getElementById('camera-zoom-speed');
-        if (zoomSpeedSlider) {
-            zoomSpeedSlider.addEventListener('input', (e) => {
-                const speed = parseFloat(e.target.value);
-                this.viewer.setZoomSpeed(speed);
-                document.getElementById('zoom-speed-value').textContent = speed.toFixed(1);
-            });
-        }
-        
-        // 이동 속도
-        const panSpeedSlider = document.getElementById('camera-pan-speed');
-        if (panSpeedSlider) {
-            panSpeedSlider.addEventListener('input', (e) => {
-                const speed = parseFloat(e.target.value);
-                this.viewer.setPanSpeed(speed);
-                document.getElementById('pan-speed-value').textContent = speed.toFixed(1);
-            });
-        }
-    }
-    
-    /**
-     * 타임라인 이벤트 설정
-     */
-    setupTimelineEvents() {
-        // 재생 버튼 클릭
-        window.addEventListener('timeline-play', () => {
-            if (this.animationController) {
-                this.animationController.togglePlayPause();
-            }
-        });
-        
-        // 타임라인 시크
-        window.addEventListener('timeline-seek', (e) => {
-            if (this.animationController && e.detail && e.detail.time !== undefined) {
-                this.animationController.seek(e.detail.time);
-            }
-        });
-        
-        // 타임라인 슬라이더 드래그 시작/종료
+        // 타임라인 드래그 시작/종료
         const timelineSlider = document.getElementById('timeline-slider');
         if (timelineSlider) {
             timelineSlider.addEventListener('mousedown', () => {
@@ -460,7 +275,7 @@ showVideo() {
     }
     
     /**
-     * 모델 로드
+     * 모델 로드 (프로그레시브 로딩 적용)
      */
     async loadModel(index) {
         if (this.isLoading) return;
@@ -475,98 +290,117 @@ showVideo() {
         const modelConfig = this.models[index];
         
         try {
-            // UI 업데이트
-            this.ui.showLoading();
+            // 향상된 로딩 UI 표시
+            loadingUI.show(modelConfig.name);
             this.ui.setActiveModel(index);
             
             // 모델 경로 생성
             const modelPath = `${this.config.basePath}${modelConfig.folder}/${modelConfig.fileName}`;
-            console.log(`📦 모델 로드: ${modelConfig.name}`);
+            console.log(`📦 프로그레시브 로딩 시작: ${modelConfig.name}`);
             console.log(`📂 경로: ${modelPath}`);
             
-            // 모델과 핫스팟 데이터 로드
-            const { gltf, hotspotsData } = await this.loader.loadWithHotspots(modelPath);
+            // 프로그레시브 로딩 (프리뷰 포함)
+            const result = await this.progressiveLoader.loadWithPreview(modelPath);
+            
+            // 프리뷰 이미지가 있으면 UI에 표시
+            if (result.preview) {
+                loadingUI.setPreview(result.preview.src);
+            }
+            
+            // 핫스팟 데이터 로드
+            const hotspotsPath = modelPath.replace('.gltf', '-hotspots.json');
+            let hotspotsData = null;
+            
+            try {
+                const response = await fetch(hotspotsPath);
+                if (response.ok) {
+                    hotspotsData = await response.json();
+                    console.log('✅ 핫스팟 데이터 로드 성공');
+                }
+            } catch (e) {
+                console.log('📌 핫스팟 데이터 없음 (정상)');
+            }
             
             // 뷰어에 모델 설정
-            this.viewer.setModel(gltf.scene);
-
-
-            // 애니메이션 컨트롤러에 모델명 전달
-            if (this.animationController.setModelName) {
-                this.animationController.setModelName(modelConfig.folder);
-            }
-            
-            // 핫스팟 데이터 저장
-            this.currentHotspotData = hotspotsData;
-            
-            // GLTF 파일 내의 카메라 처리
-            this.gltfCameras = [];
-            const cameraSelect = document.getElementById('camera-select');
-            
-            if (gltf.cameras && gltf.cameras.length > 0) {
-                console.log(`📷 커스텀 카메라 ${gltf.cameras.length}개 발견`);
-                
-                // 카메라 목록 저장
-                this.gltfCameras = gltf.cameras;
-                
-                // 카메라 선택 UI 업데이트
-                if (cameraSelect) {
-                    cameraSelect.innerHTML = '<option value="default">기본 카메라</option>';
-                    
-                    gltf.cameras.forEach((camera, index) => {
-                        const cameraName = camera.name || `카메라 ${index + 1}`;
-                        const option = document.createElement('option');
-                        option.value = index;
-                        option.textContent = cameraName;
-                        cameraSelect.appendChild(option);
-                    });
-                    
-                    // 첫 번째 커스텀 카메라 자동 선택
-                    cameraSelect.value = '0';
-                }
-                
-                // 첫 번째 카메라 적용 (애니메이션 없이 즉시 적용)
-                this.viewer.applyCustomCamera(gltf.cameras[0], false);
-                
-            } else {
-                console.log('📷 커스텀 카메라 없음 - 기본 카메라 사용');
-                
-                // 카메라 선택 UI 리셋
-                if (cameraSelect) {
-                    cameraSelect.innerHTML = '<option value="default">기본 카메라</option>';
-                }
-                
-                // 기본 카메라 위치 조정
-                this.viewer.adjustCameraToModel();
-            }
+            this.viewer.setModel(result.gltf.scene);
             
             // 애니메이션 설정
-            if (gltf.animations && gltf.animations.length > 0) {
-                this.animationController.setAnimations(gltf.animations, gltf.scene);
+            if (result.gltf.animations && result.gltf.animations.length > 0) {
+                console.log(`🎬 애니메이션 발견: ${result.gltf.animations.length}개`);
+                this.animationController.setAnimations(
+                    result.gltf.animations,
+                    result.gltf.scene
+                );
+                
+                // 모델명 전달
+                if (this.animationController.setModelName) {
+                    this.animationController.setModelName(modelConfig.folder);
+                }
+            } else {
+                console.log('🎬 애니메이션 없음');
+                this.animationController.clearAnimations();
             }
             
-            // 핫스팟 설정 (모델과 JSON 데이터 결합)
-            requestAnimationFrame(() => {
-                if (hotspotsData) {
-                    this.hotspotManager.loadHotspots(gltf.scene, hotspotsData);
-                    console.log('✅ 핫스팟 데이터 적용 완료');
-                } else {
-                    console.log('ℹ️ 핫스팟 데이터가 없습니다');
-                }
-            });
+            // 핫스팟 설정
+            this.hotspotManager.clearHotspots();
+            if (hotspotsData && hotspotsData.hotspots) {
+                console.log(`📍 핫스팟 추가: ${hotspotsData.hotspots.length}개`);
+                hotspotsData.hotspots.forEach(hotspot => {
+                    this.hotspotManager.addHotspot(hotspot);
+                });
+            }
             
-            // UI 업데이트
-            this.ui.hideLoading();
+            // 카메라 설정
+            if (result.gltf.cameras && result.gltf.cameras.length > 0) {
+                console.log(`📷 GLTF 카메라 발견: ${result.gltf.cameras.length}개`);
+                this.gltfCameras = result.gltf.cameras;
+                this.updateCameraUI();
+            } else {
+                this.gltfCameras = [];
+                this.ui.hideCameraBox();
+            }
+            
+            // 로딩 완료 - 약간의 딜레이 후 숨김
+            setTimeout(() => {
+                loadingUI.hide();
+            }, 500);
             
             console.log(`✅ 모델 로드 완료: ${modelConfig.name}`);
             
         } catch (error) {
             console.error('❌ 모델 로드 실패:', error);
-            this.ui.hideLoading();
-            this.ui.showError(`모델을 로드할 수 없습니다: ${error.message}`);
+            loadingUI.showError(error.message || '모델을 로드할 수 없습니다.');
+            
+            // 3초 후 로딩 UI 숨김
+            setTimeout(() => {
+                loadingUI.hide();
+            }, 3000);
+            
         } finally {
             this.isLoading = false;
         }
+    }
+    
+    /**
+     * 카메라 UI 업데이트
+     */
+    updateCameraUI() {
+        const cameraSelect = document.getElementById('camera-select');
+        if (!cameraSelect) return;
+        
+        // 옵션 초기화
+        cameraSelect.innerHTML = '<option value="default">기본 카메라</option>';
+        
+        // GLTF 카메라 추가
+        this.gltfCameras.forEach((camera, index) => {
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = camera.name || `카메라 ${index + 1}`;
+            cameraSelect.appendChild(option);
+        });
+        
+        // 카메라 박스 표시
+        this.ui.showCameraBox();
     }
     
     /**
@@ -580,7 +414,6 @@ showVideo() {
             // 커스텀 카메라로 전환
             const index = parseInt(cameraIndex);
             if (this.gltfCameras[index]) {
-                // viewer의 applyCustomCamera 메서드 직접 사용
                 this.viewer.applyCustomCamera(this.gltfCameras[index], true);
             }
         }
@@ -610,7 +443,7 @@ showVideo() {
                 
                 console.log(`📊 애니메이션 데이터: ${currentFrame}/${maxFrame} 프레임`);
                 
-                // 차트 시뮬레이션 시작 (await 추가)
+                // 차트 시뮬레이션 시작
                 await this.chartManager.startSimulation(currentFrame, maxFrame, modelName);
             } else {
                 // 애니메이션이 없으면 기본 데이터 표시
@@ -622,109 +455,46 @@ showVideo() {
             this.chartManager.hide();
         }
     }
-    /**
-     * 키보드 단축키 처리
-     */
-    handleKeyPress(event) {
-        // 숫자 키로 모델 선택
-        if (event.key >= '1' && event.key <= '3') {
-            const index = parseInt(event.key) - 1;
-            if (index < this.models.length) {
-                this.loadModel(index);
-            }
-        }
-        
-        // 단축키
-        switch(event.key) {
-            case 'f':
-            case 'F':
-                this.toggleFullscreen();
-                break;
-            case 'r':
-            case 'R':
-                this.viewer.resetCamera();
-                break;
-            case 'g':
-            case 'G':
-                this.viewer.toggleGrid();
-                break;
-            case 'c':
-            case 'C':
-                this.toggleSensorChart();
-                break;
-            case 'v':
-            case 'V':
-                this.showVideo();
-                break;
-            case 'h':
-            case 'H':
-                // 핫스팟 토글
-                this.hotspotManager.toggleHotspots();
-                break;
-            case ' ':
-                // 스페이스바로 애니메이션 재생/일시정지
-                if (this.animationController) {
-                    this.animationController.togglePlayPause();
-                }
-                event.preventDefault();
-                break;
-            case 'Escape':
-                if (document.fullscreenElement) {
-                    document.exitFullscreen();
-                }
-                // 동영상 모달도 닫기
-                this.closeVideo();
-                break;
-        }
-    }
     
     /**
      * 전체화면 토글
      */
     toggleFullscreen() {
         if (!document.fullscreenElement) {
-            document.documentElement.requestFullscreen();
+            document.documentElement.requestFullscreen().catch(err => {
+                console.error('전체화면 전환 실패:', err);
+            });
         } else {
             document.exitFullscreen();
-        }
-    }
-    
-    /**
-     * 치명적 에러 처리
-     */
-    handleFatalError(error) {
-        console.error('치명적 에러:', error);
-        
-        const errorScreen = document.getElementById('error');
-        const errorMessage = document.getElementById('error-message');
-        
-        if (errorMessage) {
-            errorMessage.textContent = error.message || '알 수 없는 오류가 발생했습니다.';
-        }
-        
-        if (errorScreen) {
-            errorScreen.style.display = 'flex';
-        }
-        
-        // 로딩 화면 숨기기
-        const loading = document.getElementById('loading');
-        if (loading) {
-            loading.style.display = 'none';
         }
     }
 }
 
 // 애플리케이션 시작
-document.addEventListener('DOMContentLoaded', async () => {
-    const app = new WallViewerApp();
+window.addEventListener('DOMContentLoaded', () => {
+    console.log('📄 DOM 로드 완료, 애플리케이션 시작...');
     
-    try {
-        await app.init();
-        
-        // 전역 접근 (디버깅용)
-        window.wallViewerApp = app;
-        
-    } catch (error) {
-        console.error('애플리케이션 시작 실패:', error);
+    // 프로그레시브 로딩 CSS 확인 및 로드
+    const hasProgressiveCSS = Array.from(document.styleSheets).some(sheet => {
+        try {
+            return sheet.href && sheet.href.includes('progressive-loading.css');
+        } catch(e) {
+            return false;
+        }
+    });
+    
+    if (!hasProgressiveCSS) {
+        console.log('📄 프로그레시브 로딩 CSS 동적 로드');
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'css/progressive-loading.css';
+        document.head.appendChild(link);
     }
+    
+    // 앱 시작
+    const app = new WallViewerApp();
+    window.app = app; // 디버깅용
 });
+
+// 모듈 export
+export { WallViewerApp };
