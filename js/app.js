@@ -1,4 +1,4 @@
-// js/app.js - 메인 애플리케이션 컨트롤러 (프로그레시브 로딩 통합 + 오류 수정)
+// js/app.js - 메인 애플리케이션 컨트롤러 (완전한 버전)
 
 import { Viewer3D } from './viewer.js';
 import { ProgressiveLoader, LOADING_MESSAGES } from './progressive-loader.js';
@@ -8,7 +8,7 @@ import { SensorAnimationController } from './sensor-animation.js';
 import { HotspotSpriteManager } from './hotspot-sprite.js';
 import { SensorChartManager } from './sensor-chart.js';
 
-// 모델 설정 (실제 GitHub 경로)
+// 모델 설정
 const MODELS = [
     {
         name: '블록 옹벽',
@@ -33,7 +33,7 @@ const MODELS = [
     }
 ];
 
-// 애플리케이션 설정 - 밝기 조정
+// 애플리케이션 설정
 const CONFIG = {
     basePath: './gltf/',
     defaultModel: 0,
@@ -137,13 +137,34 @@ export class WallViewerApp {
             this.setupEventListeners();
             
             // 초기 모델 로드
+            console.log('📦 초기 모델 로드 준비...');
             const initialIndex = this.getInitialModelIndex();
-            await this.loadModel(initialIndex);
+            console.log('📦 초기 모델 인덱스:', initialIndex);
+            
+            // 약간의 지연 후 모델 로드 (모든 초기화가 완료되도록)
+            setTimeout(async () => {
+                try {
+                    await this.loadModel(initialIndex);
+                    console.log('✅ 초기 모델 로드 성공!');
+                } catch (loadError) {
+                    console.error('❌ 초기 모델 로드 실패:', loadError);
+                    // 첫 번째 모델로 재시도
+                    if (initialIndex !== 0) {
+                        console.log('🔄 첫 번째 모델로 재시도...');
+                        try {
+                            await this.loadModel(0);
+                        } catch (retryError) {
+                            console.error('❌ 재시도도 실패:', retryError);
+                        }
+                    }
+                }
+            }, 100);
             
             console.log('✅ 3D 뷰어 초기화 완료!');
             
         } catch (error) {
             console.error('❌ 초기화 실패:', error);
+            console.error('에러 스택:', error.stack);
             if (this.ui) {
                 this.ui.showError('뷰어 초기화에 실패했습니다.');
             }
@@ -154,10 +175,13 @@ export class WallViewerApp {
      * 모듈 초기화
      */
     async initializeModules() {
+        console.log('📌 모듈 초기화 시작...');
+        
         // 3D 뷰어
         this.viewer = new Viewer3D(this.config);
         this.viewer.app = this; // 상호 참조
         await this.viewer.init();
+        console.log('✅ Viewer3D 초기화 완료');
         
         // 프로그레시브 로더
         this.progressiveLoader = new ProgressiveLoader({
@@ -178,12 +202,15 @@ export class WallViewerApp {
         
         // 하위 호환성을 위해 loader도 참조
         this.loader = this.progressiveLoader;
+        console.log('✅ ProgressiveLoader 초기화 완료');
         
         // 애니메이션 컨트롤러
         this.animationController = new SensorAnimationController(this.viewer);
+        console.log('✅ AnimationController 초기화 완료');
         
         // 핫스팟 매니저 (Sprite 버전)
         this.hotspotManager = new HotspotSpriteManager(this.viewer);
+        console.log('✅ HotspotManager 초기화 완료');
         
         // UI 컨트롤러
         this.ui = new UIController({
@@ -213,12 +240,17 @@ export class WallViewerApp {
         
         if (!this.ui.setTimelineDragging) {
             this.ui.setTimelineDragging = function(isDragging) {
-                // 타임라인 드래깅 상태 설정
+                this.isTimelineDragging = isDragging;
             };
         }
 
+        console.log('✅ UI 초기화 완료');
+
         // 센서 차트 매니저
         this.chartManager = new SensorChartManager();
+        console.log('✅ ChartManager 초기화 완료');
+        
+        console.log('📌 모든 모듈 초기화 완료!');
     }
     
     /**
@@ -266,11 +298,15 @@ export class WallViewerApp {
         const timelineSlider = document.getElementById('timeline-slider');
         if (timelineSlider) {
             timelineSlider.addEventListener('mousedown', () => {
-                this.ui.setTimelineDragging(true);
+                if (this.ui.setTimelineDragging) {
+                    this.ui.setTimelineDragging(true);
+                }
             });
             
             timelineSlider.addEventListener('mouseup', () => {
-                this.ui.setTimelineDragging(false);
+                if (this.ui.setTimelineDragging) {
+                    this.ui.setTimelineDragging(false);
+                }
             });
         }
     }
@@ -301,7 +337,10 @@ export class WallViewerApp {
      * 모델 로드 (프로그레시브 로딩 적용)
      */
     async loadModel(index) {
-        if (this.isLoading) return;
+        if (this.isLoading) {
+            console.log('⚠️ 이미 로딩 중입니다.');
+            return;
+        }
         
         if (index < 0 || index >= this.models.length) {
             console.error('잘못된 모델 인덱스:', index);
@@ -343,110 +382,83 @@ export class WallViewerApp {
                 }
             } catch (e) {
                 // 핫스팟 데이터는 선택사항이므로 오류 무시
+                console.log('ℹ️ 핫스팟 데이터 없음');
             }
             
             // 뷰어에 모델 설정
             this.viewer.setModel(result.gltf.scene);
             
+            // GLTF 카메라 처리
+            this.handleGLTFCameras(result.gltf);
+            
             // 애니메이션 설정
             if (result.gltf.animations && result.gltf.animations.length > 0) {
-                console.log(`🎬 애니메이션 발견: ${result.gltf.animations.length}개`);
-                this.animationController.setAnimations(
-                    result.gltf.animations,
-                    result.gltf.scene
-                );
-                
-                // 모델명 전달
-                if (this.animationController.setModelName) {
-                    this.animationController.setModelName(modelConfig.folder);
-                }
+                console.log(`🎬 ${result.gltf.animations.length}개 애니메이션 발견`);
+                this.animationController.setAnimations(result.gltf.animations, result.gltf.scene);
             } else {
-                console.log('🎬 애니메이션 없음');
-                this.animationController.clearAnimations();
+                this.animationController.cleanup();
             }
             
             // 핫스팟 설정
-            this.hotspotManager.clearHotspots();
             if (hotspotsData) {
-                if (hotspotsData.hotspots && typeof hotspotsData.hotspots === 'object') {
-                    // loadHotspots 메서드 사용 (모델과 JSON 데이터 전달)
-                    console.log(`📍 핫스팟 로드 중...`);
-                    this.hotspotManager.loadHotspots(result.gltf.scene, hotspotsData);
-                } else {
-                    console.warn('⚠️ 핫스팟 데이터 구조가 올바르지 않습니다');
-                }
-            }
-            
-            // 카메라 설정
-            if (result.gltf.cameras && result.gltf.cameras.length > 0) {
-                console.log(`📷 GLTF 카메라 발견: ${result.gltf.cameras.length}개`);
-                this.gltfCameras = result.gltf.cameras;
-                this.updateCameraUI();
+                this.currentHotspotData = hotspotsData;
+                await this.hotspotManager.loadHotspots(hotspotsData, modelConfig.name);
             } else {
-                this.gltfCameras = [];
-                // hideCameraBox가 있으면 호출
-                if (this.ui.hideCameraBox) {
-                    this.ui.hideCameraBox();
-                }
+                this.hotspotManager.clear();
             }
             
-            // 로딩 완료 - 약간의 딜레이 후 숨김
-            setTimeout(() => {
-                loadingUI.hide();
-            }, 500);
+            // 차트 설정
+            this.updateSensorChart(modelConfig.name, result.gltf.animations);
             
             console.log(`✅ 모델 로드 완료: ${modelConfig.name}`);
             
         } catch (error) {
             console.error('❌ 모델 로드 실패:', error);
-            loadingUI.showError(error.message || '모델을 로드할 수 없습니다.');
-            
-            // 3초 후 로딩 UI 숨김
-            setTimeout(() => {
-                loadingUI.hide();
-            }, 3000);
-            
+            this.ui.showError(`모델을 로드할 수 없습니다: ${error.message}`);
         } finally {
             this.isLoading = false;
+            loadingUI.hide();
         }
     }
     
     /**
-     * 카메라 UI 업데이트
+     * GLTF 카메라 처리
      */
-    updateCameraUI() {
-        const cameraSelect = document.getElementById('camera-select');
-        if (!cameraSelect) return;
+    handleGLTFCameras(gltf) {
+        this.gltfCameras = [];
         
-        // 옵션 초기화
-        cameraSelect.innerHTML = '<option value="default">기본 카메라</option>';
-        
-        // GLTF 카메라 추가
-        this.gltfCameras.forEach((camera, index) => {
-            const option = document.createElement('option');
-            option.value = index;
-            option.textContent = camera.name || `카메라 ${index + 1}`;
-            cameraSelect.appendChild(option);
-        });
-        
-        // 카메라 박스 표시 (메서드가 있으면)
-        if (this.ui.showCameraBox) {
-            this.ui.showCameraBox();
+        if (gltf.cameras && gltf.cameras.length > 0) {
+            console.log(`📷 ${gltf.cameras.length}개 카메라 발견`);
+            
+            // 카메라 셀렉트 업데이트
+            const cameraSelect = document.getElementById('camera-select');
+            if (cameraSelect) {
+                // 기존 옵션 제거
+                cameraSelect.innerHTML = '<option value="default">기본 카메라</option>';
+                
+                // GLTF 카메라 추가
+                gltf.cameras.forEach((camera, index) => {
+                    const option = document.createElement('option');
+                    option.value = `gltf_${index}`;
+                    option.textContent = camera.name || `카메라 ${index + 1}`;
+                    cameraSelect.appendChild(option);
+                    
+                    this.gltfCameras.push(camera);
+                });
+            }
         }
     }
     
     /**
      * 카메라 전환
      */
-    switchCamera(cameraIndex) {
-        if (cameraIndex === 'default') {
-            // 기본 카메라로 전환
-            this.viewer.resetCamera(true);  // 애니메이션 적용
-        } else {
-            // 커스텀 카메라로 전환
-            const index = parseInt(cameraIndex);
+    switchCamera(cameraId) {
+        if (cameraId === 'default') {
+            this.viewer.resetCamera();
+        } else if (cameraId.startsWith('gltf_')) {
+            const index = parseInt(cameraId.split('_')[1]);
             if (this.gltfCameras[index]) {
-                this.viewer.applyCustomCamera(this.gltfCameras[index], true);
+                this.viewer.setGLTFCamera(this.gltfCameras[index]);
             }
         }
     }
@@ -454,37 +466,36 @@ export class WallViewerApp {
     /**
      * 센서 차트 토글
      */
-    async toggleSensorChart() {
-        if (!this.chartManager) {
-            console.error('차트 매니저가 초기화되지 않았습니다');
-            return;
-        }
+    toggleSensorChart() {
+        const container = document.getElementById('sensor-chart-container');
+        if (!container) return;
         
-        // 차트가 보이지 않으면 표시
-        if (!this.chartManager.isVisible) {
-            this.chartManager.show();
-            
-            // 모델 폴더명 가져오기
-            const modelName = this.models[this.currentModelIndex].folder;
-            console.log('📊 차트 표시 - 모델:', modelName);
-            
-            // 현재 애니메이션 프레임 가져오기
-            if (this.animationController && this.animationController.currentTime !== undefined) {
-                const currentFrame = this.animationController.timeToFrame(this.animationController.currentTime);
-                const maxFrame = this.animationController.timeToFrame(this.animationController.duration);
-                
-                console.log(`📊 애니메이션 데이터: ${currentFrame}/${maxFrame} 프레임`);
-                
-                // 차트 시뮬레이션 시작
-                await this.chartManager.startSimulation(currentFrame, maxFrame, modelName);
-            } else {
-                // 애니메이션이 없으면 기본 데이터 표시
-                console.log('📊 기본 데이터 표시 (애니메이션 없음)');
-                await this.chartManager.startSimulation(0, 30, modelName);
-            }
-        } else {
-            // 차트 숨기기
+        const isVisible = container.style.display === 'block';
+        
+        if (isVisible) {
             this.chartManager.hide();
+        } else {
+            this.chartManager.show();
+            // 현재 모델과 애니메이션 상태에 따라 차트 업데이트
+            const modelName = this.models[this.currentModelIndex]?.name || '';
+            this.updateSensorChart(modelName, this.animationController?.clips);
+        }
+    }
+    
+    /**
+     * 센서 차트 업데이트
+     */
+    async updateSensorChart(modelName, animations) {
+        if (!this.chartManager || !this.chartManager.isVisible()) return;
+        
+        // 애니메이션이 있고 재생 중인 경우
+        if (animations && animations.length > 0 && this.animationController?.isPlaying) {
+            console.log('📊 애니메이션 동기화 차트 표시');
+            this.chartManager.syncWithAnimation(this.animationController);
+        } else {
+            // 정적 데이터 표시
+            console.log('📊 기본 데이터 표시 (애니메이션 없음)');
+            await this.chartManager.startSimulation(0, 30, modelName);
         }
     }
     
@@ -505,8 +516,6 @@ export class WallViewerApp {
 // 애플리케이션 시작
 window.addEventListener('DOMContentLoaded', () => {
     console.log('📄 DOM 로드 완료, 애플리케이션 시작...');
-    const app = new WallViewerApp();
-    window.app = app;
     
     // 프로그레시브 로딩 CSS 확인 및 로드
     const hasProgressiveCSS = Array.from(document.styleSheets).some(sheet => {
@@ -524,4 +533,18 @@ window.addEventListener('DOMContentLoaded', () => {
         link.href = 'css/progressive-loading.css';
         document.head.appendChild(link);
     }
+    
+    // 앱 시작
+    const app = new WallViewerApp();
+    window.app = app; // 디버깅용
+    
+    // 초기 모델 로드 실패 시 백업
+    setTimeout(() => {
+        if (!app.currentModel && !app.isLoading) {
+            console.log('⚠️ 초기 모델이 로드되지 않았습니다. 백업 로드 시작...');
+            app.loadModel(0).catch(error => {
+                console.error('백업 로드도 실패:', error);
+            });
+        }
+    }, 2000);
 });
