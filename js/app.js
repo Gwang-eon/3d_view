@@ -567,8 +567,14 @@ export class WallViewerApp {
             const hotspotsData = await this.loadHotspotsData(modelPath);
             
             // 뷰어에 모델 설정
-            await this.viewer.setModel(result.gltf);
-            
+            await this.viewer.setModel(result.gltf.scene);
+
+            // 모델명 설정 (애니메이션 컨트롤러용)
+            if (result.gltf.scene) {
+                result.gltf.scene.userData.modelName = modelConfig.folder;
+            }
+    
+
             // 애니메이션 설정
             const animations = result.gltf.animations || [];
             if (animations.length > 0) {
