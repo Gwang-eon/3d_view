@@ -505,6 +505,8 @@ export class WallViewerApp {
 // 애플리케이션 시작
 window.addEventListener('DOMContentLoaded', () => {
     console.log('📄 DOM 로드 완료, 애플리케이션 시작...');
+    const app = new WallViewerApp();
+    window.app = app;
     
     // 프로그레시브 로딩 CSS 확인 및 로드
     const hasProgressiveCSS = Array.from(document.styleSheets).some(sheet => {
@@ -522,8 +524,4 @@ window.addEventListener('DOMContentLoaded', () => {
         link.href = 'css/progressive-loading.css';
         document.head.appendChild(link);
     }
-    
-    // 앱 시작
-    const app = new WallViewerApp();
-    window.app = app; // 디버깅용
 });
