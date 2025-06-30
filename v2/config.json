@@ -1,0 +1,155 @@
+{
+  "app": {
+    "title": "옹벽 3D 뷰어 v2",
+    "version": "2.0.0",
+    "basePath": "../gltf/",
+    "defaultModel": 0
+  },
+  "models": [
+    {
+      "id": "block",
+      "name": "블록 옹벽",
+      "folder": "Block_Retaining_Wall",
+      "fileName": "Block_Retaining_Wall.gltf",
+      "icon": "🧱",
+      "description": "콘크리트 블록을 이용한 조립식 옹벽",
+      "animation": {
+        "startFrame": 1,
+        "crackFrame": 30,
+        "endFrame": null,
+        "fps": 30
+      },
+      "camera": {
+        "position": [5, 5, 10],
+        "lookAt": [0, 0, 0]
+      }
+    },
+    {
+      "id": "cantilever",
+      "name": "캔틸레버 옹벽",
+      "folder": "Cantilever_Retaining_Wall",
+      "fileName": "Cantilever_Retaining_Wall.gltf",
+      "icon": "🏗️",
+      "description": "철근 콘크리트 일체형 옹벽",
+      "animation": {
+        "startFrame": 10,
+        "crackFrame": 30,
+        "endFrame": 320,
+        "fps": 30
+      },
+      "camera": {
+        "position": [6, 6, 12],
+        "lookAt": [0, 2, 0]
+      }
+    },
+    {
+      "id": "mse",
+      "name": "MSE 옹벽",
+      "folder": "mse_Retaining_Wall",
+      "fileName": "mse_Retaining_Wall.gltf",
+      "icon": "🔧",
+      "description": "보강토 옹벽 (Mechanically Stabilized Earth)",
+      "animation": {
+        "startFrame": 1,
+        "crackFrame": 20,
+        "endFrame": null,
+        "fps": 30
+      },
+      "camera": {
+        "position": [5, 4, 8],
+        "lookAt": [0, 1, 0]
+      }
+    }
+  ],
+  "viewer": {
+    "container": "viewer",
+    "backgroundColor": "#2a2a2a",
+    "fog": {
+      "enabled": true,
+      "color": "#2a2a2a",
+      "near": 20,
+      "far": 150
+    },
+    "showGrid": true,
+    "showAxes": false
+  },
+  "camera": {
+    "fov": 45,
+    "near": 0.1,
+    "far": 1000,
+    "defaultPosition": [5, 5, 10],
+    "defaultLookAt": [0, 0, 0]
+  },
+  "controls": {
+    "enableDamping": true,
+    "dampingFactor": 0.15,
+    "minDistance": 2,
+    "maxDistance": 100,
+    "enablePan": true,
+    "panSpeed": 0.5,
+    "rotateSpeed": 0.5,
+    "zoomSpeed": 0.8,
+    "minPolarAngle": 0,
+    "maxPolarAngle": 2.827
+  },
+  "lights": {
+    "ambient": {
+      "color": "#ffffff",
+      "intensity": 0.8
+    },
+    "directional": {
+      "color": "#ffffff",
+      "intensity": 1.0,
+      "position": [10, 10, 5],
+      "castShadow": true,
+      "shadowMapSize": 2048
+    },
+    "point": {
+      "color": "#ffffff",
+      "intensity": 0.6,
+      "position": [-5, 5, -5]
+    }
+  },
+  "performance": {
+    "antialias": true,
+    "pixelRatio": 2,
+    "shadowsEnabled": true
+  },
+  "hotspots": {
+    "prefix": "HS_",
+    "enabled": true,
+    "animateOnHover": true,
+    "showTooltips": true,
+    "styles": {
+      "normal": {
+        "color": "#00ff88",
+        "scale": 1.0
+      },
+      "warning": {
+        "color": "#ff6b35", 
+        "scale": 1.2
+      },
+      "danger": {
+        "color": "#ff1744",
+        "scale": 1.5
+      }
+    }
+  },
+  "animation": {
+    "defaultSpeed": 1.0,
+    "loop": false,
+    "autoStart": false
+  },
+  "ui": {
+    "showTimeline": true,
+    "showControls": true,
+    "showModelSelector": true,
+    "theme": "dark"
+  },
+  "sensors": {
+    "enabled": true,
+    "types": ["tilt", "crack"],
+    "displayRealTime": false,
+    "chartEnabled": false
+  }
+}

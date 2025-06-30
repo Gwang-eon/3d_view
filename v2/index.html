@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>옹벽 3D 뷰어 v2 - 홈</title>
+    <link rel="stylesheet" href="assets/styles/main.css">
+    <style>
+        /* 홈페이지 전용 스타일 */
+        .home-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: var(--spacing-xl);
+            background: linear-gradient(135deg, var(--primary-bg) 0%, var(--secondary-bg) 100%);
+        }
+        
+        .hero-section {
+            max-width: 800px;
+            margin-bottom: var(--spacing-xl);
+        }
+        
+        .hero-title {
+            font-size: 3rem;
+            font-weight: 700;
+            margin-bottom: var(--spacing-lg);
+            background: linear-gradient(135deg, var(--accent-color), #00ff88);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+        
+        .hero-subtitle {
+            font-size: 1.3rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: var(--spacing-xl);
+        }
+        
+        .models-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: var(--spacing-xl);
+            max-width: 1200px;
+            width: 100%;
+        }
+        
+        .model-card {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: var(--spacing-xl);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .model-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 123, 255, 0.1), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .model-card:hover {
+            transform: translateY(-8px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            border-color: var(--accent-color);
+        }
+        
+        .model-card:hover::before {
+            left: 100%;
+        }
+        
+        .model-icon {
+            font-size: 4rem;
+            margin-bottom: var(--spacing-lg);
+            display: block;
+        }
+        
+        .model-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: var(--spacing-md);
+            color: var(--text-primary);
+        }
+        
+        .model-description {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: var(--spacing-lg);
+        }
+        
+        .model-link {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            padding: var(--spacing-md) var(--spacing-lg);
+            background: var(--accent-color);
+            color: var(--text-primary);
+            text-decoration: none;
+            border-radius: var(--border-radius);
+            font-weight: 500;
+            transition: all 0.2s ease;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .model-link:hover {
+            background: var(--accent-hover);
+            transform: translateX(4px);
+        }
+        
+        .features-section {
+            margin-top: var(--spacing-xl);
+            max-width: 600px;
+        }
+        
+        .features-title {
+            font-size: 1.5rem;
+            margin-bottom: var(--spacing-lg);
+            color: var(--text-secondary);
+        }
+        
+        .features-list {
+            display: flex;
+            justify-content: center;
+            gap: var(--spacing-xl);
+            flex-wrap: wrap;
+        }
+        
+        .feature-item {
+            text-align: center;
+            min-width: 120px;
+        }
+        
+        .feature-icon {
+            font-size: 2rem;
+            margin-bottom: var(--spacing-sm);
+            display: block;
+        }
+        
+        .feature-text {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+        
+        .version-badge {
+            position: absolute;
+            top: var(--spacing-lg);
+            right: var(--spacing-lg);
+            background: var(--success-color);
+            color: var(--primary-bg);
+            padding: var(--spacing-xs) var(--spacing-sm);
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2rem;
+            }
+            
+            .hero-subtitle {
+                font-size: 1.1rem;
+            }
+            
+            .models-grid {
+                grid-template-columns: 1fr;
+                gap: var(--spacing-lg);
+            }
+            
+            .model-card {
+                padding: var(--spacing-lg);
+            }
+            
+            .features-list {
+                gap: var(--spacing-lg);
+            }
+        }
+        
+        /* 애니메이션 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .hero-section {
+            animation: fadeInUp 0.8s ease-out;
+        }
+        
+        .model-card {
+            animation: fadeInUp 0.8s ease-out backwards;
+        }
+        
+        .model-card:nth-child(1) { animation-delay: 0.1s; }
+        .model-card:nth-child(2) { animation-delay: 0.2s; }
+        .model-card:nth-child(3) { animation-delay: 0.3s; }
+        
+        .features-section {
+            animation: fadeInUp 0.8s ease-out 0.4s backwards;
+        }
+    </style>
+</head>
+<body>
+    <div class="home-container">
+        <div class="version-badge">v2.0</div>
+        
+        <!-- 히어로 섹션 -->
+        <section class="hero-section">
+            <h1 class="hero-title">옹벽 3D 뷰어 v2</h1>
+            <p class="hero-subtitle">
+                완전히 새로워진 심플 구조로 다양한 옹벽 구조물을 3D로 탐색하고 학습하세요.<br>
+                인터랙티브한 3D 모델과 실시간 애니메이션을 통해 옹벽의 구조와 특성을 자세히 살펴볼 수 있습니다.
+            </p>
+        </section>
+        
+        <!-- 모델 선택 그리드 -->
+        <section class="models-grid" id="models-grid">
+            <!-- 모델 카드들이 JavaScript로 동적 생성됨 -->
+        </section>
+        
+        <!-- 기능 소개 -->
+        <section class="features-section">
+            <h3 class="features-title">v2의 새로운 특징</h3>
+            <div class="features-list">
+                <div class="feature-item">
+                    <span class="feature-icon">⚡</span>
+                    <div class="feature-text">통합 구조</div>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🎯</span>
+                    <div class="feature-text">심플 설정</div>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🚀</span>
+                    <div class="feature-text">빠른 로딩</div>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🛠️</span>
+                    <div class="feature-text">쉬운 유지보수</div>
+                </div>
+            </div>
+        </section>
+    </div>
+    
+    <script type="module">
+        // 설정 로드 후 모델 카드 생성
+        async function initHomePage() {
+            try {
+                const response = await fetch('./config.json');
+                const config = await response.json();
+                
+                const modelsGrid = document.getElementById('models-grid');
+                
+                config.models.forEach((model, index) => {
+                    const card = document.createElement('div');
+                    card.className = 'model-card';
+                    
+                    card.innerHTML = `
+                        <span class="model-icon">${model.icon}</span>
+                        <h2 class="model-title">${model.name}</h2>
+                        <p class="model-description">${model.description}</p>
+                        <a href="viewer.html?model=${index}" class="model-link">
+                            3D 모델 보기 →
+                        </a>
+                    `;
+                    
+                    modelsGrid.appendChild(card);
+                });
+                
+                console.log('✅ 홈페이지 초기화 완료');
+                
+            } catch (error) {
+                console.error('❌ 홈페이지 초기화 실패:', error);
+                document.getElementById('models-grid').innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; color: var(--danger-color);">
+                        설정 파일을 불러올 수 없습니다.
+                    </div>
+                `;
+            }
+        }
+        
+        // DOM 로드 완료 후 초기화
+        document.addEventListener('DOMContentLoaded', initHomePage);
+    </script>
+</body>
+</html>
