@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>옹벽 3D 뷰어</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/loading.css">
+    <link rel="stylesheet" href="css/chart.css">
+    <link rel="stylesheet" href="css/hotspot.css">
+    <link rel="stylesheet" href="css/icons.css">
+</head>
+<body>
+    <!-- 헤더 -->
+    <header class="header">
+        <h1>옹벽 3D 뷰어</h1>
+        <div class="header-controls">
+            <a href="index.html" class="header-btn" title="홈으로">
+                <span data-icon="home"></span>
+            </a>
+            <button class="header-btn" id="chart-btn" title="센서 차트">
+                <span data-icon="bar-chart-3"></span>
+            </button>
+            <button class="header-btn" id="fullscreen-btn" title="전체화면">
+                <span data-icon="maximize-2"></span>
+            </button>
+            <button class="header-btn" id="help-btn" title="도움말">
+                <span data-icon="help-circle"></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 모델 선택 (상단) -->
+    <div class="model-selector-top">
+        <button class="model-btn-top" data-model="0">
+            <span class="model-icon">🧱</span>
+            <span class="model-name">블록 옹벽</span>
+        </button>
+        <button class="model-btn-top" data-model="1">
+            <span class="model-icon">🏗️</span>
+            <span class="model-name">캔틸레버 옹벽</span>
+        </button>
+        <button class="model-btn-top" data-model="2">
+            <span class="model-icon">🔧</span>
+            <span class="model-name">MSE 옹벽</span>
+        </button>
+    </div>
+
+    <!-- 메인 뷰어 영역 -->
+    <main class="main-viewer">
+        <div id="viewer" class="viewer-container"></div>
+
+        <!-- 플로팅 박스들 -->
+        
+        <!-- 도움말 박스 -->
+        <div id="help-floating" class="floating-box help-box">
+            <div class="floating-header">
+                <h3>조작 방법</h3>
+                <button class="floating-close">
+                    <span data-icon="x"></span>
+                </button>
+            </div>
+            <div class="floating-content">
+                <div class="help-section">
+                    <h4><span data-icon="mouse-pointer"></span> 마우스</h4>
+                    <ul>
+                        <li><strong>드래그:</strong> 회전</li>
+                        <li><strong>휠:</strong> 줌</li>
+                        <li><strong>우클릭 드래그:</strong> 이동</li>
+                    </ul>
+                </div>
+                
+                <div class="help-section">
+                    <h4><span data-icon="keyboard"></span> 키보드</h4>
+                    <ul>
+                        <li><strong>1, 2, 3:</strong> 모델 전환</li>
+                        <li><strong>R:</strong> 카메라 리셋</li>
+                        <li><strong>F:</strong> 전체화면</li>
+                        <li><strong>H:</strong> 핫스팟 토글</li>
+                        <li><strong>스페이스:</strong> 애니메이션 재생/정지</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- 카메라 설정 박스 -->
+        <div id="camera-floating" class="floating-box camera-box">
+            <div class="floating-header">
+                <h3>카메라 설정</h3>
+                <button class="floating-close">
+                    <span data-icon="x"></span>
+                </button>
+            </div>
+            <div class="floating-content">
+                <div class="camera-section">
+                    <label for="camera-select">카메라 선택:</label>
+                    <select id="camera-select" class="camera-select">
+                        <option value="default">기본 카메라</option>
+                    </select>
+                </div>
+                
+                <div class="camera-section">
+                    <h4>미리보기 설정</h4>
+                    <div class="preset-view-grid">
+                        <button class="preset-view-btn" data-view="front" title="정면">
+                            <span data-icon="eye"></span>
+                        </button>
+                        <button class="preset-view-btn" data-view="back" title="후면">
+                            <span data-icon="eye-off"></span>
+                        </button>
+                        <button class="preset-view-btn" data-view="left" title="좌측">
+                            <span data-icon="chevron-left"></span>
+                        </button>
+                        <button class="preset-view-btn" data-view="right" title="우측">
+                            <span data-icon="chevron-right"></span>
+                        </button>
+                        <button class="preset-view-btn" data-view="top" title="상단">
+                            <span data-icon="chevron-up"></span>
+                        </button>
+                        <button class="preset-view-btn" data-view="bottom" title="하단">
+                            <span data-icon="chevron-down"></span>
+                        </button>
+                        <button class="preset-view-btn" data-view="iso" title="등각투영">
+                            <span data-icon="grid-3x3"></span>
+                        </button>
+                        <button class="preset-view-btn" data-view="reset" title="리셋">
+                            <span data-icon="refresh-ccw"></span>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="camera-section">
+                    <button class="video-btn">
+                        <span data-icon="video"></span>
+                        시공 영상 보기
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 핫스팟 필터 박스 -->
+        <div id="hotspot-floating" class="floating-box hotspot-box">
+            <div class="floating-header">
+                <h3>센서 필터</h3>
+                <button class="floating-close">
+                    <span data-icon="x"></span>
+                </button>
+            </div>
+            <div class="floating-content">
+                <label for="hotspot-filter">센서 타입:</label>
+                <select id="hotspot-filter" class="hotspot-select">
+                    <option value="all">모든 타입</option>
+                    <option value="normal">정상</option>
+                    <option value="warning">경고</option>
+                    <option value="danger">위험</option>
+                    <option value="active">활성 센서만</option>
+                </select>
+            </div>
+        </div>
+    </main>
+    
+    <!-- 애니메이션 타임라인 (하단) -->
+    <div id="animation-timeline" class="timeline-container" style="display: none;">
+        <button id="play-btn" class="timeline-btn" title="재생">
+            <span data-icon="play"></span>
+        </button>
+        
+        <div class="timeline-track">
+            <input type="range" id="timeline-slider" class="timeline-slider" min="0" max="100" value="0">
+            <div class="timeline-progress"></div>
+        </div>
+        
+        <div class="timeline-time">
+            <span id="current-time">0:00</span> / <span id="total-time">0:00</span>
+        </div>
+    </div>
+    
+    <!-- 로딩 화면 -->
+    <div id="loading" class="loading-screen">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">모델 로딩 중...</p>
+    </div>
+    
+    <!-- 에러 화면 -->
+    <div id="error" class="error-screen" style="display: none;">
+        <div class="error-content">
+            <h2>오류 발생</h2>
+            <p id="error-message">모델을 로드할 수 없습니다.</p>
+            <button onclick="location.reload()">다시 시도</button>
+        </div>
+    </div>
+    
+    <!-- 동영상 모달 -->
+    <div id="video-modal" class="video-modal">
+        <div class="video-modal-content">
+            <div class="video-modal-header">
+                <h3 id="video-title">옹벽 시공 영상</h3>
+                <button class="video-modal-close" id="video-close">
+                    <span data-icon="x"></span>
+                </button>
+            </div>
+            <div class="video-modal-body">
+                <video id="video-player" controls preload="metadata">
+                    <source src="" type="video/mp4">
+                    브라우저가 동영상 재생을 지원하지 않습니다.
+                </video>
+            </div>
+        </div>
+    </div>
+
+    <!-- Three.js 로컬 파일 사용 -->
+    <script src="js/three/three.min.js"></script>
+    <script src="js/three/GLTFLoader.js"></script>
+    <script src="js/three/OrbitControls.js"></script>
+    <script src="js/three/CSS2DRenderer.js"></script>
+
+    <!-- Chart.js 로컬 파일 사용 -->
+    <script src="js/libs/chart.umd.min.js"></script>
+
+    <!-- 아이콘 로더 초기화 -->
+    <script type="module">
+        import { iconLoader } from './js/icon-loader.js';
+        
+        // 필요한 아이콘 프리로드
+        await iconLoader.preloadIcons([
+            'home', 'map-pin', 'bar-chart-3', 'maximize-2',
+            'help-circle', 'play', 'pause', 'video', 'x',
+            'chevron-down', 'chevron-up', 'refresh-ccw',
+            'mouse-pointer', 'keyboard', 'eye', 'eye-off',
+            'alert-triangle', 'info', 'grid-3x3', 'chevron-left', 'chevron-right'
+        ]);
+        
+        // 전역 노출
+        window.iconLoader = iconLoader;
+        
+        // DOM 로드 후 아이콘 교체
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', async () => {
+                await iconLoader.replaceAllIcons();
+            });
+        } else {
+            await iconLoader.replaceAllIcons();
+        }
+    </script>
+
+    <!-- 애플리케이션 스크립트 - app.js만 로드 -->
+    <script type="module" src="js/app.js"></script>
+
+</body>
+</html>

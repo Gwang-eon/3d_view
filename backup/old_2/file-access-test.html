@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>파일 접근 진단 도구</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #ffffff;
+        }
+        .test-section {
+            background: #2d2d2d;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #00ff88;
+        }
+        .result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .success { background: #0f4c3a; border-left: 4px solid #00ff88; }
+        .error { background: #4c0f0f; border-left: 4px solid #ff4444; }
+        .warning { background: #4c3a0f; border-left: 4px solid #ffaa00; }
+        button {
+            background: #0066cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0052a3; }
+        .file-size { font-weight: bold; color: #ffaa00; }
+        pre { background: #1a1a1a; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔍 파일 접근 진단 도구</h1>
+    <p>현재 프로젝트의 GLTF 파일들에 접근할 수 있는지 확인합니다.</p>
+
+    <div class="test-section">
+        <h2>1단계: 기본 파일 확인</h2>
+        <button onclick="testBasicFiles()">파일 존재 여부 확인</button>
+        <div id="basic-results"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2단계: 파일 크기 확인</h2>
+        <button onclick="testFileSizes()">파일 크기 확인</button>
+        <div id="size-results"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3단계: 실제 내용 확인</h2>
+        <button onclick="testFileContent()">파일 내용 확인</button>
+        <div id="content-results"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4단계: 해결 방안</h2>
+        <div id="solution-results"></div>
+    </div>
+
+    <script>
+        const models = [
+            {
+                name: '블록 옹벽',
+                path: './gltf/Block_Retaining_Wall/Block_Retaining_Wall.gltf',
+                preview: './gltf/Block_Retaining_Wall/preview.jpg'
+            },
+            {
+                name: '캔틸레버 옹벽', 
+                path: './gltf/Cantilever_Retaining_Wall/Cantilever_Retaining_Wall.gltf',
+                preview: './gltf/Cantilever_Retaining_Wall/preview.jpg'
+            },
+            {
+                name: 'MSE 옹벽',
+                path: './gltf/mse_Retaining_Wall/mse_Retaining_Wall.gltf', 
+                preview: './gltf/mse_Retaining_Wall/preview.jpg'
+            }
+        ];
+
+        async function testBasicFiles() {
+            const container = document.getElementById('basic-results');
+            container.innerHTML = '<p>확인 중...</p>';
+            
+            let results = '<h3>파일 접근 테스트 결과:</h3>';
+            
+            for (const model of models) {
+                try {
+                    const response = await fetch(model.path, { method: 'HEAD' });
+                    const status = response.ok ? 'success' : 'error';
+                    const statusText = response.ok ? '✅ 접근 가능' : `❌ 접근 실패 (${response.status})`;
+                    
+                    results += `<div class="result ${status}">
+                        <strong>${model.name}:</strong> ${statusText}<br>
+                        <small>경로: ${model.path}</small>
+                    </div>`;
+                } catch (error) {
+                    results += `<div class="result error">
+                        <strong>${model.name}:</strong> ❌ 네트워크 오류<br>
+                        <small>오류: ${error.message}</small>
+                    </div>`;
+                }
+            }
+            
+            container.innerHTML = results;
+        }
+
+        async function testFileSizes() {
+            const container = document.getElementById('size-results');
+            container.innerHTML = '<p>파일 크기 확인 중...</p>';
+            
+            let results = '<h3>파일 크기 분석:</h3>';
+            
+            for (const model of models) {
+                try {
+                    const response = await fetch(model.path, { method: 'HEAD' });
+                    const contentLength = response.headers.get('Content-Length');
+                    const size = contentLength ? parseInt(contentLength) : 0;
+                    
+                    let sizeText, sizeClass;
+                    if (size === 0) {
+                        sizeText = '⚠️ 0 bytes (빈 파일 또는 LFS 포인터)';
+                        sizeClass = 'warning';
+                    } else if (size < 1000) {
+                        sizeText = `⚠️ ${size} bytes (너무 작음, LFS 포인터 가능성)`;
+                        sizeClass = 'warning';
+                    } else {
+                        sizeText = `✅ ${formatBytes(size)} (정상)`;
+                        sizeClass = 'success';
+                    }
+                    
+                    results += `<div class="result ${sizeClass}">
+                        <strong>${model.name}:</strong> ${sizeText}
+                    </div>`;
+                } catch (error) {
+                    results += `<div class="result error">
+                        <strong>${model.name}:</strong> ❌ 크기 확인 실패<br>
+                        <small>${error.message}</small>
+                    </div>`;
+                }
+            }
+            
+            container.innerHTML = results;
+        }
+
+        async function testFileContent() {
+            const container = document.getElementById('content-results');
+            container.innerHTML = '<p>파일 내용 확인 중...</p>';
+            
+            let results = '<h3>파일 내용 분석:</h3>';
+            
+            // 첫 번째 모델만 테스트 (용량 고려)
+            const model = models[0];
+            
+            try {
+                const response = await fetch(model.path);
+                const text = await response.text();
+                
+                let contentType, contentClass;
+                if (text.includes('version https://git-lfs.github.com/spec/v1')) {
+                    contentType = '❌ Git LFS 포인터 파일';
+                    contentClass = 'error';
+                } else if (text.includes('"asset"') && text.includes('"scene"')) {
+                    contentType = '✅ 유효한 GLTF 파일';
+                    contentClass = 'success';
+                } else if (text.length < 100) {
+                    contentType = '⚠️ 파일이 너무 작음';
+                    contentClass = 'warning';
+                } else {
+                    contentType = '⚠️ 알 수 없는 형식';
+                    contentClass = 'warning';
+                }
+                
+                results += `<div class="result ${contentClass}">
+                    <strong>${model.name}:</strong> ${contentType}<br>
+                    <small>파일 크기: ${text.length} 문자</small>
+                </div>`;
+                
+                if (text.length < 500) {
+                    results += `<div class="result warning">
+                        <strong>파일 내용 미리보기:</strong>
+                        <pre>${text.substring(0, 300)}${text.length > 300 ? '...' : ''}</pre>
+                    </div>`;
+                }
+                
+            } catch (error) {
+                results += `<div class="result error">
+                    <strong>${model.name}:</strong> ❌ 내용 읽기 실패<br>
+                    <small>${error.message}</small>
+                </div>`;
+            }
+            
+            container.innerHTML = results;
+            
+            // 해결 방안 표시
+            showSolutions();
+        }
+
+        function showSolutions() {
+            const container = document.getElementById('solution-results');
+            
+            const solutions = `
+                <h3>🛠️ 문제 해결 방안:</h3>
+                
+                <div class="result warning">
+                    <strong>Git LFS 파일인 경우:</strong><br>
+                    1. <code>git lfs pull</code> 명령어로 실제 파일 다운로드<br>
+                    2. GitHub에서 "Download ZIP" 대신 git clone 사용<br>
+                    3. Git LFS가 설치되어 있는지 확인
+                </div>
+                
+                <div class="result warning">
+                    <strong>로컬 서버 필요한 경우:</strong><br>
+                    1. Python: <code>python -m http.server 8000</code><br>
+                    2. Node.js: <code>npx serve .</code><br>
+                    3. PHP: <code>php -S localhost:8000</code><br>
+                    4. 또는 run.bat 파일 사용 (Chrome 전용 모드)
+                </div>
+                
+                <div class="result success">
+                    <strong>즉시 해결책:</strong><br>
+                    1. 제공된 run.bat 파일 실행<br>
+                    2. 또는 Live Server 같은 VS Code 확장 사용<br>
+                    3. 파일들이 정상적으로 다운로드되었는지 확인
+                </div>
+            `;
+            
+            container.innerHTML = solutions;
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 페이지 로드 시 자동 실행
+        window.onload = () => {
+            console.log('📋 파일 진단 도구 준비 완료');
+            console.log('현재 위치:', window.location.href);
+        };
+    </script>
+</body>
+</html>

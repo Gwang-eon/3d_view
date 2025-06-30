@@ -1,0 +1,321 @@
+/* camera-controls.css - 카메라 컨트롤 UI 스타일 */
+
+/* 카메라 속도 컨트롤 */
+.camera-speed-controls {
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.camera-speed-controls h5 {
+    margin: 0 0 10px 0;
+    color: var(--accent-blue, #007bff);
+    font-size: 14px;
+}
+
+.speed-control-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.speed-control-group:last-child {
+    margin-bottom: 0;
+}
+
+.speed-control-group label {
+    min-width: 80px;
+    font-size: 12px;
+    color: var(--text-secondary, #aaa);
+}
+
+.speed-control-group input[type="range"] {
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    outline: none;
+    -webkit-appearance: none;
+    border-radius: 2px;
+}
+
+.speed-control-group input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--accent-blue, #007bff);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.speed-control-group input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+    box-shadow: 0 0 8px rgba(0, 123, 255, 0.5);
+}
+
+.speed-control-group span {
+    min-width: 40px;
+    text-align: right;
+    font-size: 12px;
+    color: var(--accent-green, #00ff88);
+    font-family: monospace;
+}
+
+/* 프리셋 뷰 버튼 */
+.preset-view-buttons {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.view-preset-group {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 5px;
+}
+
+.preset-btn {
+    padding: 8px;
+    font-size: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.preset-btn:hover {
+    transform: scale(1.05);
+    background: rgba(0, 123, 255, 0.2);
+    border-color: var(--accent-blue, #007bff);
+}
+
+.preset-btn:active {
+    transform: scale(0.95);
+}
+
+.preset-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 줌 컨트롤 */
+.zoom-controls {
+    margin-top: 10px;
+    display: flex;
+    gap: 5px;
+}
+
+.zoom-btn {
+    flex: 1;
+    padding: 8px;
+    font-size: 14px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.zoom-btn:hover {
+    background: rgba(0, 123, 255, 0.2);
+    border-color: var(--accent-blue, #007bff);
+}
+
+/* 카메라 상태 저장/복원 */
+.camera-state-controls {
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.camera-state-controls h5 {
+    margin: 0 0 10px 0;
+    color: var(--accent-orange, #ff6b6b);
+    font-size: 14px;
+}
+
+#save-camera-state {
+    width: 100%;
+    padding: 8px;
+    background: rgba(255, 107, 107, 0.1);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 13px;
+}
+
+#save-camera-state:hover {
+    background: rgba(255, 107, 107, 0.2);
+    border-color: rgba(255, 107, 107, 0.5);
+}
+
+#saved-states-list {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.saved-state-btn {
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 12px;
+    text-align: left;
+}
+
+.saved-state-btn:hover {
+    background: rgba(255, 107, 107, 0.1);
+    border-color: rgba(255, 107, 107, 0.3);
+}
+
+/* 카메라 전환 힌트 */
+.camera-hint {
+    position: fixed;
+    top: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 123, 255, 0.9);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 24px;
+    font-size: 14px;
+    font-weight: 500;
+    pointer-events: none;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+    display: none;
+}
+
+@keyframes camera-transition-hint {
+    0% { 
+        opacity: 0; 
+        transform: translateX(-50%) translateY(10px); 
+    }
+    20% { 
+        opacity: 1; 
+        transform: translateX(-50%) translateY(0); 
+    }
+    80% { 
+        opacity: 1; 
+        transform: translateX(-50%) translateY(0); 
+    }
+    100% { 
+        opacity: 0; 
+        transform: translateX(-50%) translateY(-10px); 
+    }
+}
+
+/* 카메라 선택 드롭다운 스타일 개선 */
+.camera-select-group {
+    margin-bottom: 10px;
+}
+
+.camera-select-group label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary, #aaa);
+    margin-bottom: 5px;
+}
+
+#camera-view {
+    width: 100%;
+    padding: 8px;
+    background: rgba(30, 30, 30, 0.9);
+    border: 1px solid var(--border-color, #333);
+    border-radius: 6px;
+    color: var(--text-primary, #fff);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+#camera-view:focus {
+    outline: none;
+    border-color: var(--accent-blue, #007bff);
+}
+
+#camera-view:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* 카메라 속도/이징 선택 */
+.camera-select-sm {
+    width: 100%;
+    padding: 6px;
+    background: rgba(30, 30, 30, 0.9);
+    border: 1px solid var(--border-color, #333);
+    border-radius: 6px;
+    color: var(--text-primary, #fff);
+    font-size: 12px;
+    cursor: pointer;
+    margin-top: 5px;
+}
+
+.camera-speed-control,
+.easing-control {
+    margin-top: 10px;
+}
+
+.camera-speed-control label,
+.easing-control label {
+    font-size: 12px;
+    color: var(--text-secondary, #aaa);
+    display: block;
+    margin-bottom: 5px;
+}
+
+/* 반응형 디자인 */
+@media (max-width: 768px) {
+    .view-preset-group {
+        grid-template-columns: repeat(4, 1fr);
+    }
+    
+    .camera-speed-controls {
+        display: none; /* 모바일에서는 상세 컨트롤 숨김 */
+    }
+    
+    .preset-btn,
+    .zoom-btn {
+        font-size: 12px;
+        padding: 6px;
+    }
+}
+
+/* 다크 테마 지원 */
+@media (prefers-color-scheme: light) {
+    .camera-speed-controls,
+    .camera-state-controls {
+        background: rgba(0, 0, 0, 0.05);
+        border-color: rgba(0, 0, 0, 0.1);
+    }
+    
+    .preset-btn,
+    .zoom-btn,
+    .saved-state-btn {
+        background: rgba(0, 0, 0, 0.05);
+        border-color: rgba(0, 0, 0, 0.1);
+        color: #333;
+    }
+    
+    #camera-view,
+    .camera-select-sm {
+        background: white;
+        color: #333;
+        border-color: #ddd;
+    }
+}

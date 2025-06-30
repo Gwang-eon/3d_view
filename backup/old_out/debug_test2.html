@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 뷰어 디버그 테스트</title>
+    <style>
+        body {
+            font-family: 'Pretendard', -apple-system, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1, h2 {
+            color: #007bff;
+        }
+        .test-section {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .success { color: #28a745; }
+        .error { color: #dc3545; }
+        .warning { color: #ffc107; }
+        .info { color: #17a2b8; }
+        pre {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: 'Consolas', monospace;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-family: inherit;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .log-output {
+            background: #0a0a0a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            font-size: 12px;
+            font-family: 'Consolas', monospace;
+        }
+        .log-line {
+            padding: 2px 0;
+        }
+        .log-line.success { color: #28a745; }
+        .log-line.error { color: #dc3545; }
+        .log-line.warning { color: #ffc107; }
+        .log-line.info { color: #17a2b8; }
+        #loading, #error {
+            display: none;
+        }
+        .fix-button {
+            background: #28a745;
+        }
+        .fix-button:hover {
+            background: #218838;
+        }
+        ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        li {
+            padding: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>3D 뷰어 디버그 테스트</h1>
+        <p>이 페이지에서 현재 발생한 문제를 진단하고 해결할 수 있습니다.</p>
+        
+        <!-- 필수 DOM 요소 (숨김) -->
+        <div id="loading" style="display:none;">
+            <div class="loading-spinner"></div>
+            <div>로딩 중...</div>
+        </div>
+        <div id="error" style="display:none;"></div>
+        <div id="canvas-container" style="display:none;"></div>
+        <div id="ui-container" style="display:none;"></div>
+        
+        <!-- 테스트 섹션 -->
+        <div class="test-section">
+            <h2>1. 파일 버전 확인</h2>
+            <button onclick="checkFileVersions()">파일 버전 확인</button>
+            <div id="file-versions"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>2. 모듈 로딩 테스트</h2>
+            <button onclick="testModuleLoading()">모듈 로딩 테스트</button>
+            <div id="module-test"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>3. 설정 확인</h2>
+            <button onclick="checkConfig()">CONFIG 확인</button>
+            <button onclick="checkConfigManager()">ConfigManager 확인</button>
+            <div id="config-test"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>4. Three.js 확인</h2>
+            <button onclick="checkThreeJS()">Three.js 라이브러리 확인</button>
+            <div id="threejs-test"></div>
+        </div>
+        
+        <div class="test-section">
+            <h2>5. 실행 로그</h2>
+            <div id="log-output" class="log-output"></div>
+            <button onclick="clearLog()">로그 지우기</button>
+            <button onclick="runFullTest()">전체 테스트 실행</button>
+            <button class="fix-button" onclick="tryAutoFix()">🔧 자동 수정 시도</button>
+        </div>
+    </div>
+
+    <!-- Three.js 라이브러리 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script type="module">
+        import { CONFIG } from './js/config.js';
+        import { CONFIG_MANAGER, getConfig, setConfig } from './js/core/ConfigManager.js';
+        import { ViewerApplication, startViewer } from './js/viewer-main.js';
+        import SceneManager from './js/SceneManager.js';
+        import ModelLoader from './js/ModelLoader.js';
+        import UIController from './js/UIController.js';
+        
+        // 전역 공개
+        window.CONFIG = CONFIG;
+        window.CONFIG_MANAGER = CONFIG_MANAGER;
+        window.getConfig = getConfig;
+        window.setConfig = setConfig;
+        window.ViewerApplication = ViewerApplication;
+        window.startViewer = startViewer;
+        window.SceneManager = SceneManager;
+        window.ModelLoader = ModelLoader;
+        window.UIController = UIController;
+        
+        // 로그 기능
+        const logOutput = document.getElementById('log-output');
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logLine = document.createElement('div');
+            logLine.className = `log-line ${type}`;
+            logLine.textContent = `[${timestamp}] ${message}`;
+            logOutput.appendChild(logLine);
+            logOutput.scrollTop = logOutput.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+        
+        window.log = log;
+        
+        // 파일 버전 확인
+        window.checkFileVersions = async function() {
+            log('파일 버전 확인 시작', 'info');
+            const files = [
+                'js/viewer-main.js',
+                'js/SceneManager.js',
+                'js/ModelLoader.js',
+                'js/UIController.js',
+                'js/config.js'
+            ];
+            
+            const versionsDiv = document.getElementById('file-versions');
+            let html = '<ul>';
+            
+            for (const file of files) {
+                try {
+                    const response = await fetch(file);
+                    const text = await response.text();
+                    const size = text.length;
+                    const hasViewerInit = text.includes('viewerInit');
+                    const hasViewerApp = text.includes('ViewerApplication');
+                    
+                    html += `<li>${file}: ${size} bytes`;
+                    if (hasViewerInit) html += ' <span class="warning">(구버전 코드 감지)</span>';
+                    if (hasViewerApp) html += ' <span class="success">(신버전 코드)</span>';
+                    html += '</li>';
+                    
+                    log(`${file}: ${size} bytes`, hasViewerInit ? 'warning' : 'success');
+                } catch (error) {
+                    html += `<li>${file}: <span class="error">읽기 오류</span></li>`;
+                    log(`${file}: 읽기 오류`, 'error');
+                }
+            }
+            
+            html += '</ul>';
+            versionsDiv.innerHTML = html;
+        };
+        
+        // 모듈 로딩 테스트
+        window.testModuleLoading = async function() {
+            log('모듈 로딩 테스트 시작', 'info');
+            const moduleDiv = document.getElementById('module-test');
+            let html = '<ul>';
+            
+            // CONFIG
+            if (window.CONFIG) {
+                html += '<li class="success">✓ CONFIG 로드됨</li>';
+                log('CONFIG: OK', 'success');
+            } else {
+                html += '<li class="error">✗ CONFIG 로드 실패</li>';
+                log('CONFIG: NG', 'error');
+            }
+            
+            // ConfigManager
+            if (window.CONFIG_MANAGER) {
+                html += '<li class="success">✓ ConfigManager 로드됨</li>';
+                log('ConfigManager: OK', 'success');
+            } else {
+                html += '<li class="error">✗ ConfigManager 로드 실패</li>';
+                log('ConfigManager: NG', 'error');
+            }
+            
+            // ViewerApplication
+            if (window.ViewerApplication) {
+                html += '<li class="success">✓ ViewerApplication 로드됨</li>';
+                log('ViewerApplication: OK', 'success');
+            } else {
+                html += '<li class="error">✗ ViewerApplication 로드 실패</li>';
+                log('ViewerApplication: NG', 'error');
+            }
+            
+            // SceneManager
+            if (window.SceneManager) {
+                html += '<li class="success">✓ SceneManager 로드됨</li>';
+                log('SceneManager: OK', 'success');
+                
+                // 이벤트 시스템 체크
+                try {
+                    const sm = new SceneManager();
+                    if (typeof sm.on === 'function') {
+                        html += '<li class="success">✓ SceneManager.on() 메서드 존재</li>';
+                        log('SceneManager.on(): OK', 'success');
+                    } else {
+                        html += '<li class="error">✗ SceneManager.on() 메서드 없음</li>';
+                        log('SceneManager.on(): NG', 'error');
+                    }
+                } catch (error) {
+                    html += '<li class="error">✗ SceneManager 인스턴스 생성 실패</li>';
+                    log('SceneManager 인스턴스: NG', 'error');
+                }
+            }
+            
+            html += '</ul>';
+            moduleDiv.innerHTML = html;
+        };
+        
+        // CONFIG 확인
+        window.checkConfig = function() {
+            log('CONFIG 확인 시작', 'info');
+            const configDiv = document.getElementById('config-test');
+            
+            const checks = [
+                { path: 'models', expected: 'array' },
+                { path: 'renderer.shadowMap.enabled', expected: 'boolean' },
+                { path: 'camera.fov', expected: 'number' },
+                { path: 'controls.enableDamping', expected: 'boolean' }
+            ];
+            
+            let html = '<ul>';
+            
+            checks.forEach(check => {
+                const value = getConfig(check.path);
+                const type = Array.isArray(value) ? 'array' : typeof value;
+                const isOk = type === check.expected;
+                
+                html += `<li class="${isOk ? 'success' : 'error'}">`;
+                html += `${check.path}: ${type} ${isOk ? '✓' : '✗ (예상: ' + check.expected + ')'}`;
+                html += `</li>`;
+                
+                log(`${check.path}: ${type}`, isOk ? 'success' : 'error');
+            });
+            
+            html += '</ul>';
+            configDiv.innerHTML = html;
+        };
+        
+        // ConfigManager 확인
+        window.checkConfigManager = function() {
+            log('ConfigManager 확인 시작', 'info');
+            const configDiv = document.getElementById('config-test');
+            
+            let html = '<pre>';
+            html += `환경: ${CONFIG_MANAGER.environment}\n`;
+            html += `설정 개수: ${CONFIG_MANAGER.configs.size}\n`;
+            html += `모델 개수: ${getConfig('models.defaultModels', []).length}\n`;
+            html += '</pre>';
+            
+            configDiv.innerHTML += html;
+            
+            log(`환경: ${CONFIG_MANAGER.environment}`, 'info');
+            log(`설정 개수: ${CONFIG_MANAGER.configs.size}`, 'info');
+        };
+        
+        // Three.js 확인
+        window.checkThreeJS = function() {
+            log('Three.js 확인 시작', 'info');
+            const threeDiv = document.getElementById('threejs-test');
+            
+            const checks = [
+                { name: 'THREE', obj: window.THREE },
+                { name: 'THREE.Scene', obj: window.THREE?.Scene },
+                { name: 'THREE.WebGLRenderer', obj: window.THREE?.WebGLRenderer },
+                { name: 'THREE.GLTFLoader', obj: window.THREE?.GLTFLoader },
+                { name: 'THREE.OrbitControls', obj: window.THREE?.OrbitControls }
+            ];
+            
+            let html = '<ul>';
+            
+            checks.forEach(check => {
+                const exists = check.obj !== undefined;
+                html += `<li class="${exists ? 'success' : 'error'}">`;
+                html += `${check.name}: ${exists ? '✓ 존재' : '✗ 없음'}`;
+                html += '</li>';
+                
+                log(`${check.name}: ${exists ? 'OK' : 'NG'}`, exists ? 'success' : 'error');
+            });
+            
+            html += '</ul>';
+            threeDiv.innerHTML = html;
+        };
+        
+        // 로그 지우기
+        window.clearLog = function() {
+            logOutput.innerHTML = '';
+            console.clear();
+        };
+        
+        // 전체 테스트
+        window.runFullTest = async function() {
+            clearLog();
+            log('=== 전체 테스트 시작 ===', 'info');
+            
+            await checkFileVersions();
+            await testModuleLoading();
+            checkConfig();
+            checkConfigManager();
+            checkThreeJS();
+            
+            log('=== 전체 테스트 완료 ===', 'info');
+        };
+        
+        // 자동 수정
+        window.tryAutoFix = function() {
+            log('=== 자동 수정 시작 ===', 'warning');
+            
+            // 브라우저 캐시 클리어 안내
+            log('1. 브라우저 캐시를 클리어하세요 (Ctrl+Shift+R)', 'warning');
+            
+            // CONFIG 수정
+            if (window.CONFIG && !window.CONFIG.models && window.getConfig) {
+                window.CONFIG.models = getConfig('models.defaultModels', []);
+                log('2. CONFIG.models 설정 수정 완료', 'success');
+            }
+            
+            // Three.js 재로드
+            if (!window.THREE) {
+                log('3. Three.js를 다시 로드합니다...', 'warning');
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+                script.onload = () => {
+                    log('Three.js 재로드 완료', 'success');
+                };
+                document.head.appendChild(script);
+            }
+            
+            log('=== 자동 수정 완료 ===', 'warning');
+            log('viewer.html로 돌아가서 다시 테스트하세요', 'info');
+        };
+        
+        // 초기 실행
+        log('디버그 페이지 준비 완료', 'success');
+        log('각 테스트 버튼을 클릭하여 진단을 시작하세요', 'info');
+    </script>
+</body>
+</html>
