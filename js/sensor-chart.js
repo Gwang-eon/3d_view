@@ -1,244 +1,168 @@
-// js/sensor-chart.js - 완전히 새로운 센서 차트 매니저 (구조적 재설계)
+// js/sensor-chart.js - 센서 데이터 차트 표시 모듈 (최적화 버전)
 
 import { SensorDataLoader } from './sensor-data-loader.js';
 
-/**
- * 센서 차트 매니저 - 완전히 재설계된 버전
- * 
- * @class SensorChartManager
- * @description 옹벽 센서 데이터를 시각화하는 차트 시스템
- * 
- * 주요 기능:
- * - 실시간 센서 데이터 차트 표시
- * - 옹벽별 특성 반영 데이터 생성
- * - 애니메이션 동기화
- * - 안전한 에러 핸들링
- */
 export class SensorChartManager {
     constructor() {
-        // 상태 관리
-        this.state = {
-            isVisible: false,
-            isAnimating: false,
-            isInitialized: false,
-            hasError: false,
-            errorMessage: null
-        };
-        
-        // 차트 인스턴스
-        this.charts = new Map();
+        this.charts = [];
+        this.isVisible = false;
+        this.isAnimating = false;
         this.container = null;
-        
-        // 데이터 관리
         this.dataLoader = new SensorDataLoader();
-        this.precomputedData = null;
+        this.precomputedData = null;  // 미리 계산된 데이터
         this.currentModelName = null;
         
-        // 애니메이션 제어
-        this.animationId = null;
-        this.animationCallbacks = new Set();
-        
-        // 설정
-        this.config = {
-            animation: {
-                duration: 0,
-                updateInterval: 100,
-                batchSize: 3,
-                skipFrames: 1
-            },
-            data: {
-                maxDataPoints: 100,
-                dangerThreshold: 0.8,
-                warningThreshold: 0.5
-            },
-            ui: {
-                autoHide: true,
-                hideDelay: 5000
-            }
+        // 차트 설정
+        this.chartConfig = {
+            animationDuration: 0,
+            maxDataPoints: 50,  // 최대 표시 데이터 포인트
+            updateInterval: 200,  // 200ms (초당 5회)
+            batchSize: 5,  // 한 번에 업데이트할 프레임 수
+            skipFrames: 2,  // 프레임 스킵
+            dataPoints: 60,  // 표시할 데이터 포인트 수
+            dangerThreshold: 0.8,
+            warningThreshold: 0.5
         };
         
-        // 옹벽별 특성
-        this.modelCharacteristics = {
-            'Block_Retaining_Wall': {
-                name: '블록 옹벽',
-                description: '블록 간 이음부 벌어짐 → 도미노식 붕괴',
-                characteristics: {
-                    initial: '미세한 진동 (블록 간 마찰)',
-                    middle: '점진적 기울기 증가 (블록 이탈)',
-                    final: '급격한 가속 (연쇄 붕괴)'
-                },
-                noise: 0.02,
-                smoothness: 0.8
-            },
-            'Cantilever_Retaining_Wall': {
-                name: '캔틸레버 옹벽',
-                description: '하부 균열 → 전도/전단 파괴',
-                characteristics: {
-                    initial: '주기적 변동 (열팽창/수축)',
-                    middle: '계단식 증가 (균열 진전)',
-                    final: '갑작스런 전도 (구조 파괴)'
-                },
-                noise: 0.03,
-                smoothness: 0.5
-            },
-            'mse_Retaining_Wall': {
-                name: 'MSE 옹벽',
-                description: '보강재 인장 → 급속 파단',
-                characteristics: {
-                    initial: '안정적 (보강재 하중 분산)',
-                    middle: '선형 증가 (보강재 인장)',
-                    final: '급속 붕괴 (보강재 파단)'
-                },
-                noise: 0.01,
-                smoothness: 0.9
-            }
+        // 시뮬레이션 설정
+        this.simulationConfig = {
+            normalRange: { min: -0.05, max: 0.05 },    // 정상 범위
+            warningRange: { min: 0.5, max: 0.8 },      // 경고 범위
+            dangerRange: { min: 0.8, max: 1.5 },       // 위험 범위
+            transitionFrame: 20,  // 급격한 변화 시작 프레임
+            maxFrame: 30        // 최대 프레임
         };
         
-        // 바인딩
-        this.handleVisibilityChange = this.handleVisibilityChange.bind(this);
-        this.handleResize = this.handleResize.bind(this);
+        // 데이터 저장소
+        this.data = {
+            tilt: { x: [], y: [], z: [] },
+            crack: []
+        };
         
-        // 초기화
         this.init();
     }
     
     /**
      * 초기화
-     * @returns {Promise<void>}
      */
-    async init() {
-        try {
-            await this.createContainer();
-            await this.setupEventListeners();
-            this.state.isInitialized = true;
-            console.log('✅ SensorChartManager 초기화 완료');
-        } catch (error) {
-            this.handleError('초기화 실패', error);
-        }
+    init() {
+        this.createContainer();
+        this.createCharts();
+        console.log('✅ SensorChartManager 초기화 완료');
     }
     
     /**
      * 컨테이너 생성
-     * @returns {Promise<void>}
      */
-    async createContainer() {
+    createContainer() {
         // 기존 컨테이너 제거
         const existing = document.getElementById('sensor-chart-container');
-        if (existing) {
-            existing.remove();
-        }
+        if (existing) existing.remove();
         
         // 새 컨테이너 생성
         this.container = document.createElement('div');
         this.container.id = 'sensor-chart-container';
         this.container.className = 'sensor-chart-container';
         
-        // HTML 구조 생성
         this.container.innerHTML = `
             <div class="sensor-chart-header">
-                <h3>센서 데이터 분석</h3>
+                <h3>센서 모니터링</h3>
                 <div class="sensor-chart-status">
-                    <div class="status-indicator" id="chart-status">정상</div>
-                    <button class="sensor-chart-close" id="chart-close">×</button>
+                    <span class="status-indicator danger">위험 감지</span>
+                    <button class="sensor-chart-close">×</button>
                 </div>
             </div>
             <div class="sensor-chart-body">
                 <div class="chart-grid">
                     <div class="chart-item">
-                        <h4>기울기 X축</h4>
+                        <h4>기울기 센서 - X축</h4>
                         <canvas id="tilt-x-chart"></canvas>
                     </div>
                     <div class="chart-item">
-                        <h4>기울기 Y축</h4>
+                        <h4>기울기 센서 - Y축</h4>
                         <canvas id="tilt-y-chart"></canvas>
                     </div>
                     <div class="chart-item">
-                        <h4>기울기 Z축</h4>
+                        <h4>기울기 센서 - Z축</h4>
                         <canvas id="tilt-z-chart"></canvas>
                     </div>
                     <div class="chart-item">
-                        <h4>균열 폭</h4>
+                        <h4>균열 센서</h4>
                         <canvas id="crack-chart"></canvas>
                     </div>
                 </div>
                 <div class="sensor-summary">
                     <div class="summary-item">
-                        <span class="label">최대 기울기</span>
-                        <span class="value" id="max-tilt">0.00°</span>
+                        <span class="label">현재 프레임:</span>
+                        <span class="value" id="current-frame">0</span>
                     </div>
                     <div class="summary-item">
-                        <span class="label">균열 폭</span>
-                        <span class="value" id="crack-width">0.0mm</span>
+                        <span class="label">최대 기울기:</span>
+                        <span class="value danger" id="max-tilt">0.00°</span>
                     </div>
                     <div class="summary-item">
-                        <span class="label">현재 상태</span>
-                        <span class="value" id="current-phase">정상</span>
+                        <span class="label">균열 폭:</span>
+                        <span class="value danger" id="crack-width">0.00mm</span>
                     </div>
                 </div>
             </div>
         `;
         
-        // 문서에 추가
         document.body.appendChild(this.container);
         
-        // 차트 생성
-        await this.createCharts();
+        // 닫기 버튼 이벤트
+        const closeBtn = this.container.querySelector('.sensor-chart-close');
+        closeBtn.addEventListener('click', () => this.hide());
     }
     
     /**
      * 차트 생성
-     * @returns {Promise<void>}
      */
-    async createCharts() {
-        if (!window.Chart) {
-            throw new Error('Chart.js가 로드되지 않았습니다');
-        }
+    createCharts() {
+        // 기존 차트 제거 (중복 방지)
+        this.charts.forEach(({ chart }) => {
+            chart.destroy();
+        });
+        this.charts = [];
         
-        const chartConfigs = [
-            { id: 'tilt-x-chart', type: 'tilt', axis: 'x', color: '#ff6b35' },
-            { id: 'tilt-y-chart', type: 'tilt', axis: 'y', color: '#00ff88' },
-            { id: 'tilt-z-chart', type: 'tilt', axis: 'z', color: '#00d4ff' },
-            { id: 'crack-chart', type: 'crack', axis: null, color: '#ff1744' }
-        ];
+        // Chart.js 기본 설정
+        Chart.defaults.color = 'rgba(255, 255, 255, 0.8)';
+        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
         
-        for (const config of chartConfigs) {
-            const canvas = document.getElementById(config.id);
-            if (!canvas) {
-                console.warn(`캔버스를 찾을 수 없습니다: ${config.id}`);
-                continue;
-            }
-            
-            const chart = new Chart(canvas, this.createChartConfig(config));
-            this.charts.set(config.id, {
-                chart,
-                type: config.type,
-                axis: config.axis,
-                color: config.color
-            });
-        }
+        // 기울기 X축 차트
+        this.createTiltChart('tilt-x-chart', 'X축 기울기', '#00ff88', 'x');
         
-        console.log(`✅ ${this.charts.size}개 차트 생성 완료`);
+        // 기울기 Y축 차트
+        this.createTiltChart('tilt-y-chart', 'Y축 기울기', '#00b4d8', 'y');
+        
+        // 기울기 Z축 차트
+        this.createTiltChart('tilt-z-chart', 'Z축 기울기', '#ff6b35', 'z');
+        
+        // 균열 차트
+        this.createCrackChart();
+        
+        console.log('✅ 차트 생성 완료:', this.charts.length + '개');
     }
     
     /**
-     * 차트 설정 생성
-     * @param {Object} config - 차트 설정
-     * @returns {Object} Chart.js 설정 객체
+     * 기울기 차트 생성
      */
-    createChartConfig(config) {
-        const isTimeChart = config.type === 'tilt' || config.type === 'crack';
+    createTiltChart(canvasId, label, color, axis) {
+        const ctx = document.getElementById(canvasId);
+        if (!ctx) return;
         
-        return {
+        const chart = new Chart(ctx, {
             type: 'line',
             data: {
+                labels: [],
                 datasets: [{
-                    label: this.getChartLabel(config),
+                    label: label,
                     data: [],
-                    borderColor: config.color,
-                    backgroundColor: config.color + '20',
+                    borderColor: color,
+                    backgroundColor: color + '20',
                     borderWidth: 2,
-                    fill: false,
-                    tension: 0.1,
+                    fill: true,
+                    tension: 0.4,
                     pointRadius: 0,
                     pointHoverRadius: 4
                 }]
@@ -246,609 +170,582 @@ export class SensorChartManager {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                animation: false,
+                animation: {
+                    duration: 0  // 애니메이션 완전 비활성화
+                },
                 interaction: {
-                    intersect: false,
-                    mode: 'index'
+                    mode: 'index',
+                    intersect: false
                 },
                 plugins: {
                     legend: {
                         display: false
                     },
                     tooltip: {
-                        enabled: true,
-                        mode: 'index',
-                        intersect: false
+                        enabled: false,  // 툴팁 비활성화로 성능 향상
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        borderColor: 'rgba(255, 255, 255, 0.2)',
+                        borderWidth: 1,
+                        displayColors: false,
+                        callbacks: {
+                            label: (context) => {
+                                return `${context.parsed.y.toFixed(3)}°`;
+                            }
+                        }
                     }
                 },
                 scales: {
                     x: {
-                        type: isTimeChart ? 'linear' : 'category',
-                        display: true,
+                        type: 'linear',
                         title: {
                             display: true,
-                            text: '시간 (초)',
-                            color: '#ffffff'
+                            text: '시간 (초)'
                         },
                         ticks: {
-                            color: '#ffffff'
+                            stepSize: 0.5,
+                            callback: function(value) {
+                                return value.toFixed(1);
+                            }
                         },
                         grid: {
-                            color: 'rgba(255, 255, 255, 0.1)'
+                            color: 'rgba(255, 255, 255, 0.05)'
                         }
                     },
                     y: {
-                        display: true,
                         title: {
                             display: true,
-                            text: this.getYAxisLabel(config),
-                            color: '#ffffff'
+                            text: '기울기 (도)'
                         },
+                        min: -2,
+                        max: 2,
                         ticks: {
-                            color: '#ffffff'
+                            stepSize: 0.5
                         },
                         grid: {
-                            color: 'rgba(255, 255, 255, 0.1)'
+                            color: 'rgba(255, 255, 255, 0.05)'
                         }
                     }
                 }
             }
-        };
-    }
-    
-    /**
-     * 차트 라벨 생성
-     * @param {Object} config - 차트 설정
-     * @returns {string} 차트 라벨
-     */
-    getChartLabel(config) {
-        if (config.type === 'tilt') {
-            return `기울기 ${config.axis.toUpperCase()}축`;
-        } else if (config.type === 'crack') {
-            return '균열 폭';
-        }
-        return '센서 데이터';
-    }
-    
-    /**
-     * Y축 라벨 생성
-     * @param {Object} config - 차트 설정
-     * @returns {string} Y축 라벨
-     */
-    getYAxisLabel(config) {
-        if (config.type === 'tilt') {
-            return '각도 (°)';
-        } else if (config.type === 'crack') {
-            return '폭 (mm)';
-        }
-        return '값';
-    }
-    
-    /**
-     * 이벤트 리스너 설정
-     * @returns {Promise<void>}
-     */
-    async setupEventListeners() {
-        // 닫기 버튼
-        const closeBtn = document.getElementById('chart-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.hide());
-        }
-        
-        // ESC 키로 닫기
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && this.state.isVisible) {
-                this.hide();
-            }
         });
         
-        // 브라우저 탭 변경 감지
-        document.addEventListener('visibilitychange', this.handleVisibilityChange);
-        
-        // 윈도우 리사이즈
-        window.addEventListener('resize', this.handleResize);
-        
-        // 컨테이너 클릭 시 전파 방지
-        if (this.container) {
-            this.container.addEventListener('click', (e) => e.stopPropagation());
-        }
+        this.charts.push({ chart, axis, type: 'tilt' });
     }
     
     /**
-     * 시뮬레이션 시작
-     * @param {number} startFrame - 시작 프레임
-     * @param {number} maxFrame - 최대 프레임
-     * @param {string} modelName - 모델명
-     * @returns {Promise<void>}
+     * 균열 차트 생성
      */
-    async startSimulation(startFrame = 0, maxFrame = 30, modelName = 'Block_Retaining_Wall') {
-        try {
-            this.currentModelName = modelName;
-            console.log(`📊 센서 시뮬레이션 시작: ${modelName} (${startFrame} → ${maxFrame})`);
-            
-            // 데이터 생성
-            await this.generateData(maxFrame, modelName);
-            
-            // 차트 표시
-            this.show();
-            
-            // 애니메이션 시작
-            await this.animateToFrame(maxFrame);
-            
-        } catch (error) {
-            this.handleError('시뮬레이션 시작 실패', error);
-        }
-    }
-    
-    /**
-     * 데이터 생성
-     * @param {number} maxFrame - 최대 프레임
-     * @param {string} modelName - 모델명
-     * @returns {Promise<void>}
-     */
-    async generateData(maxFrame, modelName) {
-        try {
-            const fps = 30;
-            const dataset = [];
-            const characteristics = this.modelCharacteristics[modelName] || this.modelCharacteristics['Block_Retaining_Wall'];
-            
-            for (let frame = 0; frame <= maxFrame; frame++) {
-                const time = frame / fps;
-                const progress = frame / maxFrame;
-                
-                // 옹벽별 특성 반영 데이터 생성
-                const data = this.generateFrameData(frame, maxFrame, characteristics);
-                data.time = time;
-                data.frame = frame;
-                
-                dataset.push(data);
-            }
-            
-            this.precomputedData = {
-                modelName,
-                data: dataset,
-                maxFrame,
-                fps
-            };
-            
-            console.log(`✅ ${dataset.length}개 프레임 데이터 생성 완료`);
-            
-        } catch (error) {
-            throw new Error(`데이터 생성 실패: ${error.message}`);
-        }
-    }
-    
-    /**
-     * 프레임별 데이터 생성
-     * @param {number} frame - 현재 프레임
-     * @param {number} maxFrame - 최대 프레임
-     * @param {Object} characteristics - 옹벽 특성
-     * @returns {Object} 프레임 데이터
-     */
-    generateFrameData(frame, maxFrame, characteristics) {
-        const progress = frame / maxFrame;
-        const noise = characteristics.noise || 0.02;
-        const smoothness = characteristics.smoothness || 0.8;
+    createCrackChart() {
+        const ctx = document.getElementById('crack-chart');
+        if (!ctx) return;
         
-        // 기본 패턴
-        let tiltBase = Math.pow(progress, 2) * 2;
-        let crackBase = Math.pow(progress, 1.5) * 3;
-        
-        // 모델별 특성 적용
-        if (characteristics.name.includes('블록')) {
-            // 블록 옹벽: 계단식 증가
-            tiltBase += Math.floor(progress * 5) * 0.3;
-            crackBase += Math.floor(progress * 4) * 0.5;
-        } else if (characteristics.name.includes('캔틸레버')) {
-            // 캔틸레버: 급격한 변화
-            tiltBase *= (progress > 0.7) ? 2 : 1;
-            crackBase *= (progress > 0.8) ? 3 : 1;
-        } else if (characteristics.name.includes('MSE')) {
-            // MSE: 선형 증가 후 급격한 변화
-            tiltBase = progress < 0.8 ? progress * 1.5 : progress * 4;
-            crackBase = progress < 0.8 ? progress * 2 : progress * 5;
-        }
-        
-        // 노이즈 추가
-        const randomNoise = () => (Math.random() - 0.5) * noise;
-        
-        // 부드러움 적용
-        const smooth = (value, target) => value * smoothness + target * (1 - smoothness);
-        
-        return {
-            tilt: {
-                x: smooth(tiltBase + randomNoise(), tiltBase),
-                y: smooth(tiltBase * 0.8 + randomNoise(), tiltBase * 0.8),
-                z: smooth(tiltBase * 0.6 + randomNoise(), tiltBase * 0.6)
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: '균열 폭',
+                    data: [],
+                    borderColor: '#ff1744',
+                    backgroundColor: '#ff174420',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    pointHoverRadius: 4
+                }]
             },
-            crack: smooth(crackBase + randomNoise(), crackBase),
-            phase: crackBase > 2.0 ? 'danger' : crackBase > 1.0 ? 'warning' : 'normal'
-        };
-    }
-    
-    /**
-     * 특정 프레임까지 애니메이션
-     * @param {number} targetFrame - 목표 프레임
-     * @returns {Promise<void>}
-     */
-    async animateToFrame(targetFrame) {
-        return new Promise((resolve, reject) => {
-            try {
-                if (!this.precomputedData) {
-                    throw new Error('미리 계산된 데이터가 없습니다');
-                }
-                
-                const dataset = this.precomputedData.data;
-                const maxIndex = Math.min(targetFrame, dataset.length - 1);
-                
-                let currentIndex = 0;
-                this.state.isAnimating = true;
-                
-                const updateCharts = () => {
-                    try {
-                        if (!this.state.isAnimating || currentIndex > maxIndex) {
-                            this.state.isAnimating = false;
-                            this.updateSummary(maxIndex);
-                            resolve();
-                            return;
-                        }
-                        
-                        // 배치 처리
-                        const endIndex = Math.min(currentIndex + this.config.animation.batchSize, maxIndex + 1);
-                        
-                        for (let i = currentIndex; i < endIndex; i++) {
-                            if (i < dataset.length) {
-                                this.addDataPoint(dataset[i]);
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                    duration: 0
+                },
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        enabled: false,  // 툴팁 비활성화로 성능 향상
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#fff',
+                        bodyColor: '#fff',
+                        borderColor: 'rgba(255, 255, 255, 0.2)',
+                        borderWidth: 1,
+                        displayColors: false,
+                        callbacks: {
+                            label: (context) => {
+                                return `${context.parsed.y.toFixed(2)}mm`;
                             }
                         }
-                        
-                        currentIndex = endIndex;
-                        
-                        if (this.state.isAnimating) {
-                            this.animationId = setTimeout(updateCharts, this.config.animation.updateInterval);
+                    },
+                    annotation: {
+                        annotations: {
+                            dangerLine: {
+                                type: 'line',
+                                yMin: 2.0,
+                                yMax: 2.0,
+                                borderColor: '#ff1744',
+                                borderWidth: 2,
+                                borderDash: [5, 5],
+                                label: {
+                                    content: '위험 임계값',
+                                    enabled: true,
+                                    position: 'end',
+                                    backgroundColor: '#ff1744',
+                                    color: 'white',
+                                    font: {
+                                        size: 10
+                                    }
+                                }
+                            },
+                            warningLine: {
+                                type: 'line',
+                                yMin: 1.0,
+                                yMax: 1.0,
+                                borderColor: '#ff6b35',
+                                borderWidth: 1,
+                                borderDash: [5, 5],
+                                label: {
+                                    content: '경고 임계값',
+                                    enabled: true,
+                                    position: 'end',
+                                    backgroundColor: '#ff6b35',
+                                    color: 'white',
+                                    font: {
+                                        size: 10
+                                    }
+                                }
+                            }
                         }
-                        
-                    } catch (error) {
-                        this.state.isAnimating = false;
-                        reject(error);
                     }
-                };
-                
-                updateCharts();
-                
-            } catch (error) {
-                reject(error);
+                },
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: {
+                            display: true,
+                            text: '시간 (초)'
+                        },
+                        ticks: {
+                            stepSize: 0.5,
+                            callback: function(value) {
+                                return value.toFixed(1);
+                            }
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: '균열 폭 (mm)'
+                        },
+                        min: 0,
+                        max: 3,
+                        ticks: {
+                            stepSize: 0.5
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)'
+                        }
+                    }
+                }
             }
+        });
+        
+        this.charts.push({ chart, type: 'crack' });
+    }
+    
+    /**
+     * 시뮬레이션 시작 (최적화 버전)
+     */
+    async startSimulation(currentFrame = 0, maxFrame = 30, modelName = 'Default') {
+        console.log(`🎬 센서 시뮬레이션 시작 (프레임: ${currentFrame}/${maxFrame}, 모델: ${modelName})`);
+        
+        // 기존 애니메이션 중단
+        this.stopAnimation();
+        
+        // 모델명 저장
+        this.currentModelName = modelName;
+        
+        // 데이터 로드 확인
+        if (!this.dataLoader.dataCache) {
+            console.log('📊 센서 데이터 최초 로드 중...');
+            await this.dataLoader.loadData();
+        }
+
+        // 데이터 로드 또는 생성
+        if (!this.precomputedData || this.precomputedData.modelName !== modelName) {
+            console.log('📊 센서 데이터 생성 중...');
+            this.precomputedData = {
+                modelName: modelName,
+                data: await this.dataLoader.generateFullDataset(modelName, maxFrame)
+            };
+            
+            if (!this.precomputedData.data) {
+                console.warn('⚠️ 모델 데이터 없음, 기본 데이터 사용');
+                // 폴백: 기본 데이터 생성
+                this.generateDefaultData(currentFrame, maxFrame);
+            }
+        }
+        
+        // 차트 초기화
+        this.clearCharts();
+        
+        // 애니메이션 시작
+        this.animateWithPrecomputedData(currentFrame);
+        
+        console.log('📊 센서 차트가 표시되었습니다. 닫기 버튼(×)을 클릭하면 차트를 닫을 수 있습니다.');
+    }
+    
+    /**
+     * 기본 데이터셋 생성 (폴백)
+     */
+    async generateDefaultDataset(maxFrame) {
+        const fps = 30;
+        const dataset = [];
+        
+        for (let frame = 0; frame <= maxFrame; frame++) {
+            const time = frame / fps;
+            const progress = frame / maxFrame;
+            
+            dataset.push({
+                frame: frame,
+                time: time,
+                tilt: {
+                    x: Math.sin(time * 2) * 0.5 * progress,
+                    y: Math.cos(time * 1.5) * 0.4 * progress,
+                    z: Math.sin(time * 3) * 0.3 * progress
+                },
+                crack: Math.max(0, progress * 2.5 - 0.5)
+            });
+        }
+        
+        return dataset;
+    }
+
+    /**
+     * 시뮬레이션 데이터 생성
+     */
+    generateSimulationData(currentFrame, maxFrame) {
+        const fps = 30;
+        const transitionFrame = this.simulationConfig.transitionFrame;
+        
+        // 시간 배열 생성 (초 단위)
+        const times = [];
+        for (let i = 0; i <= currentFrame; i++) {
+            times.push(i / fps);
+        }
+        
+        // 기울기 데이터 생성
+        ['x', 'y', 'z'].forEach(axis => {
+            this.data.tilt[axis] = times.map((time, index) => {
+                const frame = index;
+                let value;
+                
+                if (frame < transitionFrame) {
+                    // 정상 구간: 미세한 변동
+                    value = this.randomInRange(-0.05, 0.05);
+                } else if (frame < currentFrame - 5) {
+                    // 전환 구간: 점진적 증가
+                    const progress = (frame - transitionFrame) / (currentFrame - transitionFrame - 5);
+                    const range = this.interpolateRange(
+                        this.simulationConfig.normalRange,
+                        this.simulationConfig.warningRange,
+                        progress
+                    );
+                    value = this.randomInRange(range.min, range.max);
+                } else {
+                    // 위험 구간: 급격한 증가
+                    const multiplier = axis === 'x' ? 1.5 : axis === 'y' ? 1.2 : 1.0;
+                    value = this.randomInRange(0.8, 1.5) * multiplier;
+                }
+                
+                return { x: time, y: value };
+            });
+        });
+        
+        // 균열 데이터 생성
+        this.data.crack = times.map((time, index) => {
+            const frame = index;
+            let value;
+            
+            if (frame < transitionFrame) {
+                // 정상: 0에 가까운 값
+                value = this.randomInRange(0, 0.1);
+            } else if (frame < currentFrame - 3) {
+                // 점진적 증가
+                const progress = (frame - transitionFrame) / (currentFrame - transitionFrame - 3);
+                value = this.interpolate(0.1, 1.0, progress) + this.randomInRange(-0.1, 0.1);
+            } else {
+                // 급격한 증가
+                value = this.interpolate(1.0, 2.5, (frame - (currentFrame - 3)) / 3);
+            }
+            
+            return { x: time, y: Math.max(0, value) };
         });
     }
     
     /**
-     * 데이터 포인트 추가
-     * @param {Object} frameData - 프레임 데이터
+     * 미리 계산된 데이터로 애니메이션
      */
-    addDataPoint(frameData) {
-        try {
-            this.charts.forEach((chartInfo, chartId) => {
-                const { chart, type, axis } = chartInfo;
-                let value;
-                
-                if (type === 'tilt' && axis && frameData.tilt) {
-                    value = frameData.tilt[axis];
-                } else if (type === 'crack') {
-                    value = frameData.crack;
-                } else {
-                    return;
-                }
-                
-                // 데이터 포인트 추가
-                const dataPoint = { x: frameData.time, y: value };
-                chart.data.datasets[0].data.push(dataPoint);
-                
-                // 최대 데이터 포인트 제한
-                if (chart.data.datasets[0].data.length > this.config.data.maxDataPoints) {
-                    chart.data.datasets[0].data.shift();
-                }
-                
-                // 차트 업데이트
-                chart.update('none');
-            });
-            
-            // 요약 정보 업데이트
-            this.updateSummaryFromData(frameData);
-            
-        } catch (error) {
-            console.error('데이터 포인트 추가 오류:', error);
+    animateWithPrecomputedData(targetFrame) {
+        const dataset = this.precomputedData.data;
+        if (!dataset || dataset.length === 0) {
+            console.error('데이터셋이 없습니다');
+            return;
         }
-    }
-    
-    /**
-     * 요약 정보 업데이트 (프레임 인덱스 기반)
-     * @param {number} frameIndex - 프레임 인덱스
-     */
-    updateSummary(frameIndex) {
-        try {
-            if (!this.precomputedData || !this.precomputedData.data) {
-                console.warn('미리 계산된 데이터가 없습니다');
+        
+        console.log(`📊 데이터 애니메이션 시작: ${targetFrame}프레임까지`);
+        console.log('데이터셋 길이:', dataset.length);
+        
+        let currentIndex = 0;
+        const maxIndex = Math.min(targetFrame, dataset.length - 1);
+        this.isAnimating = true;
+        
+        // 차트 데이터 배열 초기화
+        const chartData = {
+            tilt: { x: [], y: [], z: [] },
+            crack: []
+        };
+        
+        const updateCharts = () => {
+            if (!this.isAnimating || currentIndex > maxIndex) {
+                this.updateSummary(maxIndex);
+                this.isAnimating = false;
                 return;
             }
             
-            const dataset = this.precomputedData.data;
-            if (frameIndex >= 0 && frameIndex < dataset.length) {
-                this.updateSummaryFromData(dataset[frameIndex]);
+            // 배치 데이터 추가
+            const endIndex = Math.min(currentIndex + this.chartConfig.batchSize, maxIndex + 1);
+            
+            for (let i = currentIndex; i < endIndex; i += this.chartConfig.skipFrames) {
+                const frame = dataset[i];
+                if (!frame) continue;
+                
+                // 최대 데이터 포인트 체크
+                if (chartData.crack.length >= this.chartConfig.maxDataPoints) {
+                    // 오래된 데이터 제거
+                    ['x', 'y', 'z'].forEach(axis => chartData.tilt[axis].shift());
+                    chartData.crack.shift();
+                }
+                
+                // 새 데이터 추가
+                chartData.tilt.x.push({ x: frame.time, y: frame.tilt.x });
+                chartData.tilt.y.push({ x: frame.time, y: frame.tilt.y });
+                chartData.tilt.z.push({ x: frame.time, y: frame.tilt.z });
+                chartData.crack.push({ x: frame.time, y: frame.crack });
             }
-        } catch (error) {
-            console.error('요약 업데이트 오류:', error);
-        }
+            
+            // 차트 업데이트 (requestAnimationFrame 사용하지 않음)
+            this.updateChartsDirectly(chartData);
+            
+            // 요약 정보 업데이트
+            if (dataset[endIndex - 1]) {
+                this.updateSummaryFromData(dataset[endIndex - 1]);
+            }
+            
+            currentIndex = endIndex;
+            
+            // 다음 업데이트 예약
+            if (this.isAnimating) {
+                setTimeout(updateCharts, this.chartConfig.updateInterval);
+            }
+        };
+        
+        // 첫 업데이트
+        updateCharts();
     }
     
     /**
-     * 요약 정보 업데이트 (데이터 기반)
-     * @param {Object} frameData - 프레임 데이터
+     * 차트 직접 업데이트 (성능 최적화)
+     */
+    updateChartsDirectly(data) {
+        this.charts.forEach(({ chart, axis, type }) => {
+            if (type === 'tilt' && data.tilt[axis]) {
+                const chartData = data.tilt[axis];
+                chart.data.labels = chartData.map(d => d.x);
+                chart.data.datasets[0].data = chartData.map(d => d.y);
+            } else if (type === 'crack' && data.crack) {
+                const chartData = data.crack;
+                chart.data.labels = chartData.map(d => d.x);
+                chart.data.datasets[0].data = chartData.map(d => d.y);
+            }
+            
+            // 애니메이션 없이 업데이트
+            chart.update('none');
+        });
+    }
+    
+    /**
+     * 데이터 기반 요약 업데이트
      */
     updateSummaryFromData(frameData) {
-        try {
-            if (!frameData) return;
-            
-            // 최대 기울기 계산
+        // 현재 프레임
+        const frameEl = document.getElementById('current-frame');
+        if (frameEl) {
+            frameEl.textContent = frameData.frame;
+        }
+        
+        // 최대 기울기
+        const maxTiltEl = document.getElementById('max-tilt');
+        if (maxTiltEl) {
             const maxTilt = Math.max(
-                Math.abs(frameData.tilt?.x || 0),
-                Math.abs(frameData.tilt?.y || 0),
-                Math.abs(frameData.tilt?.z || 0)
+                Math.abs(frameData.tilt.x),
+                Math.abs(frameData.tilt.y),
+                Math.abs(frameData.tilt.z)
             );
-            
-            // UI 요소 업데이트
-            this.updateElement('max-tilt', `${maxTilt.toFixed(2)}°`, maxTilt > this.config.data.dangerThreshold);
-            this.updateElement('crack-width', `${(frameData.crack || 0).toFixed(1)}mm`, frameData.crack > 2.0);
-            this.updateElement('current-phase', this.getPhaseText(frameData.phase), frameData.phase === 'danger');
-            
-            // 상태 표시기 업데이트
-            this.updateStatusIndicator(frameData.phase);
-            
-        } catch (error) {
-            console.error('요약 데이터 업데이트 오류:', error);
+            maxTiltEl.textContent = maxTilt.toFixed(2) + '°';
+            maxTiltEl.className = maxTilt > 0.8 ? 'value danger' : maxTilt > 0.5 ? 'value warning' : 'value';
+        }
+        
+        // 균열 폭
+        const crackEl = document.getElementById('crack-width');
+        if (crackEl) {
+            const crackWidth = frameData.crack;
+            crackEl.textContent = crackWidth.toFixed(2) + 'mm';
+            crackEl.className = crackWidth > 2.0 ? 'value danger' : crackWidth > 1.0 ? 'value warning' : 'value';
         }
     }
     
     /**
-     * UI 요소 업데이트
-     * @param {string} id - 요소 ID
-     * @param {string} text - 표시할 텍스트
-     * @param {boolean} isDanger - 위험 상태 여부
+     * 기본 데이터 생성 (폴백)
      */
-    updateElement(id, text, isDanger = false) {
-        const element = document.getElementById(id);
-        if (element) {
-            element.textContent = text;
-            element.className = isDanger ? 'value danger' : 'value';
-        }
-    }
-    
-    /**
-     * 상태 텍스트 생성
-     * @param {string} phase - 상태
-     * @returns {string} 상태 텍스트
-     */
-    getPhaseText(phase) {
-        const phaseMap = {
-            'normal': '정상',
-            'warning': '경고',
-            'danger': '위험'
-        };
-        return phaseMap[phase] || '정상';
-    }
-    
-    /**
-     * 상태 표시기 업데이트
-     * @param {string} phase - 상태
-     */
-    updateStatusIndicator(phase) {
-        const indicator = document.getElementById('chart-status');
-        if (indicator) {
-            indicator.textContent = this.getPhaseText(phase);
-            indicator.className = `status-indicator ${phase || 'normal'}`;
-        }
-    }
-    
-    /**
-     * 차트 표시
-     */
-    show() {
-        try {
-            if (this.container) {
-                this.container.classList.add('show');
-                this.state.isVisible = true;
-                console.log('📊 센서 차트 표시');
-                
-                // 리사이즈 이벤트 발생 (차트 크기 조정)
-                setTimeout(() => this.handleResize(), 100);
-            }
-        } catch (error) {
-            this.handleError('차트 표시 실패', error);
-        }
-    }
-    
-    /**
-     * 차트 숨기기
-     */
-    hide() {
-        try {
-            if (this.container) {
-                this.container.classList.remove('show');
-                this.state.isVisible = false;
-                this.stopAnimation();
-                console.log('📊 센서 차트 숨김');
-            }
-        } catch (error) {
-            this.handleError('차트 숨기기 실패', error);
-        }
+    generateDefaultData(currentFrame, maxFrame) {
+        // 기존 로직 유지
+        this.generateSimulationData(currentFrame, maxFrame);
     }
     
     /**
      * 애니메이션 중단
      */
     stopAnimation() {
-        try {
-            this.state.isAnimating = false;
-            if (this.animationId) {
-                clearTimeout(this.animationId);
-                this.animationId = null;
-            }
-        } catch (error) {
-            console.error('애니메이션 중단 오류:', error);
-        }
+        this.isAnimating = false;
     }
     
     /**
      * 차트 초기화
      */
     clearCharts() {
-        try {
-            this.charts.forEach(({ chart }) => {
-                if (chart && chart.data && chart.data.datasets[0]) {
-                    chart.data.datasets[0].data = [];
-                    chart.update('none');
-                }
-            });
-            console.log('📊 차트 데이터 초기화');
-        } catch (error) {
-            console.error('차트 초기화 오류:', error);
-        }
+        this.charts.forEach(({ chart }) => {
+            chart.data.labels = [];
+            chart.data.datasets[0].data = [];
+            chart.update('none');
+        });
     }
     
     /**
-     * 가시성 상태 확인 (메서드 버전)
-     * @returns {boolean} 가시성 상태
+     * 요약 정보 업데이트
      */
-    isVisible() {
-        return this.state.isVisible;
-    }
-    
-    /**
-     * 애니메이션과 동기화
-     * @param {Object} animationController - 애니메이션 컨트롤러
-     */
-    syncWithAnimation(animationController) {
-        try {
-            if (!animationController) {
-                console.warn('애니메이션 컨트롤러가 없습니다');
-                return;
-            }
-            
-            console.log('📊 애니메이션과 동기화 시작');
-            
-            // 애니메이션 상태에 따라 차트 업데이트
-            // 실제 구현은 animationController의 인터페이스에 따라 달라짐
-            
-        } catch (error) {
-            this.handleError('애니메이션 동기화 실패', error);
-        }
-    }
-    
-    /**
-     * 리사이즈 처리
-     */
-    handleResize() {
-        try {
-            if (this.state.isVisible) {
-                this.charts.forEach(({ chart }) => {
-                    if (chart && typeof chart.resize === 'function') {
-                        chart.resize();
-                    }
-                });
-            }
-        } catch (error) {
-            console.error('리사이즈 처리 오류:', error);
-        }
-    }
-    
-    /**
-     * 브라우저 탭 변경 처리
-     */
-    handleVisibilityChange() {
-        try {
-            if (document.hidden && this.state.isAnimating) {
-                this.stopAnimation();
-            }
-        } catch (error) {
-            console.error('가시성 변경 처리 오류:', error);
-        }
-    }
-    
-    /**
-     * 에러 처리
-     * @param {string} message - 에러 메시지
-     * @param {Error} error - 에러 객체
-     */
-    handleError(message, error = null) {
-        this.state.hasError = true;
-        this.state.errorMessage = error ? error.message : message;
+    updateSummary(currentIndex = -1) {
+        const index = currentIndex === -1 ? this.data.crack.length - 1 : currentIndex;
         
-        console.error(`📊 SensorChartManager 오류: ${message}`, error);
-        
-        // 애니메이션 중단
-        this.stopAnimation();
-        
-        // 에러 상태 UI 업데이트
-        const indicator = document.getElementById('chart-status');
-        if (indicator) {
-            indicator.textContent = '오류';
-            indicator.className = 'status-indicator danger';
+        // 현재 프레임
+        const frameEl = document.getElementById('current-frame');
+        if (frameEl) {
+            frameEl.textContent = Math.round(index * 30 / this.data.crack.length);
         }
+        
+        // 최대 기울기
+        const maxTiltEl = document.getElementById('max-tilt');
+        if (maxTiltEl && index >= 0) {
+            const maxX = Math.abs(this.data.tilt.x[index]?.y || 0);
+            const maxY = Math.abs(this.data.tilt.y[index]?.y || 0);
+            const maxZ = Math.abs(this.data.tilt.z[index]?.y || 0);
+            const maxTilt = Math.max(maxX, maxY, maxZ);
+            maxTiltEl.textContent = maxTilt.toFixed(2) + '°';
+            maxTiltEl.className = maxTilt > 0.8 ? 'value danger' : maxTilt > 0.5 ? 'value warning' : 'value';
+        }
+        
+        // 균열 폭
+        const crackEl = document.getElementById('crack-width');
+        if (crackEl && index >= 0) {
+            const crackWidth = this.data.crack[index]?.y || 0;
+            crackEl.textContent = crackWidth.toFixed(2) + 'mm';
+            crackEl.className = crackWidth > 2.0 ? 'value danger' : crackWidth > 1.0 ? 'value warning' : 'value';
+        }
+    }
+    
+    /**
+     * 데이터 초기화
+     */
+    clearData() {
+        this.data.tilt.x = [];
+        this.data.tilt.y = [];
+        this.data.tilt.z = [];
+        this.data.crack = [];
+        
+        // 차트 초기화
+        this.charts.forEach(({ chart }) => {
+            chart.data.labels = [];
+            chart.data.datasets[0].data = [];
+            chart.update('none');
+        });
+    }
+    
+    /**
+     * 표시
+     */
+    show() {
+        if (this.container) {
+            this.container.classList.add('show');
+            this.isVisible = true;
+        }
+    }
+    
+    /**
+     * 숨기기
+     */
+    hide() {
+        if (this.container) {
+            this.container.classList.remove('show');
+            this.isVisible = false;
+            // 애니메이션 중단
+            this.isAnimating = false;
+        }
+    }
+    
+    /**
+     * 보간 헬퍼 함수
+     */
+    interpolate(start, end, progress) {
+        return start + (end - start) * progress;
+    }
+    
+    interpolateRange(startRange, endRange, progress) {
+        return {
+            min: this.interpolate(startRange.min, endRange.min, progress),
+            max: this.interpolate(startRange.max, endRange.max, progress)
+        };
+    }
+    
+    randomInRange(min, max) {
+        return Math.random() * (max - min) + min;
     }
     
     /**
      * 정리
      */
     destroy() {
-        try {
-            console.log('🔚 SensorChartManager 정리 시작');
-            
-            // 애니메이션 중단
-            this.stopAnimation();
-            
-            // 이벤트 리스너 제거
-            document.removeEventListener('visibilitychange', this.handleVisibilityChange);
-            window.removeEventListener('resize', this.handleResize);
-            
-            // 차트 정리
-            this.charts.forEach(({ chart }) => {
-                if (chart && typeof chart.destroy === 'function') {
-                    chart.destroy();
-                }
-            });
-            this.charts.clear();
-            
-            // 컨테이너 제거
-            if (this.container && this.container.parentNode) {
-                this.container.parentNode.removeChild(this.container);
-            }
-            
-            // 상태 초기화
-            this.state = {
-                isVisible: false,
-                isAnimating: false,
-                isInitialized: false,
-                hasError: false,
-                errorMessage: null
-            };
-            
-            console.log('✅ SensorChartManager 정리 완료');
-            
-        } catch (error) {
-            console.error('정리 중 오류:', error);
+        // 차트 제거
+        this.charts.forEach(({ chart }) => {
+            chart.destroy();
+        });
+        this.charts = [];
+        
+        // 컨테이너 제거
+        if (this.container && this.container.parentNode) {
+            this.container.parentNode.removeChild(this.container);
         }
-    }
-    
-    /**
-     * 현재 상태 정보 반환 (디버깅용)
-     * @returns {Object} 상태 정보
-     */
-    getStatus() {
-        return {
-            ...this.state,
-            chartsCount: this.charts.size,
-            hasData: !!this.precomputedData,
-            currentModel: this.currentModelName
-        };
+        
+        console.log('🔚 SensorChartManager 정리 완료');
     }
 }

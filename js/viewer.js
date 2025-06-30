@@ -1,4 +1,4 @@
-// js/viewer.js - 3D 뷰어 코어 모듈 (다크 테마 적용 + 모든 기능 포함)
+// js/viewer.js - 3D 뷰어 코어 모듈 (카메라 방향 수정)
 
 export class Viewer3D {
     constructor(config) {
@@ -17,7 +17,7 @@ export class Viewer3D {
         
         // 현재 모델
         this.currentModel = null;
-        this.modelCenter = null;
+        this.modelCenter = null;  // 모델 중심점 저장
         
         // 헬퍼
         this.gridHelper = null;
@@ -26,7 +26,7 @@ export class Viewer3D {
         // 상태
         this.isInitialized = false;
         
-        // 렌더링 콜백
+        // 렌더링 콜백 (CSS2DRenderer 등을 위한)
         this.onRenderCallbacks = [];
         
         // 카메라 애니메이션
@@ -37,8 +37,9 @@ export class Viewer3D {
             endPosition: new THREE.Vector3(),
             endTarget: new THREE.Vector3(),
             startTime: 0,
-            duration: 1000,
+            duration: 1000, // 밀리초
             easing: 'easeInOutCubic',
+            // Top 뷰를 위한 추가 속성
             isTopView: false,
             startUp: new THREE.Vector3(0, 1, 0),
             endUp: new THREE.Vector3(0, 1, 0)
@@ -114,31 +115,12 @@ export class Viewer3D {
     }
     
     /**
-     * 씬 생성 - 다크 그라데이션 배경 적용
+     * 씬 생성
      */
     createScene() {
         this.scene = new THREE.Scene();
-        
-        // 다크 그라데이션 배경 생성
-        const canvas = document.createElement('canvas');
-        canvas.width = 2;
-        canvas.height = 512;
-        const context = canvas.getContext('2d');
-        
-        // 그라데이션 생성 (위: 어두운 회색, 아래: 거의 검정)
-        const gradient = context.createLinearGradient(0, 0, 0, 512);
-        gradient.addColorStop(0, '#1a1a1a');    // 위쪽: 어두운 회색
-        gradient.addColorStop(0.5, '#0f0f0f');  // 중간: 더 어두운 회색
-        gradient.addColorStop(1, '#050505');    // 아래쪽: 거의 검정
-        
-        context.fillStyle = gradient;
-        context.fillRect(0, 0, 2, 512);
-        
-        // 텍스처로 변환하여 배경에 적용
-        const gradientTexture = new THREE.CanvasTexture(canvas);
-        gradientTexture.mapping = THREE.EquirectangularReflectionMapping;
-        
-        this.scene.background = gradientTexture;
+        // 밝은 회색 배경 (Three.js 에디터 스타일)
+        this.scene.background = new THREE.Color(0xf0f0f0);
         
         // 안개 제거 - 선명한 렌더링을 위해
         this.scene.fog = null;
@@ -186,10 +168,10 @@ export class Viewer3D {
         
         // 그림자 설정
         this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 더 선명한 그림자
         
-        // 렌더러 설정
-        this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        // 렌더러 설정 - 밝은 렌더링을 위한 최적화
+        this.renderer.toneMapping = THREE.NoToneMapping; // 톤 매핑 비활성화
         this.renderer.toneMappingExposure = 1.0;
         
         // 출력 인코딩
@@ -233,108 +215,86 @@ export class Viewer3D {
     }
     
     /**
-     * 조명 설정 - 다크 배경에 최적화된 밝은 조명
+     * 조명 설정 - 밝고 선명한 렌더링을 위한 최적화
      */
     setupLights() {
-        // 1. 주변광 - 약간 줄여서 콘트라스트 증가
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        // 1. 주변광 - 더 밝게
+        const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
         this.scene.add(ambientLight);
         this.lights.ambient = ambientLight;
         
-        // 2. 주 방향광 (키 라이트) - 더 강하게
-        const mainLight = new THREE.DirectionalLight(0xffffff, 1.8);
+        // 2. 주 방향광 (태양광) - 강하고 선명한 그림자
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
         mainLight.position.set(10, 20, 10);
         mainLight.castShadow = true;
         
-        // 그림자 설정
-        mainLight.shadow.mapSize.width = 4096;
+        // 그림자 설정 - 더 선명하고 부드러운 그림자
+        mainLight.shadow.mapSize.width = 4096;  // 고해상도
         mainLight.shadow.mapSize.height = 4096;
         mainLight.shadow.camera.near = 0.1;
         mainLight.shadow.camera.far = 100;
+        
+        // 그림자 bias 조정 - 그림자 아티팩트 제거
         mainLight.shadow.bias = -0.0005;
         mainLight.shadow.normalBias = 0.02;
-        mainLight.shadow.radius = 2;
-        mainLight.shadow.blurSamples = 8;
         
-        // 초기 그림자 범위
+        // 초기 그림자 범위 (모델 로드 시 자동 조정됨)
         mainLight.shadow.camera.left = -20;
         mainLight.shadow.camera.right = 20;
         mainLight.shadow.camera.top = 20;
         mainLight.shadow.camera.bottom = -20;
         
+        // 그림자 부드러움 감소 - 더 선명한 그림자
+        mainLight.shadow.radius = 2;
+        mainLight.shadow.blurSamples = 8;
+        
         this.scene.add(mainLight);
         this.lights.main = mainLight;
         
-        // 3. 보조 방향광 (필 라이트)
-        const fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        // 3. 보조 방향광 - 반대편에서 비추는 fill light
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.8);
         fillLight.position.set(-5, 10, -5);
         this.scene.add(fillLight);
         this.lights.fill = fillLight;
         
-        // 4. 림 라이트 - 모델 가장자리를 밝게 비춰 윤곽 강조
-        const rimLight = new THREE.DirectionalLight(0xffffff, 1.2);
-        rimLight.position.set(-10, 5, -15);
-        this.scene.add(rimLight);
-        this.lights.rim = rimLight;
-        
-        // 5. 반구광 - 하늘색을 약간 밝게, 땅색을 어둡게
+        // 4. 반구광 - 하늘과 땅의 색상 차이
         const hemiLight = new THREE.HemisphereLight(
-            0x8899aa, // 하늘색: 약간 푸른빛이 도는 회색
-            0x223344, // 땅색: 어두운 청회색
-            0.4
+            0xffffff, // 하늘색
+            0xcccccc, // 땅색
+            0.6
         );
         hemiLight.position.set(0, 20, 0);
         this.scene.add(hemiLight);
         this.lights.hemisphere = hemiLight;
         
-        // 6. 환경맵 생성 - 반사용으로만 사용
+        // 5. 환경맵 생성 (선택적) - 더 밝은 환경
         this.createEnvironment();
     }
     
     /**
-     * 환경맵 생성 - 모델 반사용 (배경에는 영향 없음)
+     * 환경맵 생성 - 밝은 스튜디오 조명 환경
      */
     createEnvironment() {
         const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
         pmremGenerator.compileEquirectangularShader();
         
-        // 스튜디오 스타일 환경 생성
+        // 밝은 스튜디오 환경 생성
         const envScene = new THREE.Scene();
+        envScene.background = new THREE.Color(0xffffff);
         
-        // 위쪽 조명 (반사용)
+        // 위쪽 조명
         const topLight = new THREE.Mesh(
             new THREE.SphereGeometry(50, 32, 16),
             new THREE.MeshBasicMaterial({
                 color: 0xffffff,
                 emissive: 0xffffff,
-                emissiveIntensity: 1
+                emissiveIntensity: 2
             })
         );
         topLight.position.y = 50;
         envScene.add(topLight);
         
-        // 측면 조명들 (부드러운 반사를 위해)
-        const sidePositions = [
-            { x: 50, y: 0, z: 0 },
-            { x: -50, y: 0, z: 0 },
-            { x: 0, y: 0, z: 50 },
-            { x: 0, y: 0, z: -50 }
-        ];
-        
-        sidePositions.forEach(pos => {
-            const sideLight = new THREE.Mesh(
-                new THREE.SphereGeometry(30, 16, 8),
-                new THREE.MeshBasicMaterial({
-                    color: 0x444444,
-                    emissive: 0x444444,
-                    emissiveIntensity: 0.5
-                })
-            );
-            sideLight.position.set(pos.x, pos.y, pos.z);
-            envScene.add(sideLight);
-        });
-        
-        // 환경맵 생성 (반사용으로만 사용)
+        // 환경맵 생성
         const renderTarget = pmremGenerator.fromScene(envScene, 0.04);
         this.scene.environment = renderTarget.texture;
         
@@ -344,12 +304,12 @@ export class Viewer3D {
     }
     
     /**
-     * 헬퍼 설정 - 다크 테마에 맞게 색상 조정
+     * 헬퍼 설정
      */
     setupHelpers() {
-        // 그리드 헬퍼 - 다크 배경에 맞는 색상
+        // 그리드 헬퍼 - 더 밝은 색상
         if (this.config.viewer.showGrid) {
-            this.gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222);
+            this.gridHelper = new THREE.GridHelper(20, 20, 0x888888, 0xcccccc);
             this.scene.add(this.gridHelper);
         }
         
@@ -396,9 +356,9 @@ export class Viewer3D {
                     // 머티리얼 속성 최적화
                     if (child.material.isMeshStandardMaterial || child.material.isMeshPhysicalMaterial) {
                         // 환경맵 반사 강도 증가
-                        child.material.envMapIntensity = 1.2;
+                        child.material.envMapIntensity = 1.0;
                         
-                        // 기본 roughness/metalness 조정
+                        // 기본 roughness/metalness 조정 (너무 반사되지 않도록)
                         if (child.material.roughness !== undefined && child.material.roughness < 0.5) {
                             child.material.roughness = 0.5;
                         }
@@ -421,18 +381,6 @@ export class Viewer3D {
         // 모델에 맞게 그림자 카메라 범위 자동 조정
         this.adjustShadowCamera();
         
-        // 림 라이트 위치 조정 (모델 뒤쪽에서 비추도록)
-        if (this.lights.rim && this.modelCenter) {
-            const cameraDir = new THREE.Vector3();
-            this.camera.getWorldDirection(cameraDir);
-            
-            // 카메라 반대 방향에서 약간 옆으로 비추도록 설정
-            this.lights.rim.position.copy(this.modelCenter);
-            this.lights.rim.position.add(cameraDir.multiplyScalar(-15));
-            this.lights.rim.position.y += 5;
-            this.lights.rim.position.x -= 10;
-        }
-        
         // 카메라 위치 조정
         this.adjustCameraToModel();
 
@@ -442,7 +390,7 @@ export class Viewer3D {
             console.log('🔲 Grid 숨김 (모델 로드됨)');
         }
         
-        // 모델 중심점 저장
+        // 모델 중심점 저장 (카메라 회전용)
         const box = new THREE.Box3().setFromObject(model);
         this.modelCenter = box.getCenter(new THREE.Vector3());
         console.log('📍 모델 중심점 계산:', this.modelCenter);
@@ -534,36 +482,47 @@ export class Viewer3D {
         const size = box.getSize(new THREE.Vector3());
         const center = box.getCenter(new THREE.Vector3());
         const maxDim = Math.max(size.x, size.y, size.z);
-        const distance = maxDim * 2.5;
         
-        const views = {
-            'front': { position: new THREE.Vector3(0, 0, distance), up: new THREE.Vector3(0, 1, 0) },
-            'back': { position: new THREE.Vector3(0, 0, -distance), up: new THREE.Vector3(0, 1, 0) },
-            'left': { position: new THREE.Vector3(-distance, 0, 0), up: new THREE.Vector3(0, 1, 0) },
-            'right': { position: new THREE.Vector3(distance, 0, 0), up: new THREE.Vector3(0, 1, 0) },
-            'top': { position: new THREE.Vector3(0, distance, 0.001), up: new THREE.Vector3(0, 0, -1) },
-            'bottom': { position: new THREE.Vector3(0, -distance, 0.001), up: new THREE.Vector3(0, 0, 1) },
-            'isometric': { position: new THREE.Vector3(distance, distance, distance), up: new THREE.Vector3(0, 1, 0) }
-        };
+        // 적절한 거리 계산
+        const distance = maxDim * 2;
+        let targetPosition;
         
-        const view = views[viewName];
-        if (!view) return;
+        switch(viewName) {
+            case 'front':
+                // 정면 - 앞에서 보는 뷰 (Z+ 방향에서)
+                targetPosition = new THREE.Vector3(center.x, center.y, center.z + distance);
+                break;
+            case 'back':
+                // 후면 - 뒤에서 보는 뷰 (Z- 방향에서)
+                targetPosition = new THREE.Vector3(center.x, center.y, center.z - distance);
+                break;
+            case 'left':
+                // 좌측 - 왼쪽에서 보는 뷰 (X+ 방향에서)
+                targetPosition = new THREE.Vector3(center.x + distance, center.y, center.z);
+                break;
+            case 'right':
+                // 우측 - 오른쪽에서 보는 뷰 (X- 방향에서)
+                targetPosition = new THREE.Vector3(center.x - distance, center.y, center.z);
+                break;
+            case 'top':
+                // 상단 - 위에서 아래를 보는 뷰
+                targetPosition = new THREE.Vector3(center.x, center.y + distance, center.z);
+                break;
+            case 'reset':
+                this.resetCamera(true); // 애니메이션 플래그 추가
+                return;
+        }
         
-        const targetPosition = view.position.clone().add(center);
-        
-        // 카메라 애니메이션 설정
-        this.cameraAnimation.active = true;
-        this.cameraAnimation.startTime = performance.now();
-        this.cameraAnimation.startPosition.copy(this.camera.position);
-        this.cameraAnimation.startTarget.copy(this.controls.target);
-        this.cameraAnimation.endPosition.copy(targetPosition);
-        this.cameraAnimation.endTarget.copy(center);
-        this.cameraAnimation.startUp.copy(this.camera.up);
-        this.cameraAnimation.endUp.copy(view.up);
-        this.cameraAnimation.isTopView = (viewName === 'top' || viewName === 'bottom');
-        
-        // 애니메이션 중 컨트롤 비활성화
-        this.controls.enabled = false;
+        if (targetPosition) {
+            // top 뷰의 경우 특별한 애니메이션 처리
+            if (viewName === 'top') {
+                this.animateCameraToTop(targetPosition, center);
+            } else {
+                // 다른 뷰들은 기본 up vector 복원하고 애니메이션
+                this.camera.up.set(0, 1, 0);
+                this.animateCamera(targetPosition, center);
+            }
+        }
     }
     
     /**
@@ -576,12 +535,13 @@ export class Viewer3D {
         // Top 뷰 플래그 리셋
         this.cameraAnimation.isTopView = false;
         
-        // 모델이 있는 경우 모델에 맞게 조정
+        // 현재 모델이 있으면 그에 맞게 조정
         if (this.currentModel) {
             const box = new THREE.Box3().setFromObject(this.currentModel);
             const size = box.getSize(new THREE.Vector3());
             const center = box.getCenter(new THREE.Vector3());
             const maxDim = Math.max(size.x, size.y, size.z);
+            
             const distance = maxDim * 2.5;
             const targetPosition = new THREE.Vector3(
                 center.x + distance * 0.7,
@@ -645,19 +605,30 @@ export class Viewer3D {
     }
     
     /**
-     * Top 뷰를 위한 특별한 애니메이션
+     * Top 뷰를 위한 특별한 카메라 애니메이션
      */
-    animateCameraToTopView(targetPosition, targetLookAt) {
+    animateCameraToTop(targetPosition, targetLookAt, duration = 800) {
+        // 이미 애니메이션 중이면 중단
+        if (this.cameraAnimation.active) {
+            this.cameraAnimation.active = false;
+        }
+        
+        // 애니메이션 설정
         this.cameraAnimation.active = true;
-        this.cameraAnimation.isTopView = true;
         this.cameraAnimation.startPosition.copy(this.camera.position);
         this.cameraAnimation.startTarget.copy(this.controls.target);
-        this.cameraAnimation.startUp.copy(this.camera.up);
         this.cameraAnimation.endPosition.copy(targetPosition);
         this.cameraAnimation.endTarget.copy(targetLookAt);
-        this.cameraAnimation.endUp.set(0, 0, -1); // Top view up vector
         this.cameraAnimation.startTime = performance.now();
-        this.cameraAnimation.duration = 1000;
+        this.cameraAnimation.duration = duration;
+        this.cameraAnimation.easing = 'easeInOutCubic';
+        
+        // Top 뷰를 위한 특별 플래그
+        this.cameraAnimation.isTopView = true;
+        
+        // 시작 up 벡터 저장
+        this.cameraAnimation.startUp = this.camera.up.clone();
+        this.cameraAnimation.endUp = new THREE.Vector3(0, 0, -1);
         
         // 애니메이션 중 컨트롤 비활성화
         this.controls.enabled = false;
@@ -674,49 +645,44 @@ export class Viewer3D {
         const progress = Math.min(elapsed / this.cameraAnimation.duration, 1);
         
         // 이징 함수 적용
-        const eased = this.getEasingValue(progress, this.cameraAnimation.easing);
+        const easedProgress = this.getEasingValue(progress, this.cameraAnimation.easing);
         
         // 위치 보간
         this.camera.position.lerpVectors(
             this.cameraAnimation.startPosition,
             this.cameraAnimation.endPosition,
-            eased
+            easedProgress
         );
         
         // 타겟 보간
         this.controls.target.lerpVectors(
             this.cameraAnimation.startTarget,
             this.cameraAnimation.endTarget,
-            eased
+            easedProgress
         );
         
-        // Top/Bottom 뷰를 위한 up vector 보간
+        // Top 뷰인 경우 up 벡터도 보간
         if (this.cameraAnimation.isTopView) {
             this.camera.up.lerpVectors(
                 this.cameraAnimation.startUp,
                 this.cameraAnimation.endUp,
-                eased
+                easedProgress
             );
         }
         
-        // 애니메이션 완료
+        // 카메라가 타겟을 바라보도록
+        this.camera.lookAt(this.controls.target);
+        
+        // 컨트롤 업데이트 (중요!)
+        this.controls.update();
+        
+        // 애니메이션 완료 체크
         if (progress >= 1) {
             this.cameraAnimation.active = false;
+            this.cameraAnimation.isTopView = false;
             this.controls.enabled = true;
-            
-            // 최종 위치 정확히 설정
-            this.camera.position.copy(this.cameraAnimation.endPosition);
-            this.controls.target.copy(this.cameraAnimation.endTarget);
-            
-            if (this.cameraAnimation.isTopView) {
-                this.camera.up.copy(this.cameraAnimation.endUp);
-            }
-            
             this.controls.update();
-            
-            console.log('✅ 카메라 애니메이션 완료');
-            console.log('   최종 위치:', this.camera.position);
-            console.log('   최종 타겟:', this.controls.target);
+            console.log('📍 카메라 애니메이션 완료. 최종 타겟:', this.controls.target);
         }
     }
     
@@ -848,55 +814,35 @@ export class Viewer3D {
         this.renderer.setSize(width, height);
     }
     
-/**
- * 애니메이션 루프 (최적화된 버전)
- */
-animate = () => {
-    requestAnimationFrame(this.animate);
-    
-    let needsMatrixUpdate = false;
-    
-    // 카메라 애니메이션 업데이트
-    if (this.cameraAnimation.active) {
-        this.updateCameraAnimation();
-        needsMatrixUpdate = true;
-    }
-    
-    // 컨트롤 업데이트
-    if (this.controls.enableDamping) {
-        const controlsChanged = this.controls.update();
-        if (controlsChanged) {
-            needsMatrixUpdate = true;
-        }
-    }
-
-    // ✅ 조건부 모델 매트릭스 업데이트 (최적화)
-    if (this.currentModel) {
-        // 애니메이션 중이거나 첫 번째 프레임인 경우만 강제 업데이트
-        const hasAnimation = this.app?.animationController?.isPlaying;
-        const isFirstFrame = !this.currentModel.matrixWorldNeedsUpdate && this.frameCount < 3;
+    /**
+     * 애니메이션 루프
+     */
+    animate = () => {
+        requestAnimationFrame(this.animate);
         
-        if (hasAnimation || needsMatrixUpdate || isFirstFrame) {
+        // 카메라 애니메이션 업데이트
+        this.updateCameraAnimation();
+        
+        // 컨트롤 업데이트
+        if (this.controls.enableDamping) {
+            this.controls.update();
+        }
+
+        // 모델 매트릭스 강제 업데이트
+        if (this.currentModel) {
             this.currentModel.updateMatrixWorld(true);
         }
-    }
-    
-    // 렌더링 전에 씬 매트릭스 업데이트 (필요시에만)
-    if (needsMatrixUpdate || this.scene.matrixWorldNeedsUpdate) {
+        
+        // 렌더링 전에 매트릭스 업데이트
         this.scene.updateMatrixWorld();
-    }
 
-    // 메인 렌더링
-    this.renderer.render(this.scene, this.camera);
-    
-    // 추가 렌더링 콜백 실행 (CSS2DRenderer 등)
-    this.onRenderCallbacks.forEach(callback => callback());
-    
-    // 프레임 카운터 증가 (초기화 시에만 사용)
-    if (this.frameCount < 10) {
-        this.frameCount++;
+        // 메인 렌더링
+        this.renderer.render(this.scene, this.camera);
+        
+        // 추가 렌더링 콜백 실행 (CSS2DRenderer 등)
+        this.onRenderCallbacks.forEach(callback => callback());
     }
-}
+    
     /**
      * 렌더링 콜백 추가
      */
@@ -945,91 +891,66 @@ animate = () => {
         if (material.normalMap) material.normalMap.dispose();
         if (material.roughnessMap) material.roughnessMap.dispose();
         if (material.metalnessMap) material.metalnessMap.dispose();
-        if (material.aoMap) material.aoMap.dispose();
         if (material.emissiveMap) material.emissiveMap.dispose();
-        if (material.bumpMap) material.bumpMap.dispose();
-        if (material.displacementMap) material.displacementMap.dispose();
         material.dispose();
     }
     
     /**
+     * 회전 속도 설정
+     */
+    setRotateSpeed(speed) {
+        if (this.controls) {
+            this.controls.rotateSpeed = speed;
+        }
+    }
+
+    /**
+     * 줌 속도 설정
+     */
+    setZoomSpeed(speed) {
+        if (this.controls) {
+            this.controls.zoomSpeed = speed;
+        }
+    }
+
+    /**
+     * 이동 속도 설정
+     */
+    setPanSpeed(speed) {
+        if (this.controls) {
+            this.controls.panSpeed = speed;
+        }
+    }
+
+    /**
+     * 모든 컨트롤 속도 리셋
+     */
+    resetControlSpeeds() {
+        this.setRotateSpeed(this.config.controls.rotateSpeed || 0.5);
+        this.setZoomSpeed(this.config.controls.zoomSpeed || 0.8);
+        this.setPanSpeed(this.config.controls.panSpeed || 0.5);
+    }
+
+    /**
      * 뷰어 정리
      */
-    dispose() {
+    destroy() {
         // 애니메이션 중지
-        cancelAnimationFrame(this.animationId);
+        cancelAnimationFrame(this.animate);
         
-        // 모델 정리
+        // 현재 모델 정리
         if (this.currentModel) {
             this.disposeObject(this.currentModel);
         }
         
-        // 헬퍼 정리
-        if (this.gridHelper) {
-            this.gridHelper.geometry.dispose();
-            this.gridHelper.material.dispose();
-        }
-        
-        if (this.axesHelper) {
-            this.axesHelper.geometry.dispose();
-            this.axesHelper.material.dispose();
-        }
-        
-        // 씬 정리
-        this.scene.traverse((child) => {
-            if (child.geometry) {
-                child.geometry.dispose();
-            }
-            if (child.material) {
-                this.disposeMaterial(child.material);
-            }
-        });
-        
         // 렌더러 정리
         this.renderer.dispose();
         
-        // DOM 요소 제거
-        if (this.renderer.domElement.parentElement) {
-            this.renderer.domElement.parentElement.removeChild(this.renderer.domElement);
+        // DOM에서 제거
+        if (this.container && this.renderer.domElement) {
+            this.container.removeChild(this.renderer.domElement);
         }
         
-        console.log('🧹 뷰어 정리 완료');
-    }
-    
-    /**
-     * 화면 크기 변경 처리
-     */
-    onResize() {
-        const width = this.container.clientWidth;
-        const height = this.container.clientHeight;
-        
-        this.camera.aspect = width / height;
-        this.camera.updateProjectionMatrix();
-        
-        this.renderer.setSize(width, height);
-    }
-    
-    /**
-     * 스크린샷 촬영
-     */
-    takeScreenshot(filename = 'screenshot.png') {
-        this.renderer.render(this.scene, this.camera);
-        this.renderer.domElement.toBlob((blob) => {
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = filename;
-            link.click();
-            URL.revokeObjectURL(url);
-        });
-    }
-    
-    /**
-     * 축 표시/숨김 토글
-     */
-    toggleAxes() {
-        if (this.axesHelper) {
-            this.axesHelper.visible = !this.axesHelper.visible;
-        }
+        console.log('🔚 3D 뷰어 정리 완료');
     }
 }

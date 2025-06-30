@@ -1,4 +1,4 @@
-// js/ui.js - 새로운 UI 컨트롤러 모듈 (아이콘 시스템 적용)
+// js/ui.js - 새로운 UI 컨트롤러 모듈
 
 export class UIController {
     constructor(config) {
@@ -186,16 +186,10 @@ export class UIController {
         this.isSpeedControlOpen = !this.isSpeedControlOpen;
         const speedToggle = document.querySelector('.speed-toggle');
         const speedControls = document.querySelector('.speed-controls');
-        const toggleIcon = document.querySelector('.toggle-icon');
         
         if (speedToggle && speedControls) {
             speedToggle.classList.toggle('open', this.isSpeedControlOpen);
             speedControls.style.display = this.isSpeedControlOpen ? 'block' : 'none';
-        }
-        
-        // 아이콘 업데이트
-        if (toggleIcon && window.iconLoader) {
-            window.iconLoader.updateIcon(toggleIcon, this.isSpeedControlOpen ? 'chevron-up' : 'chevron-down');
         }
     }
     
@@ -364,18 +358,11 @@ export class UIController {
     }
     
     /**
-     * 재생 버튼 업데이트 (아이콘 시스템 사용)
+     * 재생 버튼 업데이트
      */
     updatePlayButton(isPlaying) {
         if (this.elements.playBtn) {
-            const iconSpan = this.elements.playBtn.querySelector('[data-icon]');
-            if (iconSpan && window.iconLoader) {
-                // 아이콘 동적 변경
-                window.iconLoader.updateIcon(iconSpan, isPlaying ? 'pause' : 'play', {
-                    size: 24,
-                    className: 'play-icon'
-                });
-            }
+            this.elements.playBtn.innerHTML = isPlaying ? '<span>⏸</span>' : '<span>▶</span>';
         }
     }
     
