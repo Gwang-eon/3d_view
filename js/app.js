@@ -1,4 +1,4 @@
-// js/app.js - 메인 애플리케이션 컨트롤러 (프로그레시브 로딩 통합)
+// js/app.js - 메인 애플리케이션 컨트롤러 (프로그레시브 로딩 통합 + 오류 수정)
 
 import { Viewer3D } from './viewer.js';
 import { ProgressiveLoader, LOADING_MESSAGES } from './progressive-loader.js';
@@ -193,6 +193,29 @@ export class WallViewerApp {
             onReset: () => this.viewer.resetCamera()
         });
         this.ui.init();
+        
+        // 누락된 메서드 임시 추가
+        if (!this.ui.showCameraBox) {
+            this.ui.showCameraBox = function() {
+                if (this.elements.cameraBox) {
+                    this.elements.cameraBox.classList.add('show');
+                }
+            };
+        }
+        
+        if (!this.ui.hideCameraBox) {
+            this.ui.hideCameraBox = function() {
+                if (this.elements.cameraBox) {
+                    this.elements.cameraBox.classList.remove('show');
+                }
+            };
+        }
+        
+        if (!this.ui.setTimelineDragging) {
+            this.ui.setTimelineDragging = function(isDragging) {
+                // 타임라인 드래깅 상태 설정
+            };
+        }
 
         // 센서 차트 매니저
         this.chartManager = new SensorChartManager();
@@ -307,8 +330,8 @@ export class WallViewerApp {
                 loadingUI.setPreview(result.preview.src);
             }
             
-            // 핫스팟 데이터 로드
-            const hotspotsPath = modelPath.replace('.gltf', '-hotspots.json');
+            // 핫스팟 데이터 로드 (선택사항)
+            const hotspotsPath = modelPath.replace(/[^\/]+\.gltf$/i, 'hotspots.json');
             let hotspotsData = null;
             
             try {
@@ -316,9 +339,10 @@ export class WallViewerApp {
                 if (response.ok) {
                     hotspotsData = await response.json();
                     console.log('✅ 핫스팟 데이터 로드 성공');
+                    console.log('📍 핫스팟 개수:', Object.keys(hotspotsData.hotspots || {}).length);
                 }
             } catch (e) {
-                console.log('📌 핫스팟 데이터 없음 (정상)');
+                // 핫스팟 데이터는 선택사항이므로 오류 무시
             }
             
             // 뷰어에 모델 설정
@@ -343,11 +367,14 @@ export class WallViewerApp {
             
             // 핫스팟 설정
             this.hotspotManager.clearHotspots();
-            if (hotspotsData && hotspotsData.hotspots) {
-                console.log(`📍 핫스팟 추가: ${hotspotsData.hotspots.length}개`);
-                hotspotsData.hotspots.forEach(hotspot => {
-                    this.hotspotManager.addHotspot(hotspot);
-                });
+            if (hotspotsData) {
+                if (hotspotsData.hotspots && typeof hotspotsData.hotspots === 'object') {
+                    // loadHotspots 메서드 사용 (모델과 JSON 데이터 전달)
+                    console.log(`📍 핫스팟 로드 중...`);
+                    this.hotspotManager.loadHotspots(result.gltf.scene, hotspotsData);
+                } else {
+                    console.warn('⚠️ 핫스팟 데이터 구조가 올바르지 않습니다');
+                }
             }
             
             // 카메라 설정
@@ -357,7 +384,10 @@ export class WallViewerApp {
                 this.updateCameraUI();
             } else {
                 this.gltfCameras = [];
-                this.ui.hideCameraBox();
+                // hideCameraBox가 있으면 호출
+                if (this.ui.hideCameraBox) {
+                    this.ui.hideCameraBox();
+                }
             }
             
             // 로딩 완료 - 약간의 딜레이 후 숨김
@@ -399,8 +429,10 @@ export class WallViewerApp {
             cameraSelect.appendChild(option);
         });
         
-        // 카메라 박스 표시
-        this.ui.showCameraBox();
+        // 카메라 박스 표시 (메서드가 있으면)
+        if (this.ui.showCameraBox) {
+            this.ui.showCameraBox();
+        }
     }
     
     /**
@@ -495,6 +527,3 @@ window.addEventListener('DOMContentLoaded', () => {
     const app = new WallViewerApp();
     window.app = app; // 디버깅용
 });
-
-// 모듈 export
-export { WallViewerApp };
